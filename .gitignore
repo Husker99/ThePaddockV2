@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.npm-cache/
+.vite-cache/
+practice-v1-preview.png
+track-reference-preview.png

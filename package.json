@@ -1,0 +1,16 @@
+{
+  "name": "the-paddock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=/ThePaddock/",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "vite": "^7.1.12",
+    "three": "^0.181.2"
+  },
+  "devDependencies": {}
+}

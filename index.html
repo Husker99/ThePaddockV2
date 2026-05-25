@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Paddock</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <main id="start-menu" class="start-menu">
+      <section class="menu-panel">
+        <div class="menu-header">
+          <p class="eyebrow">The Paddock</p>
+          <h1 id="menu-title">Practice Session</h1>
+        </div>
+
+        <div class="menu-step" data-menu-step="intro">
+          <div class="menu-actions">
+            <button id="play-game" class="start-button" type="button">Race</button>
+            <button class="ghost-button" type="button" disabled>Functionality to come</button>
+          </div>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="track">
+          <button class="back-button" type="button" data-menu-back="intro">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card is-selected" type="button" data-track="practice">
+              <span>Track</span>
+              <strong>Practice Track</strong>
+            </button>
+            <button class="selection-card" type="button" data-track="race-1">
+              <span>Track</span>
+              <strong>Race Track 1</strong>
+            </button>
+          </div>
+          <button id="track-next" class="start-button" type="button">Next</button>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="car-category">
+          <button class="back-button" type="button" data-menu-back="track">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card" type="button" data-car-category="formula">
+              <span>Class</span>
+              <strong>Formula</strong>
+            </button>
+            <button class="selection-card" type="button" data-car-category="lmp">
+              <span>Class</span>
+              <strong>Le Mans Prototype</strong>
+            </button>
+            <button class="selection-card" type="button" data-car-category="stock">
+              <span>Class</span>
+              <strong>Stock Car</strong>
+            </button>
+            <button class="selection-card" type="button" data-car-category="jeep">
+              <span>Class</span>
+              <strong>Jeep</strong>
+            </button>
+          </div>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="formula">
+          <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card is-selected" type="button" data-car="ferraro">
+              <span>Formula</span>
+              <strong>Ferraro</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="mersedeez">
+              <span>Formula</span>
+              <strong>Mersedeez</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="alpeen">
+              <span>Formula</span>
+              <strong>Alpeen</strong>
+            </button>
+          </div>
+          <button id="start-race" class="start-button" type="button">Start</button>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="lmp">
+          <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card is-selected" type="button" data-car="lmp">
+              <span>Le Mans Prototype</span>
+              <strong>Apex Tricolore</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="scarlet-lmp">
+              <span>Le Mans Prototype</span>
+              <strong>Scarlet Arrow</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="ocean-lmp">
+              <span>Le Mans Prototype</span>
+              <strong>Ocean Vector</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="volt-lmp">
+              <span>Le Mans Prototype</span>
+              <strong>Volt Phantom</strong>
+            </button>
+          </div>
+          <button class="start-button" type="button" data-start-race>Start</button>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="stock">
+          <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card is-selected" type="button" data-car="orange-stock">
+              <span>Stock Car</span>
+              <strong>Sunset Motors</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="thunder-stock">
+              <span>Stock Car</span>
+              <strong>Thunderline Racing</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="jade-stock">
+              <span>Stock Car</span>
+              <strong>Jade Rocket</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="grape-stock">
+              <span>Stock Car</span>
+              <strong>Grape Apex</strong>
+            </button>
+          </div>
+          <button class="start-button" type="button" data-start-race>Start</button>
+        </div>
+
+        <div class="menu-step is-hidden" data-menu-step="jeep">
+          <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+          <div class="selection-grid">
+            <button class="selection-card is-selected" type="button" data-car="dune-jeep">
+              <span>Jeep</span>
+              <strong>Dune Patrol</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="forest-jeep">
+              <span>Jeep</span>
+              <strong>Forest Ranger</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="rescue-jeep">
+              <span>Jeep</span>
+              <strong>Rescue Red</strong>
+            </button>
+            <button class="selection-card" type="button" data-car="storm-jeep">
+              <span>Jeep</span>
+              <strong>Storm Blue</strong>
+            </button>
+          </div>
+          <button class="start-button" type="button" data-start-race>Start</button>
+        </div>
+      </section>
+    </main>
+    <div class="hud">
+      <div class="left-hud">
+        <div class="brand">The Paddock</div>
+        <div class="ers-panel">
+          <div class="ers-label">
+            <span>ERS</span>
+            <strong id="ers-readout">100%</strong>
+          </div>
+          <div class="ers-track">
+            <div id="ers-fill" class="ers-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div class="readouts">
+        <span id="speed">0 mph</span>
+        <span id="gear">N</span>
+        <span id="surface">Track</span>
+      </div>
+    </div>
+    <div id="rev-meter" class="rev-meter" hidden>
+      <strong id="manual-gear">1</strong>
+      <span>Revs</span>
+      <div class="rev-track">
+        <div id="rev-fill" class="rev-fill"></div>
+      </div>
+    </div>
+    <div id="pause-badge" class="pause-badge" hidden>Paused</div>
+    <div class="controls">
+      <span>W / Up: throttle</span>
+      <span>S / Down: brake</span>
+      <span>A / D: steer</span>
+      <span id="ers-control-hint">Shift: ERS</span>
+      <span>Space: camera</span>
+      <span>C: handbrake</span>
+      <span>Mouse: shift</span>
+      <span>P: pause</span>
+      <span>Esc: cars</span>
+      <span>R: reset</span>
+    </div>
+  </body>
+</html>
