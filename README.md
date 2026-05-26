@@ -4,7 +4,7 @@ A browser-based 3D arcade Formula racing prototype built with Three.js.
 
 ## What is in this first version
 
-- A racing-styled menu flow with Back buttons: Race, track selection, car class selection, then paint scheme selection.
+- A sharper racing-sim menu flow with retro arcade-inspired fonts, Back buttons, and a live spotlight showroom that spins the selected car during car selection.
 - Formula, LMP, Stock Car, and Jeep class menus, with Ferraro, Mersedeez, and Alpeen Formula paint schemes plus four Stock Car, four LMP, and four Jeep paint options.
 - Two closed 3D tracks based on the uploaded circuit references.
 - A car spawn location based on the red marker in the reference.
