@@ -24,9 +24,16 @@ const trackWidthReadout = document.querySelector("#track-width-readout");
 const curveBendSlider = document.querySelector("#curve-bend-slider");
 const curveBendReadout = document.querySelector("#curve-bend-readout");
 const sceneryTypeSelect = document.querySelector("#scenery-type-select");
+const editorStatus = document.querySelector("#editor-status");
 const editorUndoButton = document.querySelector("#editor-undo");
 const editorExportButton = document.querySelector("#editor-export");
 const editorBackButton = document.querySelector("#editor-back");
+const editorTestDriveButton = document.querySelector("#editor-test-drive");
+const backToEditorButton = document.querySelector("#back-to-editor");
+const editorZoomSlider = document.querySelector("#editor-zoom-slider");
+const editorZoomReadout = document.querySelector("#editor-zoom-readout");
+const editorZoomOutButton = document.querySelector("#editor-zoom-out");
+const editorZoomInButton = document.querySelector("#editor-zoom-in");
 const trackJsonOutput = document.querySelector("#track-json-output");
 const trackNextButton = document.querySelector("#track-next");
 const startButton = document.querySelector("#start-race");
@@ -47,6 +54,7 @@ const revMeterEl = document.querySelector("#rev-meter");
 const revFillEl = document.querySelector("#rev-fill");
 const manualGearEl = document.querySelector("#manual-gear");
 const MENU_THEME_SRC = "/audio/the-paddock-theme.mp3";
+const EDITOR_MUSIC_SRCS = ["/audio/track-editor-1.mp3", "/audio/track-editor-2.mp3"];
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -118,26 +126,37 @@ let menuStep = "intro";
 let selectedCar = "ferraro";
 let selectedTrack = "practice";
 let cameraMode = "chase";
-let editorTool = "straight";
+let editorTool = "select";
 let selectedEditorNode = 0;
+let selectedEditorScenery = -1;
+let draggedEditorNode = null;
+let draggedEditorCurveSegment = null;
 let editorGhostPoint = null;
+let isEditorTestDrive = false;
+const EDITOR_WORLD_WIDTH = 18000;
+const EDITOR_WORLD_HEIGHT = 12600;
+const EDITOR_DEFAULT_ZOOM = 1;
+const EDITOR_VISUAL_SCALE = 15;
+const EDITOR_TRACK_VISUAL_SCALE = 20;
+let editorZoom = EDITOR_DEFAULT_ZOOM;
+const editorViewCenter = {
+  x: EDITOR_WORLD_WIDTH * 0.5,
+  y: EDITOR_WORLD_HEIGHT * 0.5,
+};
 const editorTrack = {
   name: "New Paddock Track",
   closed: true,
+  startNode: 0,
+  startDirection: 1,
   startSegment: 0,
   nodes: [
-    { x: 230, y: 470, width: 12, curve: 0 },
-    { x: 360, y: 285, width: 12, curve: 0.25 },
-    { x: 590, y: 240, width: 15, curve: 0.18 },
-    { x: 780, y: 360, width: 13, curve: 0.38 },
-    { x: 680, y: 545, width: 11, curve: 0.15 },
-    { x: 410, y: 560, width: 14, curve: 0.22 },
+    { x: 2400, y: 6300, width: 14, curve: 0 },
+    { x: 9000, y: 2700, width: 14, curve: 0 },
+    { x: 15600, y: 6300, width: 14, curve: 0 },
+    { x: 9000, y: 9900, width: 14, curve: 0 },
   ],
-  scenery: [
-    { type: "trees", x: 170, y: 230 },
-    { type: "building", x: 825, y: 175 },
-    { type: "grandstand", x: 620, y: 145 },
-  ],
+  scenery: [],
+  kerbs: [],
   pitLane: [],
 };
 const chaseCamera = {
@@ -152,6 +171,17 @@ if (trackShowcaseCar) {
   trackShowcaseCar.style.setProperty("--showcase-car-color", trackShowcaseColors[Math.floor(Math.random() * trackShowcaseColors.length)]);
 }
 window.addEventListener("keydown", (event) => {
+  if (!trackEditor.classList.contains("is-hidden") && (event.code === "Delete" || event.code === "Backspace")) {
+    if (isEditorTypingTarget(event.target)) return;
+    deleteSelectedEditorItem();
+    event.preventDefault();
+    return;
+  }
+  if (!trackEditor.classList.contains("is-hidden") && (event.code === "KeyQ" || event.code === "KeyE")) {
+    if (editorTool === "select-scenery") rotateSelectedEditorDirectionalScenery(event.code === "KeyE" ? 1 : -1);
+    event.preventDefault();
+    return;
+  }
   keys.add(event.code);
   if (event.code === "Escape" && gameStarted && !event.repeat) {
     openCarSelectionMenu();
@@ -199,18 +229,27 @@ startMenu.addEventListener("pointerdown", startMenuMusic);
 playGameButton.addEventListener("click", () => setMenuStep("track"));
 openTrackEditorButton.addEventListener("click", openTrackEditor);
 editorBackButton.addEventListener("click", closeTrackEditor);
+editorTestDriveButton.addEventListener("click", startEditorTestDrive);
+backToEditorButton.addEventListener("click", returnToTrackEditor);
 editorUndoButton.addEventListener("click", undoEditorAction);
 editorExportButton.addEventListener("click", exportEditorTrack);
 trackWidthSlider.addEventListener("input", updateSelectedTrackWidth);
 curveBendSlider.addEventListener("input", updateSelectedCurveBend);
+editorZoomSlider?.addEventListener("input", () => updateEditorZoom(Number(editorZoomSlider.value)));
+editorZoomOutButton?.addEventListener("click", () => updateEditorZoom(editorZoom - 0.2));
+editorZoomInButton?.addEventListener("click", () => updateEditorZoom(editorZoom + 0.2));
 for (const button of editorToolButtons) {
   button.addEventListener("click", () => setEditorTool(button.dataset.editorTool));
 }
+editorCanvas.addEventListener("contextmenu", clearEditorToolSelection);
 editorCanvas.addEventListener("pointerdown", handleEditorPointerDown);
 editorCanvas.addEventListener("pointermove", handleEditorPointerMove);
+editorCanvas.addEventListener("pointerup", handleEditorPointerUp);
+editorCanvas.addEventListener("pointercancel", handleEditorPointerUp);
 editorCanvas.addEventListener("pointerleave", () => {
   editorGhostPoint = null;
   sceneryTypeSelect.closest(".editor-select")?.classList.toggle("is-hidden", editorTool !== "scenery");
+  updateEditorStatus();
   renderTrackEditor();
 });
 trackNextButton.addEventListener("click", () => setMenuStep("car-category"));
@@ -399,7 +438,7 @@ const carProfiles = {
     yawDamping: 4.4,
     slipLimitLowSpeed: 22,
     slipLimitHighSpeed: 34,
-    cockpitPosition: { forward: 0.58, height: 1.54 },
+    cockpitPosition: { forward: 0.46, height: 1.54 },
     cockpitTarget: { forward: 18, height: 1.68, steerLook: 1.1 },
   },
   mersedeez: null,
@@ -610,6 +649,8 @@ const carState = {
   grassBump: 0,
   grassRockRoll: 0,
   grassRockPitch: 0,
+  kerbJoltCooldown: 0,
+  collisionSmokeCooldown: 0,
   gear: 0,
   rpm: 2400,
   ers: 100,
@@ -658,6 +699,11 @@ const audioState = {
 const menuAudio = {
   element: null,
 };
+const editorAudio = {
+  element: null,
+  playlist: [],
+  index: 0,
+};
 startMenuMusic();
 
 const clock = new THREE.Clock();
@@ -667,8 +713,10 @@ const scratchForward = new THREE.Vector3();
 const scratchRight = new THREE.Vector3();
 const dirtGroup = new THREE.Group();
 const dirtParticles = [];
+const smokeParticles = [];
 scene.add(dirtGroup);
 initDirtParticles();
+initCollisionSmokeParticles();
 
 resetCar();
 renderer.setAnimationLoop(update);
@@ -820,12 +868,25 @@ function updateCar(dt) {
     .multiplyScalar(forwardSpeed)
     .addScaledVector(scratchRight, lateralSpeed);
   carState.position.addScaledVector(carState.velocity, dt);
+  if (resolveObstacleCollisions(speedAbs, dt)) {
+    forwardSpeed = carState.velocity.dot(scratchForward);
+    lateralSpeed = carState.velocity.dot(scratchRight);
+  }
   const grassBumpIntensity = wheelSurface.grassRatio * THREE.MathUtils.clamp(speedAbs / 24, 0, 1) * 0.8;
+  const kerbBumpIntensity = wheelSurface.kerbRatio * THREE.MathUtils.clamp(speedAbs / 22, 0, 1) * 0.55;
   const grassBumpStrength = profile.kind === "formula" ? 0.105 : profile.kind === "lmp" ? 0.075 : profile.kind === "stock" ? 0.052 : 0.09;
   const grassBump = grassBumpIntensity * grassBumpStrength * (
     Math.sin(clock.elapsedTime * 18 + forwardSpeed * 0.55) + Math.sin(clock.elapsedTime * 29) * 0.42
   );
-  carState.position.y = (surface.kind === "kerb" ? track.kerbY : track.groundY) + grassBump;
+  const kerbBump = kerbBumpIntensity * 0.065 * (
+    Math.sin(clock.elapsedTime * 34 + forwardSpeed * 0.7) + Math.sin(clock.elapsedTime * 51) * 0.35
+  );
+  carState.position.y = (surface.kind === "kerb" ? track.kerbY : track.groundY) + grassBump + kerbBump;
+  carState.kerbJoltCooldown = Math.max(0, carState.kerbJoltCooldown - dt);
+  if (surface.kind === "kerb" && speedAbs > 5 && carState.kerbJoltCooldown <= 0 && Math.random() < 0.5) {
+    carState.heading += THREE.MathUtils.degToRad(THREE.MathUtils.randFloat(1, 5)) * (Math.random() < 0.5 ? -1 : 1);
+    carState.kerbJoltCooldown = 0.65;
+  }
 
   car.root.position.copy(carState.position);
   car.root.rotation.set(0, carState.heading, 0);
@@ -833,8 +894,9 @@ function updateCar(dt) {
   const rollStrength = profile.kind === "jeep" ? 0.42 : 0.1;
   const rollTarget = -carState.steer * THREE.MathUtils.clamp(speedAbs / (profile.kind === "jeep" ? 24 : 45), 0, 1) * rollStrength;
   const grassRockScale = profile.kind === "formula" ? 1.25 : profile.kind === "lmp" ? 0.9 : profile.kind === "stock" ? 0.65 : 0.85;
-  const grassRockRoll = grassBumpIntensity * grassRockScale * 0.035 * Math.sin(clock.elapsedTime * 16 + forwardSpeed * 0.3);
-  const grassRockPitch = grassBumpIntensity * grassRockScale * 0.028 * Math.sin(clock.elapsedTime * 21 + forwardSpeed * 0.38);
+  const rockIntensity = grassBumpIntensity + kerbBumpIntensity * 0.62;
+  const grassRockRoll = rockIntensity * grassRockScale * 0.035 * Math.sin(clock.elapsedTime * 16 + forwardSpeed * 0.3);
+  const grassRockPitch = rockIntensity * grassRockScale * 0.028 * Math.sin(clock.elapsedTime * 21 + forwardSpeed * 0.38);
   carState.grassBump = grassBump;
   carState.grassRockRoll = grassRockRoll;
   carState.grassRockPitch = grassRockPitch;
@@ -863,13 +925,69 @@ function updateCar(dt) {
   updateDirtParticles(dt, surface, speedAbs);
 }
 
+function resolveObstacleCollisions(speedAbs, dt) {
+  if (!track.obstacles?.length) return false;
+  carState.collisionSmokeCooldown = Math.max(0, carState.collisionSmokeCooldown - dt);
+  const carRadius = tuning.carCollisionRadius * 1.25;
+  let collided = false;
+
+  for (const obstacle of track.obstacles) {
+    if (obstacle.kind !== "grandstand" && obstacle.kind !== "tree") continue;
+    const normal = getOrientedBoxCollisionNormal(carState.position, obstacle, carRadius);
+    if (!normal) continue;
+
+    const contact = carState.position.clone().addScaledVector(normal, carRadius);
+    carState.position.addScaledVector(normal, obstacle.penetration + 0.12);
+    const impactSpeed = Math.max(speedAbs, carState.velocity.length());
+    const incoming = carState.velocity.dot(normal);
+    if (incoming < 0) carState.velocity.addScaledVector(normal, -incoming * 1.35);
+    carState.velocity.multiplyScalar(obstacle.kind === "tree" ? 0.25 : 0.38);
+    carState.heading += THREE.MathUtils.clamp(normal.x * scratchForward.z - normal.z * scratchForward.x, -1, 1) * 0.18;
+    collided = true;
+
+    if (impactSpeed > 4 && carState.collisionSmokeCooldown <= 0) {
+      spawnCollisionSmoke(contact, normal, impactSpeed);
+      carState.collisionSmokeCooldown = 0.45;
+    }
+  }
+
+  return collided;
+}
+
+function getOrientedBoxCollisionNormal(position, obstacle, radius) {
+  const dx = position.x - obstacle.x;
+  const dz = position.z - obstacle.z;
+  const cos = Math.cos(-obstacle.rotation);
+  const sin = Math.sin(-obstacle.rotation);
+  const localX = dx * cos - dz * sin;
+  const localZ = dx * sin + dz * cos;
+  const halfWidth = obstacle.width * 0.5 + radius;
+  const halfDepth = obstacle.depth * 0.5 + radius;
+  if (Math.abs(localX) > halfWidth || Math.abs(localZ) > halfDepth) return null;
+
+  const penetrationX = halfWidth - Math.abs(localX);
+  const penetrationZ = halfDepth - Math.abs(localZ);
+  const localNormalX = penetrationX < penetrationZ ? Math.sign(localX || 1) : 0;
+  const localNormalZ = penetrationX < penetrationZ ? 0 : Math.sign(localZ || 1);
+  const worldCos = Math.cos(obstacle.rotation);
+  const worldSin = Math.sin(obstacle.rotation);
+  obstacle.penetration = Math.min(penetrationX, penetrationZ);
+  return new THREE.Vector3(
+    localNormalX * worldCos + localNormalZ * worldSin,
+    0,
+    -localNormalX * worldSin + localNormalZ * worldCos,
+  ).normalize();
+}
+
 function getWheelSurfaceState() {
   const wheelNames = ["frontLeft", "frontRight", "rearLeft", "rearRight"];
   const state = {
     grassCount: 0,
     leftGrassCount: 0,
     rightGrassCount: 0,
+    kerbCount: 0,
     grassRatio: 0,
+    kerbRatio: 0,
     leftBrakeScale: 1,
     rightBrakeScale: 1,
     brakeScale: 1,
@@ -881,7 +999,9 @@ function getWheelSurfaceState() {
 
     const wheelPosition = new THREE.Vector3();
     wheel.getWorldPosition(wheelPosition);
-    if (track.sample(wheelPosition.x, wheelPosition.z).kind !== "grass") continue;
+    const wheelSurface = track.sample(wheelPosition.x, wheelPosition.z).kind;
+    if (wheelSurface === "kerb") state.kerbCount += 1;
+    if (wheelSurface !== "grass") continue;
 
     state.grassCount += 1;
     if (wheelName.endsWith("Left")) state.leftGrassCount += 1;
@@ -889,6 +1009,7 @@ function getWheelSurfaceState() {
   }
 
   state.grassRatio = state.grassCount / wheelNames.length;
+  state.kerbRatio = state.kerbCount / wheelNames.length;
   state.leftBrakeScale = 1 - 0.3 * (state.leftGrassCount / 2);
   state.rightBrakeScale = 1 - 0.3 * (state.rightGrassCount / 2);
   state.brakeScale = (state.leftBrakeScale + state.rightBrakeScale) * 0.5;
@@ -956,7 +1077,24 @@ function initDirtParticles() {
   }
 }
 
+function initCollisionSmokeParticles() {
+  const material = new THREE.MeshStandardMaterial({ color: 0xaeb1ad, roughness: 1, transparent: true, opacity: 0.74, flatShading: true });
+  const geometry = new THREE.SphereGeometry(0.28, 7, 5);
+
+  for (let i = 0; i < 42; i += 1) {
+    const particle = new THREE.Mesh(geometry, material);
+    particle.visible = false;
+    particle.userData.life = 0;
+    particle.userData.maxLife = 1;
+    particle.userData.velocity = new THREE.Vector3();
+    smokeParticles.push(particle);
+    dirtGroup.add(particle);
+  }
+}
+
 function updateDirtParticles(dt, surface, speedAbs) {
+  updateCollisionSmokeParticles(dt);
+
   for (const particle of dirtParticles) {
     if (particle.userData.life <= 0) {
       particle.visible = false;
@@ -1006,6 +1144,40 @@ function updateDirtParticles(dt, surface, speedAbs) {
   }
 }
 
+function updateCollisionSmokeParticles(dt) {
+  for (const particle of smokeParticles) {
+    if (particle.userData.life <= 0) {
+      particle.visible = false;
+      continue;
+    }
+
+    particle.userData.life -= dt;
+    particle.userData.velocity.y += 0.28 * dt;
+    particle.position.addScaledVector(particle.userData.velocity, dt);
+    const ratio = THREE.MathUtils.clamp(particle.userData.life / particle.userData.maxLife, 0, 1);
+    particle.scale.setScalar(0.35 + (1 - ratio) * 1.65);
+  }
+}
+
+function spawnCollisionSmoke(position, normal, speedAbs) {
+  const burstCount = Math.round(THREE.MathUtils.clamp(speedAbs / 4, 5, 12));
+  for (let i = 0; i < burstCount; i += 1) {
+    const particle = smokeParticles.find((item) => item.userData.life <= 0);
+    if (!particle) return;
+    particle.visible = true;
+    particle.position.copy(position);
+    particle.position.y = 0.55 + Math.random() * 0.65;
+    particle.userData.maxLife = THREE.MathUtils.randFloat(0.55, 0.95);
+    particle.userData.life = particle.userData.maxLife;
+    particle.userData.velocity
+      .copy(normal)
+      .multiplyScalar(THREE.MathUtils.randFloat(1.6, 3.7))
+      .addScaledVector(scratchRight, THREE.MathUtils.randFloatSpread(2.2))
+      .add(new THREE.Vector3(0, THREE.MathUtils.randFloat(0.9, 2.4), 0));
+    particle.scale.setScalar(0.3 + Math.random() * 0.25);
+  }
+}
+
 function updateCamera(dt) {
   const profile = getCarProfile();
   scratchForward.set(Math.sin(carState.heading), 0, Math.cos(carState.heading));
@@ -1015,11 +1187,12 @@ function updateCamera(dt) {
     const cockpit = profile.cockpitPosition;
     const target = profile.cockpitTarget;
     const cockpitBump = carState.grassBump * 0.45;
+    const cockpitPullback = THREE.MathUtils.clamp(carState.velocity.length() / 90, 0, 1) * 0.18;
     const cockpitRockRoll = carState.grassRockRoll * 2.4;
     const cockpitRockPitch = carState.grassRockPitch * 2.8;
     const desiredPosition = carState.position
       .clone()
-      .addScaledVector(scratchForward, cockpit.forward + cockpitRockPitch)
+      .addScaledVector(scratchForward, cockpit.forward - cockpitPullback + cockpitRockPitch)
       .addScaledVector(scratchRight, cockpitRockRoll)
       .add(new THREE.Vector3(0, cockpit.height + cockpitBump, 0));
     const desiredTarget = carState.position
@@ -1100,14 +1273,25 @@ function createTrack(trackId = "practice") {
     group.add(kerb);
   }
 
-  const roadGeometry = makeTrackStrip(samples, halfWidth, 0.04);
+  const roadGeometry = makeCrownedTrackStrip(samples, halfWidth, 0.08, 0.26);
   const road = new THREE.Mesh(roadGeometry, createAsphaltMaterial());
   road.receiveShadow = true;
   group.add(road);
 
+  const edgeLineMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf5f3e6,
+    roughness: 0.72,
+    metalness: 0.01,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  addTrackEdgeLines(group, samples, halfWidth, edgeLineMaterial);
+
   const extraTrackAreas = [];
-  if (definition.extras) definition.extras(group, extraTrackAreas, samples);
-  addSceneryBuildings(group);
+  const obstacles = [];
+  if (definition.extras) definition.extras(group, extraTrackAreas, samples, obstacles);
   addCloudsAndSun(group, trackId === "generated");
 
   const start = pointFromPlan(...definition.start, planScale);
@@ -1118,8 +1302,9 @@ function createTrack(trackId = "practice") {
     group,
     start: { x: start.x, z: start.z, heading },
     extraTrackAreas,
+    obstacles,
     groundY: 0.14,
-    kerbY: 0.18,
+    kerbY: 0.28,
     sample(x, z) {
       for (const area of extraTrackAreas) {
         if (area.kind === "curve" && isPointInExtraTrackArea(x, z, area)) return { kind: "track", distance: 0 };
@@ -1158,11 +1343,11 @@ function createAsphaltMaterial() {
   const texture = makeAsphaltTexture(192);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(22, 22);
+  texture.repeat.set(30, 30);
   return new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: texture,
-    roughness: 0.92,
+    roughness: 0.88,
     metalness: 0.025,
     flatShading: false,
   });
@@ -1173,32 +1358,44 @@ function makeAsphaltTexture(size) {
   textureCanvas.width = size;
   textureCanvas.height = size;
   const context = textureCanvas.getContext("2d");
-  context.fillStyle = "#888b84";
+  context.fillStyle = "#8f928b";
   context.fillRect(0, 0, size, size);
 
   const image = context.getImageData(0, 0, size, size);
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       const i = (y * size + x) * 4;
-      const aggregate = (Math.random() - 0.5) * 44;
-      const directionGrain = Math.sin(x * 0.16 + y * 0.04) * 8;
-      const rubber = Math.sin(x * 0.035 + y * 0.012) * 10;
-      const fleck = aggregate + directionGrain - Math.max(0, rubber);
-      image.data[i] = THREE.MathUtils.clamp(136 + fleck, 72, 190);
-      image.data[i + 1] = THREE.MathUtils.clamp(138 + fleck, 74, 192);
-      image.data[i + 2] = THREE.MathUtils.clamp(132 + fleck, 70, 184);
+      const aggregate = (Math.random() - 0.5) * 64;
+      const pebble = Math.sin(x * 1.7 + Math.random() * 1.2) * Math.sin(y * 1.35) * 8;
+      const directionGrain = Math.sin(x * 0.22 + y * 0.055) * 12;
+      const rubber = Math.max(0, Math.sin(x * 0.035 + y * 0.012)) * 18;
+      const fleck = aggregate + pebble + directionGrain - rubber;
+      image.data[i] = THREE.MathUtils.clamp(142 + fleck, 66, 202);
+      image.data[i + 1] = THREE.MathUtils.clamp(144 + fleck, 68, 204);
+      image.data[i + 2] = THREE.MathUtils.clamp(138 + fleck, 62, 196);
       image.data[i + 3] = 255;
     }
   }
   context.putImageData(image, 0, 0);
 
-  context.globalAlpha = 0.16;
+  context.globalAlpha = 0.24;
   context.strokeStyle = "#555750";
-  for (let i = 0; i < 18; i += 1) {
+  for (let i = 0; i < 32; i += 1) {
     const y = Math.random() * size;
     context.beginPath();
     context.moveTo(0, y);
-    context.bezierCurveTo(size * 0.3, y + Math.random() * 10 - 5, size * 0.65, y + Math.random() * 12 - 6, size, y + Math.random() * 10 - 5);
+    context.bezierCurveTo(size * 0.3, y + Math.random() * 12 - 6, size * 0.65, y + Math.random() * 16 - 8, size, y + Math.random() * 12 - 6);
+    context.stroke();
+  }
+
+  context.globalAlpha = 0.18;
+  context.strokeStyle = "#2f302d";
+  context.lineWidth = 2;
+  for (let i = 0; i < 5; i += 1) {
+    const x = size * (0.35 + i * 0.06 + Math.random() * 0.04);
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.bezierCurveTo(x + Math.random() * 18 - 9, size * 0.33, x + Math.random() * 22 - 11, size * 0.66, x + Math.random() * 18 - 9, size);
     context.stroke();
   }
 
@@ -1241,6 +1438,17 @@ function makeNoiseTexture(size, base, spread, stripeStrength = 0) {
   }
 
   context.putImageData(image, 0, 0);
+  context.globalAlpha = 0.18;
+  context.strokeStyle = "#2f302d";
+  context.lineWidth = 2;
+  for (let i = 0; i < 5; i += 1) {
+    const x = size * (0.35 + i * 0.06 + Math.random() * 0.04);
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.bezierCurveTo(x + Math.random() * 18 - 9, size * 0.33, x + Math.random() * 22 - 11, size * 0.66, x + Math.random() * 18 - 9, size);
+    context.stroke();
+  }
+
   const texture = new THREE.CanvasTexture(textureCanvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
@@ -1427,9 +1635,43 @@ function addGrandstandAtTrack(group, samples, spec) {
   group.add(stand);
 }
 
+function addKerbSurfaceObject(group, samples, spec, extraTrackAreas) {
+  const material = new THREE.MeshStandardMaterial({ color: 0x8f1414, roughness: 0.78, flatShading: true });
+  const segmentCount = Math.max(1, editorTrack.nodes.length);
+  const segmentStart = THREE.MathUtils.clamp((spec.segment ?? 0) / segmentCount, 0, 0.999);
+  const segmentSpan = 1 / segmentCount;
+  const startT = segmentStart + segmentSpan * THREE.MathUtils.clamp(spec.start ?? 0.16, 0, 0.96);
+  const endT = segmentStart + segmentSpan * THREE.MathUtils.clamp(spec.end ?? 0.58, 0.04, 1);
+  const startIndex = Math.floor(startT * samples.length);
+  const endIndex = Math.max(startIndex + 2, Math.floor(endT * samples.length));
+  const width = spec.width ?? 1.35;
+  const height = spec.height ?? 0.28;
+  const side = spec.side ?? 1;
+  const centerOffset = side * ((spec.trackHalfWidth ?? 7.2) + width * 0.45);
+  const kerbPoints = [];
+
+  for (let i = startIndex; i <= endIndex; i += 2) {
+    kerbPoints.push(getTrackPoseAt(samples, (i % samples.length) / samples.length, centerOffset).position);
+  }
+
+  for (let i = 0; i < kerbPoints.length - 1; i += 1) {
+    const current = kerbPoints[i];
+    const next = kerbPoints[i + 1];
+    const length = Math.max(0.8, current.distanceTo(next));
+    const angle = Math.atan2(next.x - current.x, next.z - current.z);
+    const block = new THREE.Mesh(makeKerbBlockGeometry(length, width, height), material);
+    block.position.copy(current).lerp(next, 0.5);
+    block.position.y = 0.1;
+    block.rotation.y = angle;
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+  }
+
+  extraTrackAreas.push({ kind: "kerb", points: kerbPoints, halfWidth: width * 0.62, height, surface: "kerb" });
+}
 function addCornerKerbBlocks(group, samples, spec, extraTrackAreas) {
-  const red = new THREE.MeshStandardMaterial({ color: 0xd91f26, roughness: 0.78, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  const white = new THREE.MeshStandardMaterial({ color: 0xf6f1df, roughness: 0.76, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const red = new THREE.MeshStandardMaterial({ color: 0x8f1414, roughness: 0.78, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const startIndex = Math.floor(spec.t * samples.length);
   const step = 2;
   const kerbCenterOffset = spec.side * ((spec.trackHalfWidth ?? 9.4) + 0.72);
@@ -1440,7 +1682,7 @@ function addCornerKerbBlocks(group, samples, spec, extraTrackAreas) {
     const index = (startIndex + i * step) % samples.length;
     const localT = index / samples.length;
     const pose = getTrackPoseAt(samples, localT, kerbCenterOffset);
-    const block = new THREE.Mesh(makeKerbBlockGeometry(kerbLength, kerbHalfWidth * 2, 0.28), i % 2 === 0 ? red : white);
+    const block = new THREE.Mesh(makeKerbBlockGeometry(kerbLength, kerbHalfWidth * 2, 0.28), red);
     block.position.copy(pose.position);
     block.position.y = 0.1;
     block.rotation.y = pose.angle + Math.PI / 2;
@@ -1625,6 +1867,149 @@ function getNearestTrackPose(target, samples) {
   };
 }
 
+function makeTrackBand(samples, outerHalfWidth, innerHalfWidth, outerY, innerY) {
+  const vertices = [];
+  const indices = [];
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const prev = samples[(i - 1 + samples.length) % samples.length];
+    const next = samples[(i + 1) % samples.length];
+    const tangent = next.clone().sub(prev).normalize();
+    const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+    const outer = samples[i].clone().addScaledVector(normal, outerHalfWidth);
+    const inner = samples[i].clone().addScaledVector(normal, innerHalfWidth);
+    vertices.push(outer.x, outerY, outer.z, inner.x, innerY, inner.z);
+  }
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const a = i * 2;
+    const b = ((i + 1) % samples.length) * 2;
+    indices.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addTrackEdgeLines(group, samples, halfWidth, material) {
+  const edgeLineWidth = 0.98;
+  const edgeInset = 0.03;
+  const outerY = 0.092;
+  const innerY = 0.12;
+  const edgeSets = [
+    getEdgeLinePoints(samples, halfWidth - edgeInset, halfWidth - edgeInset - edgeLineWidth),
+    getEdgeLinePoints(samples, -halfWidth + edgeInset + edgeLineWidth, -halfWidth + edgeInset),
+  ];
+  const leftGeometry = makeSegmentedEdgeLine(edgeSets[0], edgeSets, 0, outerY, innerY);
+  const rightGeometry = makeSegmentedEdgeLine(edgeSets[1], edgeSets, 1, innerY, outerY);
+
+  for (const geometry of [leftGeometry, rightGeometry]) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+}
+
+function getEdgeLinePoints(samples, outerHalfWidth, innerHalfWidth) {
+  return samples.map((sample, index) => {
+    const prev = samples[(index - 1 + samples.length) % samples.length];
+    const next = samples[(index + 1) % samples.length];
+    const tangent = next.clone().sub(prev).normalize();
+    const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+    return {
+      outer: sample.clone().addScaledVector(normal, outerHalfWidth),
+      inner: sample.clone().addScaledVector(normal, innerHalfWidth),
+      center: sample.clone().addScaledVector(normal, (outerHalfWidth + innerHalfWidth) * 0.5),
+    };
+  });
+}
+
+function makeSegmentedEdgeLine(points, edgeSets, sideIndex, outerY, innerY) {
+  const vertices = [];
+  const indices = [];
+  const clearPoints = points.map((point, index) => isEdgeLinePointClear(point.center, edgeSets, sideIndex, index));
+
+  for (let i = 0; i < points.length; i += 1) {
+    const nextIndex = (i + 1) % points.length;
+    if (!clearPoints[i] || !clearPoints[nextIndex]) continue;
+    if (points[i].center.distanceTo(points[nextIndex].center) > 3.6) continue;
+
+    const base = vertices.length / 3;
+    vertices.push(
+      points[i].outer.x, outerY, points[i].outer.z,
+      points[nextIndex].outer.x, outerY, points[nextIndex].outer.z,
+      points[i].inner.x, innerY, points[i].inner.z,
+      points[nextIndex].inner.x, innerY, points[nextIndex].inner.z,
+    );
+    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function isEdgeLinePointClear(point, edgeSets, sideIndex, index) {
+  const neighborWindow = 18;
+  const mergeDistance = 1.75;
+  for (const [setIndex, edgePoints] of edgeSets.entries()) {
+    for (let i = 0; i < edgePoints.length; i += 1) {
+      const circularDistance = Math.min(
+        Math.abs(i - index),
+        edgePoints.length - Math.abs(i - index),
+      );
+      if (setIndex === sideIndex && circularDistance <= neighborWindow) continue;
+      if (setIndex !== sideIndex && circularDistance <= 3) continue;
+      if (point.distanceTo(edgePoints[i].center) < mergeDistance) return false;
+    }
+  }
+  return true;
+}
+
+function makeCrownedTrackStrip(samples, halfWidth, edgeY, crownY) {
+  const vertices = [];
+  const indices = [];
+  const bands = [
+    { offset: halfWidth, y: edgeY },
+    { offset: halfWidth * 0.52, y: edgeY + (crownY - edgeY) * 0.55 },
+    { offset: 0, y: crownY },
+    { offset: -halfWidth * 0.52, y: edgeY + (crownY - edgeY) * 0.55 },
+    { offset: -halfWidth, y: edgeY },
+  ];
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const prev = samples[(i - 1 + samples.length) % samples.length];
+    const next = samples[(i + 1) % samples.length];
+    const tangent = next.clone().sub(prev).normalize();
+    const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+
+    for (const band of bands) {
+      const point = samples[i].clone().addScaledVector(normal, band.offset);
+      vertices.push(point.x, band.y, point.z);
+    }
+  }
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const row = i * bands.length;
+    const nextRow = ((i + 1) % samples.length) * bands.length;
+    for (let band = 0; band < bands.length - 1; band += 1) {
+      const a = row + band;
+      const b = nextRow + band;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
 function makeTrackStrip(samples, outerHalfWidth, y, innerHalfWidth = -outerHalfWidth) {
   const vertices = [];
   const indices = [];
@@ -2614,8 +2999,11 @@ function openTrackEditor() {
   gameStarted = false;
   setPaused(false);
   keys.clear();
+  stopMenuMusic();
   startMenu.classList.add("is-hidden");
   trackEditor.classList.remove("is-hidden");
+  startEditorMusic();
+  updateEditorZoom(editorZoom);
   updateTrackWidthReadout();
   updateCurveBendReadout();
   sceneryTypeSelect.closest(".editor-select")?.classList.add("is-hidden");
@@ -2623,39 +3011,100 @@ function openTrackEditor() {
 }
 
 function closeTrackEditor() {
+  stopEditorMusic();
   trackEditor.classList.add("is-hidden");
   startMenu.classList.remove("is-hidden");
   setMenuStep("intro");
+  startMenuMusic();
 }
 
+function clearEditorToolSelection(event) {
+  event.preventDefault();
+  const point = getEditorPoint(event);
+  if (point && isNearEditorStartLine(point)) {
+    editorTrack.startDirection *= -1;
+    renderTrackEditor();
+    return;
+  }
+  editorTool = "none";
+  draggedEditorNode = null;
+  draggedEditorCurveSegment = null;
+  editorGhostPoint = null;
+  selectedEditorScenery = -1;
+  for (const button of editorToolButtons) {
+    button.classList.remove("is-selected");
+  }
+  sceneryTypeSelect.closest(".editor-select")?.classList.add("is-hidden");
+  renderTrackEditor();
+}
 function setEditorTool(tool) {
   editorTool = tool;
   for (const button of editorToolButtons) {
     button.classList.toggle("is-selected", button.dataset.editorTool === editorTool);
   }
   editorGhostPoint = null;
+  draggedEditorCurveSegment = null;
   sceneryTypeSelect.closest(".editor-select")?.classList.toggle("is-hidden", editorTool !== "scenery");
+  updateEditorStatus();
   renderTrackEditor();
 }
 
 function handleEditorPointerDown(event) {
+  if (event.button !== 0) return;
   const point = getEditorPoint(event);
   if (!point) return;
 
-  if (editorTool === "straight" || editorTool === "curve") {
-    const curve = editorTool === "curve" ? Number(curveBendSlider.value) : 0;
-    editorTrack.nodes.push({ ...point, width: Number(trackWidthSlider.value), curve });
-    selectedEditorNode = editorTrack.nodes.length - 1;
+  if (editorTool === "add-node") {
+    const insertAfter = getNearestEditorSegment(point);
+    const previous = editorTrack.nodes[insertAfter];
+    const next = editorTrack.nodes[(insertAfter + 1) % editorTrack.nodes.length];
+    const width = previous && next ? (previous.width + next.width) * 0.5 : Number(trackWidthSlider.value);
+    const originalCurve = next?.curve ?? 0;
+    editorTrack.nodes.splice(insertAfter + 1, 0, { ...point, width, curve: originalCurve * 0.45 });
+    if (next) next.curve = originalCurve * 0.45;
+    selectedEditorNode = insertAfter + 1;
+    selectedEditorScenery = -1;
   } else if (editorTool === "select") {
-    selectedEditorNode = getNearestEditorNode(point);
-    trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 12;
-    curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
+    const curveSegment = getNearestEditorCurveHandle(point);
+    if (curveSegment >= 0) {
+      draggedEditorCurveSegment = curveSegment;
+      selectedEditorNode = (curveSegment + 1) % editorTrack.nodes.length;
+      selectedEditorScenery = -1;
+      draggedEditorNode = null;
+      editorCanvas.setPointerCapture(event.pointerId);
+      trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 12;
+      curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
+    } else {
+      selectedEditorNode = getNearestEditorNode(point);
+      selectedEditorScenery = -1;
+      draggedEditorNode = selectedEditorNode;
+      draggedEditorCurveSegment = null;
+      editorCanvas.setPointerCapture(event.pointerId);
+      trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 12;
+      curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
+    }
+  } else if (editorTool === "select-scenery") {
+    const nearestScenery = getNearestEditorScenery(point);
+    selectedEditorScenery = nearestScenery.index;
+    draggedEditorNode = null;
+    if (selectedEditorScenery >= 0) editorCanvas.setPointerCapture(event.pointerId);
+  } else if (editorTool === "kerb") {
+    const segment = getNearestEditorSegment(point);
+    const side = getEditorSegmentSide(point, segment);
+    const existing = editorTrack.kerbs.find((kerb) => kerb.segment === segment && kerb.side === side);
+    if (existing) {
+      existing.length = THREE.MathUtils.clamp((existing.length ?? 0.4) + 0.18, 0.22, 0.82);
+    } else {
+      editorTrack.kerbs.push(createEditorKerb(segment, side));
+    }
   } else if (editorTool === "start") {
-    editorTrack.startSegment = getNearestEditorSegment(point);
+    editorTrack.startNode = getNearestEditorNode(point);
+    editorTrack.startSegment = editorTrack.startNode;
   } else if (editorTool === "pit") {
     editorTrack.pitLane.push({ ...point, width: 6, curve: 0 });
   } else if (editorTool === "scenery") {
-    editorTrack.scenery.push({ type: sceneryTypeSelect.value, ...point });
+    editorTrack.scenery.push({ type: sceneryTypeSelect.value, rotation: 0, ...point });
+    selectedEditorScenery = editorTrack.scenery.length - 1;
   }
 
   updateTrackWidthReadout();
@@ -2664,17 +3113,54 @@ function handleEditorPointerDown(event) {
 }
 
 function handleEditorPointerMove(event) {
-  editorGhostPoint = getEditorPoint(event);
-  if (editorTool !== "straight" && editorTool !== "curve" && editorTool !== "pit") return;
+  const point = getEditorPoint(event);
+  editorGhostPoint = point;
+  if (editorTool === "select" && draggedEditorCurveSegment !== null) {
+    updateEditorCurveFromPoint(draggedEditorCurveSegment, point);
+    renderTrackEditor();
+    return;
+  }
+  if (editorTool === "select" && draggedEditorNode !== null && editorTrack.nodes[draggedEditorNode]) {
+    editorTrack.nodes[draggedEditorNode].x = point.x;
+    editorTrack.nodes[draggedEditorNode].y = point.y;
+    renderTrackEditor();
+    return;
+  }
+  if (editorTool === "select-scenery" && selectedEditorScenery >= 0 && editorTrack.scenery[selectedEditorScenery] && editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorTrack.scenery[selectedEditorScenery].x = point.x;
+    editorTrack.scenery[selectedEditorScenery].y = point.y;
+    renderTrackEditor();
+    return;
+  }
+  if (editorTool !== "add-node" && editorTool !== "pit" && editorTool !== "kerb" && editorTool !== "start") return;
   renderTrackEditor();
+}
+
+function handleEditorPointerUp(event) {
+  draggedEditorNode = null;
+  draggedEditorCurveSegment = null;
+  if (editorCanvas.hasPointerCapture(event.pointerId)) editorCanvas.releasePointerCapture(event.pointerId);
 }
 
 function getEditorPoint(event) {
   const rect = editorCanvas.getBoundingClientRect();
+  const viewBox = editorCanvas.viewBox.baseVal;
   return {
-    x: THREE.MathUtils.clamp(((event.clientX - rect.left) / rect.width) * 1000, 0, 1000),
-    y: THREE.MathUtils.clamp(((event.clientY - rect.top) / rect.height) * 700, 0, 700),
+    x: THREE.MathUtils.clamp(viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width, 0, EDITOR_WORLD_WIDTH),
+    y: THREE.MathUtils.clamp(viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height, 0, EDITOR_WORLD_HEIGHT),
   };
+}
+
+function updateEditorZoom(nextZoom = editorZoom) {
+  if (!editorCanvas) return;
+  editorZoom = THREE.MathUtils.clamp(nextZoom, 0.3, 3);
+  const visibleWidth = EDITOR_WORLD_WIDTH / editorZoom;
+  const visibleHeight = EDITOR_WORLD_HEIGHT / editorZoom;
+  const x = editorViewCenter.x - visibleWidth * 0.5;
+  const y = editorViewCenter.y - visibleHeight * 0.5;
+  editorCanvas.setAttribute("viewBox", `${x} ${y} ${visibleWidth} ${visibleHeight}`);
+  if (editorZoomSlider) editorZoomSlider.value = editorZoom.toFixed(2);
+  if (editorZoomReadout) editorZoomReadout.textContent = `${Math.round(editorZoom * 100)}%`;
 }
 
 function updateSelectedTrackWidth() {
@@ -2693,21 +3179,48 @@ function updateSelectedCurveBend() {
   renderTrackEditor();
 }
 
+function isEditorTypingTarget(target) {
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
+}
+
+function deleteSelectedEditorItem() {
+  if (selectedEditorScenery >= 0 && editorTrack.scenery[selectedEditorScenery]) {
+    editorTrack.scenery.splice(selectedEditorScenery, 1);
+    selectedEditorScenery = -1;
+  } else if (editorTool === "select" && editorTrack.nodes.length > 3 && editorTrack.nodes[selectedEditorNode]) {
+    editorTrack.nodes.splice(selectedEditorNode, 1);
+    selectedEditorNode = Math.max(0, Math.min(selectedEditorNode, editorTrack.nodes.length - 1));
+    editorTrack.startNode = Math.max(0, Math.min(editorTrack.startNode ?? 0, editorTrack.nodes.length - 1));
+    editorTrack.startSegment = editorTrack.startNode;
+  } else if (editorTool === "kerb" && editorTrack.kerbs.length > 0) {
+    editorTrack.kerbs.pop();
+  } else {
+    return;
+  }
+  draggedEditorNode = null;
+  draggedEditorCurveSegment = null;
+  updateTrackWidthReadout();
+  updateCurveBendReadout();
+  renderTrackEditor();
+}
+
 function updateTrackWidthReadout() {
   trackWidthReadout.textContent = `${Number(trackWidthSlider.value).toFixed(1).replace(".0", "")}m`;
 }
 
 function updateCurveBendReadout() {
   const bend = Number(curveBendSlider.value);
-  const size = Math.abs(bend) < 0.18 ? "Soft" : Math.abs(bend) < 0.58 ? "Gentle" : "Tight";
+  const size = Math.abs(bend) < 0.18 ? "Soft" : Math.abs(bend) < 0.58 ? "Gentle" : Math.abs(bend) < 1.1 ? "Tight" : "Chicane";
   const direction = bend < -0.05 ? "L" : bend > 0.05 ? "R" : "Straight";
   curveBendReadout.textContent = direction === "Straight" ? "Straight" : `${size} ${direction}`;
 }
 
 function undoEditorAction() {
-  if ((editorTool === "straight" || editorTool === "curve") && editorTrack.nodes.length > 0) {
-    editorTrack.nodes.pop();
-    selectedEditorNode = Math.max(0, editorTrack.nodes.length - 1);
+  if (editorTool === "add-node" && editorTrack.nodes.length > 3) {
+    editorTrack.nodes.splice(selectedEditorNode, 1);
+    selectedEditorNode = Math.max(0, Math.min(selectedEditorNode - 1, editorTrack.nodes.length - 1));
+  } else if (editorTool === "kerb" && editorTrack.kerbs.length > 0) {
+    editorTrack.kerbs.pop();
   } else if (editorTool === "pit" && editorTrack.pitLane.length > 0) {
     editorTrack.pitLane.pop();
   } else if (editorTrack.scenery.length > 0) {
@@ -2721,6 +3234,8 @@ function exportEditorTrack() {
     version: 2,
     name: editorTrack.name,
     closed: editorTrack.closed,
+    startNode: editorTrack.startNode,
+    startDirection: editorTrack.startDirection,
     startSegment: editorTrack.startSegment,
     nodes: editorTrack.nodes.map((node) => ({
       x: Math.round(node.x),
@@ -2728,8 +3243,9 @@ function exportEditorTrack() {
       width: node.width,
       curve: Number((node.curve ?? 0).toFixed(2)),
     })),
+    kerbs: editorTrack.kerbs.map(normalizeEditorKerbForExport),
     pitLane: editorTrack.pitLane.map((node) => ({ x: Math.round(node.x), y: Math.round(node.y), width: node.width })),
-    scenery: editorTrack.scenery.map((item) => ({ type: item.type, x: Math.round(item.x), y: Math.round(item.y) })),
+    scenery: editorTrack.scenery.map((item) => ({ type: item.type, x: Math.round(item.x), y: Math.round(item.y), rotation: Number((item.rotation ?? 0).toFixed(2)) })),
   };
   trackJsonOutput.value = JSON.stringify(exportData, null, 2);
 }
@@ -2741,30 +3257,64 @@ function renderTrackEditor() {
   editorSceneryLayer.innerHTML = "";
   editorGhostLayer.innerHTML = "";
 
-  renderEditorSegments(editorTrack.nodes, true, "editor-kerb", 8);
+  renderEditorSegments(editorTrack.nodes, true, "editor-road-edge", 7.5);
   renderEditorSegments(editorTrack.nodes, true, "editor-road", 0);
+  renderEditorKerbs();
   renderEditorSegments(editorTrack.pitLane, false, "editor-pit", 0);
   renderEditorStartLine();
   renderEditorScenery();
   renderEditorNodes();
+  renderEditorCurveHandles();
   renderEditorGhost();
   exportEditorTrack();
+  updateEditorStatus();
 }
 
 function renderEditorSegments(nodes, closed, className, widthOffset) {
   const segmentCount = closed ? nodes.length : Math.max(0, nodes.length - 1);
   if (nodes.length < 2) return;
+  if (closed && className === "editor-road-edge") {
+    const averageWidth = nodes.reduce((sum, node) => sum + (node.width ?? 10), 0) / nodes.length;
+    editorTrackLayer.appendChild(svgElement("path", {
+      class: className,
+      "stroke-width": (averageWidth + widthOffset) * EDITOR_TRACK_VISUAL_SCALE,
+      d: getEditorTrackPath(nodes),
+    }));
+    return;
+  }
   for (let i = 0; i < segmentCount; i += 1) {
     const a = nodes[i];
     const b = nodes[(i + 1) % nodes.length];
     const width = ((a.width ?? 10) + (b.width ?? 10)) * 0.5 + widthOffset;
     const attrs = {
       class: className,
-      "stroke-width": width,
+      "stroke-width": width * EDITOR_TRACK_VISUAL_SCALE,
       d: getEditorSegmentPath(a, b, b.curve ?? 0),
     };
     editorTrackLayer.appendChild(svgElement("path", attrs));
   }
+}
+
+function getEditorTrackPath(nodes) {
+  let path = `M ${nodes[0].x} ${nodes[0].y}`;
+  for (let i = 0; i < nodes.length; i += 1) {
+    const a = nodes[i];
+    const b = nodes[(i + 1) % nodes.length];
+    const curve = b.curve ?? 0;
+    if (Math.abs(curve) < 0.04) {
+      path += ` L ${b.x} ${b.y}`;
+      continue;
+    }
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const controlX = (a.x + b.x) * 0.5 + nx * length * curve * 0.55;
+    const controlY = (a.y + b.y) * 0.5 + ny * length * curve * 0.55;
+    path += ` Q ${controlX} ${controlY} ${b.x} ${b.y}`;
+  }
+  return path;
 }
 
 function getEditorSegmentPath(a, b, curve = 0) {
@@ -2779,70 +3329,417 @@ function getEditorSegmentPath(a, b, curve = 0) {
   return `M ${a.x} ${a.y} Q ${controlX} ${controlY} ${b.x} ${b.y}`;
 }
 
-function renderEditorStartLine() {
-  if (editorTrack.nodes.length < 2) return;
-  const a = editorTrack.nodes[editorTrack.startSegment % editorTrack.nodes.length];
-  const b = editorTrack.nodes[(editorTrack.startSegment + 1) % editorTrack.nodes.length];
+function getEditorCurveHandlePose(segmentIndex) {
+  const segment = getEditorSegment(segmentIndex);
+  if (!segment) return null;
+  const { a, b } = segment;
+  const curve = b.curve ?? 0;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const length = Math.hypot(dx, dy) || 1;
   const nx = -dy / length;
   const ny = dx / length;
-  const cx = (a.x + b.x) * 0.5;
-  const cy = (a.y + b.y) * 0.5;
-  const width = (((a.width ?? 10) + (b.width ?? 10)) * 0.5 + 10) * 0.5;
-  editorTrackLayer.appendChild(svgElement("line", {
-    x1: cx - nx * width,
-    y1: cy - ny * width,
-    x2: cx + nx * width,
-    y2: cy + ny * width,
-    class: "editor-start-line",
-  }));
+  return {
+    x: (a.x + b.x) * 0.5 + nx * length * curve * 0.55,
+    y: (a.y + b.y) * 0.5 + ny * length * curve * 0.55,
+    midX: (a.x + b.x) * 0.5,
+    midY: (a.y + b.y) * 0.5,
+    nx,
+    ny,
+    length,
+  };
+}
+
+function updateEditorCurveFromPoint(segmentIndex, point) {
+  const pose = getEditorCurveHandlePose(segmentIndex);
+  const node = editorTrack.nodes[(segmentIndex + 1) % editorTrack.nodes.length];
+  if (!pose || !node) return;
+  const bend = ((point.x - pose.midX) * pose.nx + (point.y - pose.midY) * pose.ny) / (pose.length * 0.55);
+  node.curve = THREE.MathUtils.clamp(bend, Number(curveBendSlider.min), Number(curveBendSlider.max));
+  curveBendSlider.value = node.curve;
+  updateCurveBendReadout();
+}
+
+function renderEditorStartLine() {
+  if (editorTrack.nodes.length < 2) return;
+  const pose = getEditorStartPose(editorTrack.startNode ?? 0, editorTrack.startDirection ?? 1);
+  if (!pose) return;
+  renderEditorStartLineAtPose(pose, "editor-start-line");
+}
+
+function getEditorStartPose(nodeIndex, direction = 1) {
+  if (editorTrack.nodes.length < 2) return null;
+  const safeIndex = ((nodeIndex % editorTrack.nodes.length) + editorTrack.nodes.length) % editorTrack.nodes.length;
+  const node = editorTrack.nodes[safeIndex];
+  const otherIndex = direction >= 0
+    ? (safeIndex + 1) % editorTrack.nodes.length
+    : (safeIndex - 1 + editorTrack.nodes.length) % editorTrack.nodes.length;
+  const other = editorTrack.nodes[otherIndex];
+  const dx = (other.x - node.x) * Math.sign(direction || 1);
+  const dy = (other.y - node.y) * Math.sign(direction || 1);
+  const length = Math.hypot(dx, dy) || 1;
+  return {
+    x: node.x,
+    y: node.y,
+    tx: dx / length,
+    ty: dy / length,
+    width: node.width ?? 12,
+  };
+}
+
+function renderEditorStartLineAtPose(pose, className) {
+  const nx = -pose.ty;
+  const ny = pose.tx;
+  const halfWidth = (pose.width + 12) * 0.5 * EDITOR_VISUAL_SCALE;
+  const columns = 10;
+  const tileWidth = (halfWidth * 2) / columns;
+  const tileDepth = (className === "editor-ghost-start-line" ? 7 : 10) * EDITOR_VISUAL_SCALE;
+
+  for (let col = 0; col < columns; col += 1) {
+    const offset = -halfWidth + tileWidth * (col + 0.5);
+    const tileCx = pose.x + nx * offset;
+    const tileCy = pose.y + ny * offset;
+    editorTrackLayer.appendChild(svgElement("rect", {
+      x: tileCx - tileWidth / 2,
+      y: tileCy - tileDepth / 2,
+      width: tileWidth,
+      height: tileDepth,
+      class: `${className} ${col % 2 === 0 ? "is-light" : "is-dark"}`,
+      transform: `rotate(${Math.atan2(pose.ty, pose.tx) * 180 / Math.PI} ${tileCx} ${tileCy})`,
+    }));
+  }
+
+  if (className === "editor-start-line") {
+    editorTrackLayer.appendChild(svgElement("path", {
+      d: `M ${pose.x} ${pose.y} l ${pose.tx * 110} ${pose.ty * 110} l ${-pose.ty * 25} ${pose.tx * 25} m ${pose.ty * 25} ${-pose.tx * 25} l ${pose.ty * 25} ${-pose.tx * 25}`,
+      class: "editor-start-direction",
+    }));
+  }
+}
+
+function isNearEditorStartLine(point) {
+  const pose = getEditorStartPose(editorTrack.startNode ?? 0, editorTrack.startDirection ?? 1);
+  if (!pose) return false;
+  return Math.hypot(point.x - pose.x, point.y - pose.y) < 170;
 }
 
 function renderEditorNodes() {
   for (const [index, node] of editorTrack.nodes.entries()) {
+    const classes = ["editor-node"];
+    if (index === selectedEditorNode) classes.push("is-selected");
+    if (editorTool === "start") classes.push("is-start-option");
+    if (index === (editorTrack.startNode ?? 0)) classes.push("is-start-node");
     editorNodeLayer.appendChild(svgElement("circle", {
       cx: node.x,
       cy: node.y,
-      r: index === selectedEditorNode ? 10 : 7,
-      class: index === selectedEditorNode ? "editor-node is-selected" : "editor-node",
+      r: (index === selectedEditorNode || editorTool === "start" ? 10 : 7) * EDITOR_VISUAL_SCALE,
+      class: classes.join(" "),
     }));
-    const curveLabel = Math.abs(node.curve ?? 0) > 0.04 ? ` / ${node.curve > 0 ? "R" : "L"}` : "";
     editorNodeLayer.appendChild(svgElement("text", {
-      x: node.x + 13,
-      y: node.y - 10,
+      x: node.x + 65,
+      y: node.y - 50,
       class: "editor-node-label",
-    }, `${node.width}m${curveLabel}`));
+    }, `${node.width}m`));
   }
 }
 
+function renderEditorCurveHandles() {
+  if (editorTool !== "select") return;
+  for (let segmentIndex = 0; segmentIndex < editorTrack.nodes.length; segmentIndex += 1) {
+    const pose = getEditorCurveHandlePose(segmentIndex);
+    if (!pose) continue;
+    const selected = selectedEditorNode === (segmentIndex + 1) % editorTrack.nodes.length;
+    editorNodeLayer.appendChild(svgElement("line", {
+      x1: pose.midX,
+      y1: pose.midY,
+      x2: pose.x,
+      y2: pose.y,
+      class: `editor-curve-stem${selected ? " is-selected" : ""}`,
+    }));
+    editorNodeLayer.appendChild(svgElement("circle", {
+      cx: pose.x,
+      cy: pose.y,
+      r: (selected ? 9 : 7) * EDITOR_VISUAL_SCALE,
+      class: `editor-curve-handle${selected ? " is-selected" : ""}`,
+    }));
+  }
+}
+
+function createEditorKerb(segment, side) {
+  return {
+    segment,
+    side,
+    start: 0.16,
+    end: 0.58,
+    width: 1.35,
+    height: 0.28,
+    surface: "kerb",
+  };
+}
+
+function normalizeEditorKerbForExport(kerb) {
+  return {
+    segment: kerb.segment,
+    side: kerb.side,
+    start: Number((kerb.start ?? 0.16).toFixed(2)),
+    end: Number((kerb.end ?? 0.58).toFixed(2)),
+    width: Number((kerb.width ?? 1.35).toFixed(2)),
+    height: Number((kerb.height ?? 0.28).toFixed(2)),
+    surface: kerb.surface ?? "kerb",
+  };
+}
+function renderEditorKerbs() {
+  for (const kerb of editorTrack.kerbs) {
+    const segment = getEditorSegment(kerb.segment);
+    if (!segment) continue;
+    const { a, b } = segment;
+    const curve = b.curve ?? 0;
+    const width = ((a.width ?? 10) + (b.width ?? 10)) * 0.5;
+    const samples = sampleEditorSegment(a, b, curve, 16);
+    const start = Math.floor(samples.length * THREE.MathUtils.clamp(kerb.start ?? 0.16, 0.02, 0.9));
+    const end = Math.max(start + 2, Math.floor(samples.length * THREE.MathUtils.clamp(kerb.end ?? 0.58, 0.08, 0.98)));
+
+    for (let i = start; i < end; i += 1) {
+      const current = samples[i];
+      const next = samples[Math.min(samples.length - 1, i + 1)];
+      const dx = next.x - current.x;
+      const dy = next.y - current.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const nx = -dy / length;
+      const ny = dx / length;
+      const side = kerb.side ?? 1;
+      const kerbVisualWidth = (kerb.width ?? 1.35) * 3.2 * EDITOR_VISUAL_SCALE;
+      const cx = current.x + nx * side * (width * 0.5 + kerbVisualWidth * 0.55);
+      const cy = current.y + ny * side * (width * 0.5 + kerbVisualWidth * 0.55);
+      editorTrackLayer.appendChild(svgElement("rect", {
+        x: cx - 30,
+        y: cy - kerbVisualWidth * 0.5,
+        width: 60,
+        height: kerbVisualWidth,
+        rx: 5,
+        class: "editor-kerb-red",
+        transform: `rotate(${Math.atan2(dy, dx) * 180 / Math.PI} ${cx} ${cy})`,
+      }));
+    }
+  }
+}
+
+function sampleEditorSegment(a, b, curve = 0, count = 16) {
+  const points = [];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const nx = -dy / length;
+  const ny = dx / length;
+  const control = {
+    x: (a.x + b.x) * 0.5 + nx * length * curve * 0.55,
+    y: (a.y + b.y) * 0.5 + ny * length * curve * 0.55,
+  };
+
+  for (let i = 0; i <= count; i += 1) {
+    const t = i / count;
+    if (Math.abs(curve) < 0.04) {
+      points.push({ x: THREE.MathUtils.lerp(a.x, b.x, t), y: THREE.MathUtils.lerp(a.y, b.y, t) });
+    } else {
+      const mt = 1 - t;
+      points.push({
+        x: mt * mt * a.x + 2 * mt * t * control.x + t * t * b.x,
+        y: mt * mt * a.y + 2 * mt * t * control.y + t * t * b.y,
+      });
+    }
+  }
+  return points;
+}
+
+function getEditorSegment(index) {
+  if (editorTrack.nodes.length < 2) return null;
+  const safeIndex = ((index % editorTrack.nodes.length) + editorTrack.nodes.length) % editorTrack.nodes.length;
+  return {
+    a: editorTrack.nodes[safeIndex],
+    b: editorTrack.nodes[(safeIndex + 1) % editorTrack.nodes.length],
+  };
+}
+
+function getEditorSegmentSide(point, segmentIndex) {
+  const segment = getEditorSegment(segmentIndex);
+  if (!segment) return 1;
+  const { a, b } = segment;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const side = Math.sign(dx * (point.y - a.y) - dy * (point.x - a.x));
+  return side === 0 ? 1 : side;
+}
+
+function updateEditorStatus() {
+  if (!editorStatus) return;
+  const toolLabel = {
+    "add-node": "Add Node",
+    select: "Select Node",
+    "select-scenery": "Select Scenery",
+    kerb: "Kerbs",
+    start: "Start Line",
+    pit: "Pit Lane",
+    scenery: "Add Scenery",
+  }[editorTool] ?? "No Tool";
+  editorStatus.textContent = `${toolLabel} | ${editorTrack.nodes.length} road nodes | ${editorTrack.kerbs.length} kerbs | ${editorTrack.scenery.length} scenery`;
+}
 function renderEditorScenery() {
-  for (const item of editorTrack.scenery) {
-    const symbol = { trees: "T", lamp: "L", building: "B", grandstand: "G" }[item.type] ?? "S";
+  for (const [index, item] of editorTrack.scenery.entries()) {
+    const selectedClass = index === selectedEditorScenery ? " is-selected" : "";
+    if (item.type === "grandstand") {
+      const group = svgElement("g", {
+        class: `editor-scenery-group${selectedClass}`,
+        transform: `translate(${item.x} ${item.y}) rotate(${editorRotationDegrees(item.rotation)})`,
+      });
+      group.appendChild(svgElement("rect", {
+        x: -720,
+        y: -165,
+        width: 1440,
+        height: 330,
+        rx: 30,
+        class: "editor-scenery editor-scenery-grandstand",
+      }));
+      group.appendChild(svgElement("path", {
+        d: "M 0 -270 L 120 -105 L 45 -105 L 45 75 L -45 75 L -45 -105 L -120 -105 Z",
+        class: "editor-facing-arrow",
+      }));
+      editorSceneryLayer.appendChild(group);
+      continue;
+    }
+
+    if (item.type === "lamp") {
+      const group = svgElement("g", {
+        class: `editor-scenery-group${selectedClass}`,
+        transform: `translate(${item.x} ${item.y}) rotate(${editorRotationDegrees(item.rotation)})`,
+      });
+      group.appendChild(svgElement("circle", {
+        cx: 0,
+        cy: 0,
+        r: 120,
+        class: "editor-scenery editor-scenery-lamp",
+      }));
+      group.appendChild(svgElement("path", {
+        d: "M 0 -405 L 105 -225 L 30 -240 L 30 -75 L -30 -75 L -30 -240 L -105 -225 Z",
+        class: "editor-light-arrow",
+      }));
+      editorSceneryLayer.appendChild(group);
+      continue;
+    }
+
+    const symbol = { trees: "T", building: "B" }[item.type] ?? "S";
     editorSceneryLayer.appendChild(svgElement("circle", {
       cx: item.x,
       cy: item.y,
-      r: item.type === "grandstand" ? 18 : item.type === "building" ? 15 : 11,
-      class: `editor-scenery editor-scenery-${item.type}`,
+      r: (item.type === "building" ? 15 : 11) * EDITOR_VISUAL_SCALE,
+      class: `editor-scenery editor-scenery-${item.type}${selectedClass}`,
     }));
     editorSceneryLayer.appendChild(svgElement("text", {
       x: item.x,
-      y: item.y + 5,
+      y: item.y + 25,
       class: "editor-scenery-label",
       "text-anchor": "middle",
     }, symbol));
   }
 }
 
+function editorRotationDegrees(rotation = 0) {
+  return rotation * 180 / Math.PI;
+}
+
+function rotateSelectedEditorDirectionalScenery(direction) {
+  const selected = editorTrack.scenery[selectedEditorScenery];
+  let targetIndex = selected && ["lamp", "grandstand"].includes(selected.type) ? selectedEditorScenery : -1;
+  if (targetIndex < 0) {
+    for (let i = editorTrack.scenery.length - 1; i >= 0; i -= 1) {
+      if (["lamp", "grandstand"].includes(editorTrack.scenery[i].type)) {
+        targetIndex = i;
+        break;
+      }
+    }
+  }
+  if (targetIndex < 0) return;
+  selectedEditorScenery = targetIndex;
+  editorTrack.scenery[targetIndex].rotation = (editorTrack.scenery[targetIndex].rotation ?? 0) + direction * THREE.MathUtils.degToRad(2);
+  renderTrackEditor();
+}
+
+function getNearestEditorScenery(point) {
+  let index = -1;
+  let distance = Infinity;
+  for (const [candidateIndex, item] of editorTrack.scenery.entries()) {
+    const radius = (item.type === "grandstand" ? 26 : item.type === "building" ? 17 : 13) * EDITOR_VISUAL_SCALE;
+    const itemDistance = Math.hypot(item.x - point.x, item.y - point.y);
+    if (itemDistance < distance && itemDistance <= radius) {
+      index = candidateIndex;
+      distance = itemDistance;
+    }
+  }
+  return { index, distance };
+}
+
+function getNearestEditorCurveHandle(point) {
+  let nearest = -1;
+  let best = Infinity;
+  const hitRadius = 12 * EDITOR_VISUAL_SCALE;
+  for (let segmentIndex = 0; segmentIndex < editorTrack.nodes.length; segmentIndex += 1) {
+    const pose = getEditorCurveHandlePose(segmentIndex);
+    if (!pose) continue;
+    const distance = Math.hypot(point.x - pose.x, point.y - pose.y);
+    if (distance < best && distance <= hitRadius) {
+      best = distance;
+      nearest = segmentIndex;
+    }
+  }
+  return nearest;
+}
+
 function renderEditorGhost() {
-  if (!editorGhostPoint || (editorTool !== "straight" && editorTool !== "curve" && editorTool !== "pit")) return;
-  const nodes = editorTool === "pit" ? editorTrack.pitLane : editorTrack.nodes;
+  if (!editorGhostPoint) return;
+  if (editorTool === "start" || editorTool === "kerb") {
+    const segmentIndex = getNearestEditorSegment(editorGhostPoint);
+    const segment = getEditorSegment(segmentIndex);
+    if (!segment) return;
+    if (editorTool === "start") {
+      const nodeIndex = getNearestEditorNode(editorGhostPoint);
+      const pose = getEditorStartPose(nodeIndex, editorTrack.startDirection ?? 1);
+      if (pose) renderEditorStartLineAtPose(pose, "editor-ghost-start-line");
+      return;
+    }
+    const side = getEditorSegmentSide(editorGhostPoint, segmentIndex);
+    const preview = createEditorKerb(segmentIndex, side);
+    const original = editorTrack.kerbs;
+    editorTrack.kerbs = [preview];
+    renderEditorKerbs();
+    editorTrack.kerbs = original;
+    return;
+  }
+
+  if (editorTool === "add-node") {
+    const insertAfter = getNearestEditorSegment(editorGhostPoint);
+    const segment = getEditorSegment(insertAfter);
+    if (!segment) return;
+    editorGhostLayer.appendChild(svgElement("path", {
+      d: getEditorSegmentPath(segment.a, editorGhostPoint, 0),
+      class: "editor-ghost-line",
+    }));
+    editorGhostLayer.appendChild(svgElement("path", {
+      d: getEditorSegmentPath(editorGhostPoint, segment.b, segment.b.curve ?? 0),
+      class: "editor-ghost-line",
+    }));
+    editorGhostLayer.appendChild(svgElement("circle", {
+      cx: editorGhostPoint.x,
+      cy: editorGhostPoint.y,
+      r: 45,
+      class: "editor-node is-selected",
+    }));
+    return;
+  }
+  if (editorTool !== "pit") return;
+  const nodes = editorTrack.pitLane;
   const last = nodes[nodes.length - 1];
   if (!last) return;
-  const curve = editorTool === "curve" ? Number(curveBendSlider.value) : 0;
   editorGhostLayer.appendChild(svgElement("path", {
-    d: getEditorSegmentPath(last, editorGhostPoint, curve),
+    d: getEditorSegmentPath(last, editorGhostPoint, 0),
     class: "editor-ghost-line",
   }));
 }
@@ -2866,7 +3763,11 @@ function getNearestEditorSegment(point) {
   for (let i = 0; i < editorTrack.nodes.length; i += 1) {
     const a = editorTrack.nodes[i];
     const b = editorTrack.nodes[(i + 1) % editorTrack.nodes.length];
-    const distance = distanceToSegment2D(point.x, point.y, a, b);
+    const samples = sampleEditorSegment(a, b, b.curve ?? 0, 18);
+    let distance = Infinity;
+    for (let sampleIndex = 0; sampleIndex < samples.length - 1; sampleIndex += 1) {
+      distance = Math.min(distance, distanceToSegment2D(point.x, point.y, samples[sampleIndex], samples[sampleIndex + 1]));
+    }
     if (distance < best) {
       best = distance;
       nearest = i;
@@ -3026,6 +3927,265 @@ function setPaused(paused) {
   if (isPaused) keys.clear();
 }
 
+function startEditorTestDrive() {
+  if (editorTrack.nodes.length < 3) return;
+  trackDefinitions["editor-test"] = createTrackDefinitionFromEditor();
+  selectedTrack = "editor-test";
+  isEditorTestDrive = true;
+  backToEditorButton.hidden = false;
+  gameStarted = true;
+  setPaused(false);
+  keys.clear();
+  stopEditorMusic();
+  startMenu.classList.add("is-hidden");
+  trackEditor.classList.add("is-hidden");
+  scene.remove(track.group);
+  track = createTrack(selectedTrack);
+  scene.add(track.group);
+  startEngineAudio();
+  forceAudioProbe();
+  resetCar();
+}
+
+function returnToTrackEditor() {
+  if (!isEditorTestDrive) return;
+  gameStarted = false;
+  setPaused(false);
+  keys.clear();
+  backToEditorButton.hidden = true;
+  isEditorTestDrive = false;
+  scene.remove(track.group);
+  selectedTrack = "practice";
+  track = createTrack(selectedTrack);
+  scene.add(track.group);
+  resetCar();
+  trackEditor.classList.remove("is-hidden");
+  startEditorMusic();
+  renderTrackEditor();
+}
+
+function createTrackDefinitionFromEditor() {
+  const startNode = THREE.MathUtils.clamp(editorTrack.startNode ?? 0, 0, editorTrack.nodes.length - 1);
+  const direction = editorTrack.startDirection ?? 1;
+  const nextNode = direction >= 0
+    ? (startNode + 1) % editorTrack.nodes.length
+    : (startNode - 1 + editorTrack.nodes.length) % editorTrack.nodes.length;
+  const points = editorTrack.nodes.map(editorPointToPlan);
+
+  return {
+    points,
+    start: points[startNode],
+    next: points[nextNode],
+    tension: 0.32,
+    scale: 0.168,
+    halfWidth: Math.max(6, averageEditorTrackWidth() * 0.62),
+    kerbWidth: 1.2,
+    detailSamples: 720,
+    grassSize: [560, 420],
+    cornerOnlyKerbs: true,
+    extras: addEditorTestTrackDetails,
+  };
+}
+
+function editorPointToPlan(node) {
+  return [
+    800 + (node.x - EDITOR_WORLD_WIDTH * 0.5) * 0.1733333333,
+    450 + (node.y - EDITOR_WORLD_HEIGHT * 0.5) * 0.1733333333,
+  ];
+}
+
+function averageEditorTrackWidth() {
+  if (!editorTrack.nodes.length) return 12;
+  return editorTrack.nodes.reduce((sum, node) => sum + (node.width ?? 12), 0) / editorTrack.nodes.length;
+}
+
+function addEditorTestTrackDetails(group, extraTrackAreas, samples, obstacles = []) {
+  const halfWidth = trackDefinitions["editor-test"].halfWidth;
+  for (const kerb of editorTrack.kerbs) {
+    addKerbSurfaceObject(group, samples, {
+      segment: kerb.segment ?? 0,
+      side: kerb.side ?? 1,
+      start: kerb.start ?? 0.16,
+      end: kerb.end ?? 0.58,
+      width: kerb.width ?? 1.35,
+      height: kerb.height ?? 0.28,
+      trackHalfWidth: halfWidth,
+    }, extraTrackAreas);
+  }
+  addEditorSceneryObjects(group, obstacles);
+}
+
+function addEditorSceneryObjects(group, obstacles = []) {
+  for (const item of editorTrack.scenery) {
+    const position = editorPointToWorld(item);
+    if (item.type === "trees") {
+      addEditorTreeCluster(group, position.x, position.z, item.rotation ?? 0, obstacles);
+    } else if (item.type === "grandstand") {
+      addEditorGrandstand(group, position.x, position.z, item.rotation ?? 0, obstacles);
+    } else if (item.type === "building") {
+      addEditorBuilding(group, position.x, position.z, item.rotation ?? 0);
+    } else if (item.type === "lamp") {
+      addEditorLamp(group, position.x, position.z, item.rotation ?? 0);
+    }
+  }
+}
+
+function editorPointToWorld(item) {
+  const [planX, planY] = editorPointToPlan(item);
+  return pointFromPlan(planX, planY, 0.168);
+}
+
+function addEditorTreeCluster(group, x, z, rotation = 0, obstacles = []) {
+  const cluster = new THREE.Group();
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8c6239, roughness: 0.88, flatShading: true });
+  const leafMaterials = [
+    new THREE.MeshStandardMaterial({ color: 0x4f9b52, roughness: 0.9, flatShading: true }),
+    new THREE.MeshStandardMaterial({ color: 0x3f7f45, roughness: 0.9, flatShading: true }),
+    new THREE.MeshStandardMaterial({ color: 0x67ad5d, roughness: 0.9, flatShading: true }),
+  ];
+  const spots = [
+    [0, 0, 2.25],
+    [-3.1, 2.0, 1.15],
+    [2.8, 1.6, 1.45],
+    [-1.5, -2.6, 0.95],
+    [2.1, -2.4, 1.8],
+  ];
+
+  for (const [localX, localZ, scale] of spots) {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * scale, 0.28 * scale, 1.4 * scale, 5), trunkMaterial);
+    const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.05 * scale, 2.4 * scale, 7), leafMaterials[Math.floor(scale * 10) % leafMaterials.length]);
+    trunk.position.y = 0.7 * scale;
+    leaves.position.y = 2.25 * scale;
+    trunk.castShadow = true;
+    leaves.castShadow = true;
+    tree.add(trunk, leaves);
+    tree.position.set(localX, 0, localZ);
+    cluster.add(tree);
+  }
+
+  cluster.position.set(x, 0, z);
+  const worldRotation = editorRotationToWorld(rotation);
+  cluster.rotation.y = worldRotation;
+  group.add(cluster);
+
+  for (const [localX, localZ, scale] of spots) {
+    const worldOffset = new THREE.Vector3(localX, 0, localZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), worldRotation);
+    const trunkRadius = Math.max(0.55, 0.55 * scale);
+    obstacles.push({
+      kind: "tree",
+      x: x + worldOffset.x,
+      z: z + worldOffset.z,
+      rotation: worldRotation,
+      width: trunkRadius * 2.1,
+      depth: trunkRadius * 2.1,
+    });
+  }
+}
+
+function addEditorGrandstand(group, x, z, rotation = 0, obstacles = []) {
+  const stand = new THREE.Group();
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xbfc6c9, roughness: 0.56, metalness: 0.2, flatShading: true });
+  const seatMaterial = new THREE.MeshStandardMaterial({ color: 0xff7a1f, roughness: 0.62, metalness: 0.04, flatShading: true });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x202532, roughness: 0.48, metalness: 0.22, flatShading: true });
+  const crowdColors = [0xf4d35e, 0xe94f37, 0x2d7dd2, 0x3cb371, 0xf7f7f2, 0x101820];
+
+  const length = 68;
+  const tiers = 6;
+  const rowDepth = 2.7;
+  const rowStep = 1.65;
+  const deckDepth = tiers * 2.2;
+  const deckZ = -tiers * 1.6;
+  const roofDepth = 7;
+  const roofZ = -tiers * 1.4;
+  const frontEdge = rowDepth * 0.5;
+  const backEdge = Math.min(deckZ - deckDepth * 0.5, roofZ - roofDepth * 0.5, -(tiers - 1) * rowStep - rowDepth * 0.5);
+  const collisionDepth = frontEdge - backEdge;
+  const visualCenterZ = (frontEdge + backEdge) * 0.5;
+  for (let tier = 0; tier < tiers; tier += 1) {
+    const row = new THREE.Mesh(new THREE.BoxGeometry(length, 0.9, rowDepth), seatMaterial);
+    row.position.set(0, 0.8 + tier * 1.15, -tier * rowStep - visualCenterZ);
+    row.castShadow = true;
+    row.receiveShadow = true;
+    stand.add(row);
+  }
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(length + 3.5, 0.7, deckDepth), frameMaterial);
+  deck.position.set(0, 0.35, deckZ - visualCenterZ);
+  deck.castShadow = true;
+  deck.receiveShadow = true;
+  stand.add(deck);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(length + 5, 0.8, roofDepth), roofMaterial);
+  roof.position.set(0, 8.8, roofZ - visualCenterZ);
+  roof.rotation.x = -0.12;
+  roof.castShadow = true;
+  stand.add(roof);
+
+  const crowdCount = 68;
+  const crowdColumns = 34;
+  for (let i = 0; i < crowdCount; i += 1) {
+    const tier = i % tiers;
+    const person = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 6, 4),
+      new THREE.MeshStandardMaterial({ color: crowdColors[i % crowdColors.length], roughness: 0.9, flatShading: true }),
+    );
+    person.position.set(-length / 2 + 1.6 + (i % crowdColumns) * 2.0, 1.7 + tier * 1.15, -tier * rowStep - 0.35 - visualCenterZ);
+    person.castShadow = true;
+    stand.add(person);
+  }
+
+  stand.position.set(x, 0, z);
+  stand.rotation.y = editorRotationToWorld(rotation);
+  group.add(stand);
+  obstacles.push({
+    kind: "grandstand",
+    x,
+    z,
+    rotation: stand.rotation.y,
+    width: length + 5,
+    depth: collisionDepth,
+  });
+}
+
+function addEditorBuilding(group, x, z, rotation = 0) {
+  const building = new THREE.Group();
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x6ab6e8, roughness: 0.58, metalness: 0.04, flatShading: true });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x26313a, roughness: 0.5, metalness: 0.14, flatShading: true });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 9), wallMaterial);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(13, 1.2, 10), roofMaterial);
+  body.position.y = 4;
+  roof.position.y = 8.8;
+  body.castShadow = true;
+  roof.castShadow = true;
+  building.add(body, roof);
+  building.position.set(x, 0, z);
+  building.rotation.y = editorRotationToWorld(rotation);
+  group.add(building);
+}
+
+function addEditorLamp(group, x, z, rotation = 0) {
+  const lamp = new THREE.Group();
+  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0xc6ced2, roughness: 0.42, metalness: 0.34, flatShading: true });
+  const glowMaterial = new THREE.MeshStandardMaterial({ color: 0xffe28a, emissive: 0xffcf4a, emissiveIntensity: 0.75, roughness: 0.4, flatShading: true });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 8, 6), poleMaterial);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.22, 0.22), poleMaterial);
+  const light = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), glowMaterial);
+  pole.position.y = 4;
+  arm.position.set(1.9, 7.85, 0);
+  light.position.set(4.1, 7.7, 0);
+  pole.castShadow = true;
+  arm.castShadow = true;
+  light.castShadow = true;
+  lamp.add(pole, arm, light);
+  lamp.position.set(x, 0, z);
+  lamp.rotation.y = editorRotationToWorld(rotation);
+  group.add(lamp);
+}
+
+function editorRotationToWorld(rotation = 0) {
+  return Math.PI - rotation;
+}
 function togglePause() {
   setPaused(!isPaused);
 }
@@ -3048,14 +4208,49 @@ function startGame() {
   resetCar();
 }
 
+function startEditorMusic() {
+  if (editorAudio.element) {
+    editorAudio.element.play().catch(() => {});
+    return;
+  }
+
+  editorAudio.playlist = [...EDITOR_MUSIC_SRCS].sort(() => Math.random() - 0.5);
+  editorAudio.index = 0;
+  playNextEditorMusicTrack();
+}
+
+function playNextEditorMusicTrack() {
+  if (!editorAudio.playlist.length) return;
+  const src = editorAudio.playlist[editorAudio.index % editorAudio.playlist.length];
+  editorAudio.index += 1;
+  const audio = new Audio(src);
+  editorAudio.element = audio;
+  audio.preload = "auto";
+  audio.volume = 0.3;
+  audio.addEventListener("ended", playNextEditorMusicTrack, { once: true });
+  audio.addEventListener("error", () => {
+    if (editorAudio.element === audio) {
+      editorAudio.element = null;
+      if (editorAudio.index < editorAudio.playlist.length + 2) playNextEditorMusicTrack();
+    }
+  }, { once: true });
+  audio.play().catch(() => {});
+}
+
+function stopEditorMusic() {
+  if (!editorAudio.element) return;
+  editorAudio.element.pause();
+  editorAudio.element.currentTime = 0;
+  editorAudio.element = null;
+}
 function startMenuMusic() {
-  if (gameStarted) return;
+  if (gameStarted || !trackEditor.classList.contains("is-hidden")) return;
 
   if (!menuAudio.element) {
     menuAudio.element = new Audio(MENU_THEME_SRC);
     menuAudio.element.loop = true;
     menuAudio.element.preload = "auto";
-    menuAudio.element.volume = 0.5;
+    menuAudio.element.volume = 0.35;
   }
   menuAudio.element.play().catch(() => {});
 }
@@ -3435,6 +4630,7 @@ function resetCar() {
   carState.grassBump = 0;
   carState.grassRockRoll = 0;
   carState.grassRockPitch = 0;
+  carState.kerbJoltCooldown = 0;
   updateErsHud();
   updateRevMeter();
   cameraPosition
@@ -3448,6 +4644,45 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
