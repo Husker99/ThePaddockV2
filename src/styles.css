@@ -603,7 +603,10 @@ h1 {
   color: #15170f;
 }
 
-.editor-select.is-hidden {
+.editor-slider.is-hidden,
+.editor-slider.is-hidden,
+.editor-select.is-hidden,
+.road-options.is-hidden {
   display: none;
 }
 
@@ -639,6 +642,34 @@ h1 {
 
 .editor-slider strong {
   color: #ffcf4a;
+}
+
+.road-options {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(255, 207, 74, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 207, 74, 0.07);
+  color: rgba(246, 242, 232, 0.86);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.road-options span {
+  color: #ffcf4a;
+  font-weight: 950;
+}
+
+.road-options label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.road-options input {
+  accent-color: #ffcf4a;
 }
 
 .editor-actions {
@@ -789,14 +820,14 @@ h1 {
 }
 
 .editor-curve-handle {
-  fill: #ffcf4a;
+  fill: #f6f2e8;
   stroke: #141819;
   stroke-width: 14;
 }
 
 .editor-curve-handle.is-selected {
-  fill: #ff5b45;
-  stroke: #f6f2e8;
+  fill: #ffffff;
+  stroke: #ffcf4a;
 }
 
 .editor-curve-stem {
@@ -811,14 +842,14 @@ h1 {
 }
 
 .editor-curve-handle {
-  fill: #ffcf4a;
+  fill: #f6f2e8;
   stroke: #141819;
   stroke-width: 14;
 }
 
 .editor-curve-handle.is-selected {
-  fill: #ff5b45;
-  stroke: #f6f2e8;
+  fill: #ffffff;
+  stroke: #ffcf4a;
 }
 
 .editor-node-label,
@@ -837,8 +868,12 @@ h1 {
 }
 
 .editor-scenery-trees { fill: #4f9b52; }
+.editor-scenery-cherry-trees { fill: #ff9cc9; }
+.editor-scenery-douglas-pines { fill: #1f5f42; }
 .editor-scenery-lamp { fill: #ffcf4a; }
-.editor-scenery-building { fill: #6ab6e8; }
+.editor-scenery-building-small { fill: #9bd4f5; }
+.editor-scenery-building-group { fill: #4d91d4; }
+.editor-scenery-building-tall { fill: #153f7a; }
 .editor-scenery-grandstand { fill: #ff7a1f; }
 
 
@@ -877,6 +912,22 @@ h1 {
   stroke-linejoin: round;
 }
 
+.editor-road-selection {
+  fill: none;
+  stroke: rgba(255, 207, 74, 0.28);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.editor-wall-line {
+  fill: none;
+  stroke: #d7d8d2;
+  stroke-width: 46;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.28));
+}
+
 .editor-kerb-red,
 .editor-kerb-white {
   stroke: rgba(22, 24, 24, 0.22);
@@ -889,6 +940,15 @@ h1 {
 
 .editor-kerb-white {
   fill: #f6f1df;
+}
+
+.editor-kerb-yellow {
+  fill: none;
+  stroke: #ffcf4a;
+  stroke-width: 68;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));
 }
 
 .editor-ghost-start-line {
@@ -1504,7 +1564,8 @@ h1 {
   color: #15170f;
 }
 
-.editor-select.is-hidden {
+.editor-select.is-hidden,
+.road-options.is-hidden {
   display: none;
 }
 
@@ -1540,6 +1601,34 @@ h1 {
 
 .editor-slider strong {
   color: #ffcf4a;
+}
+
+.road-options {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(255, 207, 74, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 207, 74, 0.07);
+  color: rgba(246, 242, 232, 0.86);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.road-options span {
+  color: #ffcf4a;
+  font-weight: 950;
+}
+
+.road-options label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.road-options input {
+  accent-color: #ffcf4a;
 }
 
 .editor-actions {
@@ -1694,8 +1783,12 @@ h1 {
 }
 
 .editor-scenery-trees { fill: #4f9b52; }
+.editor-scenery-cherry-trees { fill: #ff9cc9; }
+.editor-scenery-douglas-pines { fill: #1f5f42; }
 .editor-scenery-lamp { fill: #ffcf4a; }
-.editor-scenery-building { fill: #6ab6e8; }
+.editor-scenery-building-small { fill: #9bd4f5; }
+.editor-scenery-building-group { fill: #4d91d4; }
+.editor-scenery-building-tall { fill: #153f7a; }
 .editor-scenery-grandstand { fill: #ff7a1f; }
 
 
@@ -1734,6 +1827,22 @@ h1 {
   stroke-linejoin: round;
 }
 
+.editor-road-selection {
+  fill: none;
+  stroke: rgba(255, 207, 74, 0.28);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.editor-wall-line {
+  fill: none;
+  stroke: #d7d8d2;
+  stroke-width: 46;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.28));
+}
+
 .editor-kerb-red,
 .editor-kerb-white {
   stroke: rgba(22, 24, 24, 0.22);
@@ -1746,6 +1855,15 @@ h1 {
 
 .editor-kerb-white {
   fill: #f6f1df;
+}
+
+.editor-kerb-yellow {
+  fill: none;
+  stroke: #ffcf4a;
+  stroke-width: 68;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));
 }
 
 .editor-ghost-start-line {

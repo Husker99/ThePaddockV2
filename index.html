@@ -229,16 +229,16 @@
         </div>
         <div class="editor-tools" role="toolbar" aria-label="Track editor tools">
           <button class="editor-tool is-selected" type="button" data-editor-tool="select">Select Node</button>
+          <button class="editor-tool" type="button" data-editor-tool="select-road">Select Road</button>
           <button class="editor-tool" type="button" data-editor-tool="select-scenery">Select Scenery</button>
           <button class="editor-tool" type="button" data-editor-tool="add-node">Add Node</button>
-          <button class="editor-tool" type="button" data-editor-tool="kerb">Kerbs</button>
           <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
           <button class="editor-tool" type="button" data-editor-tool="pit">Pit Lane</button>
           <button class="editor-tool" type="button" data-editor-tool="scenery">Add Scenery</button>
         </div>
         <label class="editor-slider">
           <span>Track Width</span>
-          <input id="track-width-slider" type="range" min="7" max="20" step="0.5" value="12" />
+          <input id="track-width-slider" type="range" min="5" max="35" step="0.5" value="12" />
           <strong id="track-width-readout">12m</strong>
         </label>
         <label class="editor-slider">
@@ -250,11 +250,23 @@
           <span>Scenery Type</span>
           <select id="scenery-type-select">
             <option value="trees">Trees</option>
+            <option value="cherry-trees">Pink Trees</option>
+            <option value="douglas-pines">Douglas Pines</option>
             <option value="lamp">Lamp</option>
-            <option value="building">Building</option>
-            <option value="grandstand">Grandstand</option>
+            <option value="building-small">Small Building</option>
+            <option value="building-group">Building Group</option>
+            <option value="building-tall">Tall Building</option>
           </select>
         </label>
+        <div id="road-options" class="road-options is-hidden">
+          <span>Selected Road</span>
+          <label><input id="road-kerb-right" type="checkbox" data-road-feature="kerbRight" /> Kerb right</label>
+          <label><input id="road-kerb-left" type="checkbox" data-road-feature="kerbLeft" /> Kerb left</label>
+          <label><input id="road-wall-right" type="checkbox" data-road-feature="wallRight" /> Wall right</label>
+          <label><input id="road-wall-left" type="checkbox" data-road-feature="wallLeft" /> Wall left</label>
+          <label><input id="road-grandstand-right" type="checkbox" data-road-feature="grandstandRight" /> Grandstand right</label>
+          <label><input id="road-grandstand-left" type="checkbox" data-road-feature="grandstandLeft" /> Grandstand left</label>
+        </div>
         <div class="editor-actions">
           <button id="editor-undo" class="back-button" type="button">Undo</button>
           <button id="editor-export" class="back-button" type="button">Export JSON</button>
@@ -284,7 +296,7 @@
           <button id="editor-zoom-in" type="button" aria-label="Zoom in">+</button>
           <strong id="editor-zoom-readout">100%</strong>
         </div>
-        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Scenery moves objects; Q and E rotate lamps and grandstands.</div>
+        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
       </div>
     </section>
     <div class="hud">
