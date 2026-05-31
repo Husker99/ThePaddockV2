@@ -1,0 +1,864 @@
+{
+  "version": 2,
+  "name": "Katara Speedway",
+  "closed": true,
+  "startNode": 11,
+  "startDirection": 1,
+  "startSegment": 11,
+  "nodes": [
+    {
+      "x": 9027,
+      "y": 2300,
+      "width": 14,
+      "curve": 0
+    },
+    {
+      "x": 15540,
+      "y": 3680,
+      "width": 14,
+      "curve": -1.05
+    },
+    {
+      "x": 14907,
+      "y": 4474,
+      "width": 14,
+      "curve": -1.65
+    },
+    {
+      "x": 14435,
+      "y": 3743,
+      "width": 14,
+      "curve": -0.6
+    },
+    {
+      "x": 13806,
+      "y": 3537,
+      "width": 14,
+      "curve": 1.65
+    },
+    {
+      "x": 7526,
+      "y": 10509,
+      "width": 14,
+      "curve": 0
+    },
+    {
+      "x": 6802,
+      "y": 10454,
+      "width": 14,
+      "curve": -1.15
+    },
+    {
+      "x": 6078,
+      "y": 10537,
+      "width": 14,
+      "curve": 1.65
+    },
+    {
+      "x": 5717,
+      "y": 11778,
+      "width": 14,
+      "curve": 0
+    },
+    {
+      "x": 4324,
+      "y": 12279,
+      "width": 14,
+      "curve": -1.65
+    },
+    {
+      "x": 2838,
+      "y": 8216,
+      "width": 14,
+      "curve": -0.35
+    },
+    {
+      "x": 3562,
+      "y": 7014,
+      "width": 14,
+      "curve": -0.35
+    }
+  ],
+  "kerbs": [],
+  "roadFeatures": [
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": true,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": false,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": false,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": false,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": false,
+      "grandstandRight": true,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": false,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": false,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": true,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": true,
+      "grandstandRight": false,
+      "grandstandLeft": false
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": true,
+      "grandstandRight": false,
+      "grandstandLeft": false,
+      "width": 14
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": false,
+      "wallLeft": true,
+      "grandstandRight": false,
+      "grandstandLeft": false,
+      "width": 14
+    },
+    {
+      "kerbRight": false,
+      "kerbLeft": false,
+      "wallRight": true,
+      "wallLeft": true,
+      "grandstandRight": true,
+      "grandstandLeft": true
+    }
+  ],
+  "pitLane": [],
+  "scenery": [
+    {
+      "type": "douglas-pines",
+      "x": 9418,
+      "y": 934,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 9735,
+      "y": 5429,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 15072,
+      "y": 8861,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 6072,
+      "y": 8304,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 644,
+      "y": 4662,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 34,
+      "y": 8060,
+      "rotation": 0
+    },
+    {
+      "type": "building-small",
+      "x": 9396,
+      "y": 7520,
+      "rotation": 2.3
+    },
+    {
+      "type": "building-small",
+      "x": 14235,
+      "y": 1178,
+      "rotation": 3.74
+    },
+    {
+      "type": "building-small",
+      "x": 10459,
+      "y": 1997,
+      "rotation": -0.49
+    },
+    {
+      "type": "building-small",
+      "x": 13851,
+      "y": 951,
+      "rotation": -2.58
+    },
+    {
+      "type": "building-small",
+      "x": 10866,
+      "y": 1805,
+      "rotation": -0.42
+    },
+    {
+      "type": "building-tall",
+      "x": 11184,
+      "y": 7296,
+      "rotation": -0.84
+    },
+    {
+      "type": "building-tall",
+      "x": 11649,
+      "y": 6798,
+      "rotation": -0.84
+    },
+    {
+      "type": "building-tall",
+      "x": 10744,
+      "y": 7793,
+      "rotation": -0.8
+    },
+    {
+      "type": "building-tall",
+      "x": 10305,
+      "y": 8291,
+      "rotation": -0.84
+    },
+    {
+      "type": "building-tall",
+      "x": 12114,
+      "y": 6280,
+      "rotation": -0.87
+    },
+    {
+      "type": "cherry-trees",
+      "x": 6388,
+      "y": 9471,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 5421,
+      "y": 8709,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 4464,
+      "y": 9486,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 4082,
+      "y": 10760,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 5524,
+      "y": 9585,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 3652,
+      "y": 9575,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 2862,
+      "y": 11577,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 665,
+      "y": 9526,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 1751,
+      "y": 11577,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 3069,
+      "y": 12154,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 6479,
+      "y": 10778,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 7643,
+      "y": 12174,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 8832,
+      "y": 11676,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 10253,
+      "y": 10641,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 7089,
+      "y": 9715,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 6713,
+      "y": 11776,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 5007,
+      "y": 11796,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 2092,
+      "y": 8251,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 4749,
+      "y": 10581,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14642,
+      "y": 5655,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16067,
+      "y": 5655,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15818,
+      "y": 6056,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15004,
+      "y": 6457,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15094,
+      "y": 5812,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16677,
+      "y": 5446,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 4662,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 3896,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16044,
+      "y": 3094,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17220,
+      "y": 4070,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16971,
+      "y": 3478,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16587,
+      "y": 2432,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16338,
+      "y": 1474,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 2711,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 4105,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17582,
+      "y": 2467,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17129,
+      "y": 4819,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16293,
+      "y": 5133,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15546,
+      "y": 5586,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 13851,
+      "y": 5011,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 13828,
+      "y": 5690,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14167,
+      "y": 6770,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16496,
+      "y": 6979,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17989,
+      "y": 6335,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 5760,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16881,
+      "y": 5742,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 18000,
+      "y": 7136,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17763,
+      "y": 6858,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16632,
+      "y": 6718,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14778,
+      "y": 6875,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16180,
+      "y": 7798,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16835,
+      "y": 7345,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15614,
+      "y": 2781,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14778,
+      "y": 1648,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15479,
+      "y": 969,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16881,
+      "y": 1962,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16361,
+      "y": 1230,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15185,
+      "y": 847,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17265,
+      "y": 1788,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 12607,
+      "y": 3530,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 15660,
+      "y": 2467,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 16587,
+      "y": 4540,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 17446,
+      "y": 3791,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 15026,
+      "y": 3843,
+      "rotation": 0
+    },
+    {
+      "type": "building-group",
+      "x": 3697,
+      "y": 7990,
+      "rotation": -1.15
+    },
+    {
+      "type": "trees",
+      "x": 12087,
+      "y": 429,
+      "rotation": -0.87
+    },
+    {
+      "type": "trees",
+      "x": 12969,
+      "y": 376,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 11114,
+      "y": 289,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 10187,
+      "y": 603,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 9328,
+      "y": 690,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 8559,
+      "y": 916,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 6976,
+      "y": 376,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 11092,
+      "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14574,
+      "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15727,
+      "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 12629,
+      "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 8039,
+      "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 5077,
+      "y": 847,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3856,
+      "y": 2519,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3041,
+      "y": 3286,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3516,
+      "y": 4000,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 6094,
+      "y": 3251,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 5891,
+      "y": 3094,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 2001,
+      "y": 2519,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 1119,
+      "y": 2537,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 6366,
+      "y": 2363,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 11544,
+      "y": 237,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 13421,
+      "y": 2101,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 599,
+      "y": 6143,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 2273,
+      "y": 6283,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 1526,
+      "y": 7276,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 3335,
+      "y": 6039,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 4195,
+      "y": 5377,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 4873,
+      "y": 5028,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 11340,
+      "y": 1631,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 2476,
+      "y": 7067,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 10029,
+      "y": 2258,
+      "rotation": 0
+    },
+    {
+      "type": "cherry-trees",
+      "x": 14009,
+      "y": 4018,
+      "rotation": 0
+    }
+  ]
+}

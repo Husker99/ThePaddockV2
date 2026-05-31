@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Paddock</title>
+    <script type="module" crossorigin src="./assets/index-BXjj_R6u.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C4_bbSFj.css">
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <main id="start-menu" class="start-menu">
+      <section class="menu-shell">
+        <div class="menu-panel">
+          <div class="menu-header">
+            <p class="eyebrow">The Paddock</p>
+            <h1 id="menu-title">Practice Session</h1>
+          </div>
+
+          <div class="menu-step" data-menu-step="intro">
+            <div class="menu-actions">
+              <button id="play-game" class="start-button" type="button">Just Drive</button>
+              <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
+            </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="track">
+            <button class="back-button" type="button" data-menu-back="intro">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-track="practice">
+                <span>Track</span>
+                <strong>Practice Track</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="race-1">
+                <span>Track</span>
+                <strong>Race Track 1</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="katara-speedway">
+                <span>Track</span>
+                <strong>Katara Speedway</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="generated">
+                <span>Track</span>
+                <strong>Generated Layout</strong>
+              </button>
+            </div>
+            <button id="track-next" class="start-button" type="button">Next</button>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="car-category">
+            <button class="back-button" type="button" data-menu-back="track">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card" type="button" data-car-category="formula">
+                <span>Class</span>
+                <strong>Formula</strong>
+              </button>
+              <button class="selection-card" type="button" data-car-category="lmp">
+                <span>Class</span>
+                <strong>Le Mans Prototype</strong>
+              </button>
+              <button class="selection-card" type="button" data-car-category="stock">
+                <span>Class</span>
+                <strong>Stock Car</strong>
+              </button>
+              <button class="selection-card" type="button" data-car-category="jeep">
+                <span>Class</span>
+                <strong>Jeep</strong>
+              </button>
+            </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="formula">
+            <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-car="ferraro">
+                <span>Formula</span>
+                <strong>Ferraro</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="mersedeez">
+                <span>Formula</span>
+                <strong>Mersedeez</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="alpeen">
+                <span>Formula</span>
+                <strong>Alpeen</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="willems">
+                <span>Formula</span>
+                <strong>Willems</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="mclarsen">
+                <span>Formula</span>
+                <strong>McLarsen</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="racing-bats">
+                <span>Formula</span>
+                <strong>Racing Bats</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="raging-bowl">
+                <span>Formula</span>
+                <strong>Raging Bowl</strong>
+              </button>
+            </div>
+            <button id="start-race" class="start-button" type="button">Start</button>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="lmp">
+            <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-car="lmp">
+                <span>Le Mans Prototype</span>
+                <strong>Apex Tricolore</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="scarlet-lmp">
+                <span>Le Mans Prototype</span>
+                <strong>Scarlet Arrow</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="ocean-lmp">
+                <span>Le Mans Prototype</span>
+                <strong>Ocean Vector</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="volt-lmp">
+                <span>Le Mans Prototype</span>
+                <strong>Volt Phantom</strong>
+              </button>
+            </div>
+            <button class="start-button" type="button" data-start-race>Start</button>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="stock">
+            <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-car="orange-stock">
+                <span>Stock Car</span>
+                <strong>Sunset Motors</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="thunder-stock">
+                <span>Stock Car</span>
+                <strong>Thunderline Racing</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="jade-stock">
+                <span>Stock Car</span>
+                <strong>Jade Rocket</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="grape-stock">
+                <span>Stock Car</span>
+                <strong>Grape Apex</strong>
+              </button>
+            </div>
+            <button class="start-button" type="button" data-start-race>Start</button>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="jeep">
+            <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-car="dune-jeep">
+                <span>Jeep</span>
+                <strong>Dune Patrol</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="forest-jeep">
+                <span>Jeep</span>
+                <strong>Forest Ranger</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="rescue-jeep">
+                <span>Jeep</span>
+                <strong>Rescue Red</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="storm-jeep">
+                <span>Jeep</span>
+                <strong>Storm Blue</strong>
+              </button>
+            </div>
+            <button class="start-button" type="button" data-start-race>Start</button>
+          </div>
+        </div>
+        <aside class="menu-showroom">
+          <div class="showroom-label">
+            <span>Selected Machine</span>
+            <strong id="preview-title">Ferraro</strong>
+          </div>
+          <div class="showroom-visual intro-visual" data-showroom-visual="intro" aria-hidden="true">
+            <div class="flag-pole"></div>
+            <div class="checkered-flag">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="flag-shadow"></div>
+          </div>
+          <div class="showroom-visual track-visual is-hidden" data-showroom-visual="track" aria-hidden="true">
+            <svg class="track-map track-map-practice is-selected" viewBox="0 0 180 130" data-track-map="practice">
+              <path class="map-kerb" d="M42 93 C28 68 38 35 71 26 C108 16 147 36 146 67 C145 94 113 112 78 104 C64 101 51 100 42 93 Z" />
+              <path class="map-road" d="M42 93 C28 68 38 35 71 26 C108 16 147 36 146 67 C145 94 113 112 78 104 C64 101 51 100 42 93 Z" />
+              <path class="map-extension" d="M132 62 C151 48 158 32 144 21" />
+              <circle class="map-start" cx="48" cy="90" r="4" />
+            </svg>
+            <svg class="track-map track-map-race is-hidden" viewBox="0 0 180 130" data-track-map="race-1">
+              <path class="map-kerb" d="M33 88 C30 49 55 26 92 27 C131 28 157 53 148 83 C140 109 104 113 80 97 C64 87 47 100 33 88 Z" />
+              <path class="map-road" d="M33 88 C30 49 55 26 92 27 C131 28 157 53 148 83 C140 109 104 113 80 97 C64 87 47 100 33 88 Z" />
+              <circle class="map-start" cx="38" cy="86" r="4" />
+            </svg>
+            <svg class="track-map track-map-katara is-hidden" viewBox="0 0 180 130" data-track-map="katara-speedway">
+              <path class="map-kerb" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
+              <path class="map-road" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
+              <circle class="map-start" cx="20.9" cy="62.1" r="4" />
+            </svg>
+            <svg class="track-map track-map-generated is-hidden" viewBox="0 0 180 130" data-track-map="generated">
+              <path class="map-kerb" d="M18 96 L56 96 L101 96 L137 96 C162 93 172 75 158 61 C140 45 174 40 164 20 C150 1 120 9 96 26 C79 18 55 19 51 37 C48 50 62 57 49 67 C35 78 13 73 11 88 C10 94 13 96 18 96 Z" />
+              <path class="map-road" d="M18 96 L56 96 L101 96 L137 96 C162 93 172 75 158 61 C140 45 174 40 164 20 C150 1 120 9 96 26 C79 18 55 19 51 37 C48 50 62 57 49 67 C35 78 13 73 11 88 C10 94 13 96 18 96 Z" />
+              <path class="map-extension" d="M29 96 L88 96" />
+              <circle class="map-start" cx="24" cy="96" r="4" />
+            </svg>
+            <div class="track-showcase-car" aria-hidden="true"><span></span></div>
+            <div class="track-map-floor"></div>
+          </div>
+          <div class="showroom-visual driver-visual is-hidden" data-showroom-visual="driver" aria-hidden="true">
+            <div class="driver-card">
+              <div class="driver-head">
+                <div class="driver-visor"></div>
+              </div>
+              <div class="driver-neck"></div>
+              <div class="driver-suit">
+                <span></span>
+              </div>
+              <div class="driver-arm driver-arm-left"></div>
+              <div class="driver-arm driver-arm-right"></div>
+            </div>
+          </div>
+          <canvas id="menu-preview" aria-hidden="true"></canvas>
+        </aside>
+      </section>
+    </main>
+    <section id="track-editor" class="track-editor is-hidden" aria-label="Track editor">
+      <aside class="editor-panel">
+        <div class="menu-header">
+          <p class="eyebrow">The Paddock</p>
+          <h1>Track Editor</h1>
+        </div>
+        <div class="editor-tools" role="toolbar" aria-label="Track editor tools">
+          <button class="editor-tool is-selected" type="button" data-editor-tool="select">Select Node</button>
+          <button class="editor-tool" type="button" data-editor-tool="select-road">Select Road</button>
+          <button class="editor-tool" type="button" data-editor-tool="select-scenery">Select Scenery</button>
+          <button class="editor-tool" type="button" data-editor-tool="add-node">Add Node</button>
+          <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
+          <button class="editor-tool" type="button" data-editor-tool="pit">Pit Lane</button>
+          <button class="editor-tool" type="button" data-editor-tool="scenery">Add Scenery</button>
+        </div>
+        <label class="editor-slider">
+          <span>Track Width</span>
+          <input id="track-width-slider" type="range" min="5" max="35" step="0.5" value="12" />
+          <strong id="track-width-readout">12m</strong>
+        </label>
+        <label class="editor-slider">
+          <span>Curve Bend</span>
+          <input id="curve-bend-slider" type="range" min="-1.65" max="1.65" step="0.05" value="0" />
+          <strong id="curve-bend-readout">Gentle R</strong>
+        </label>
+        <label class="editor-select">
+          <span>Scenery Type</span>
+          <select id="scenery-type-select">
+            <option value="trees">Trees</option>
+            <option value="cherry-trees">Pink Trees</option>
+            <option value="douglas-pines">Douglas Pines</option>
+            <option value="lamp">Lamp</option>
+            <option value="building-small">Small Building</option>
+            <option value="building-group">Building Group</option>
+            <option value="building-tall">Tall Building</option>
+          </select>
+        </label>
+        <div id="road-options" class="road-options is-hidden">
+          <span>Selected Road</span>
+          <label><input id="road-kerb-right" type="checkbox" data-road-feature="kerbRight" /> Kerb right</label>
+          <label><input id="road-kerb-left" type="checkbox" data-road-feature="kerbLeft" /> Kerb left</label>
+          <label><input id="road-wall-right" type="checkbox" data-road-feature="wallRight" /> Wall right</label>
+          <label><input id="road-wall-left" type="checkbox" data-road-feature="wallLeft" /> Wall left</label>
+          <label><input id="road-grandstand-right" type="checkbox" data-road-feature="grandstandRight" /> Grandstand right</label>
+          <label><input id="road-grandstand-left" type="checkbox" data-road-feature="grandstandLeft" /> Grandstand left</label>
+        </div>
+        <div class="editor-actions">
+          <button id="editor-undo" class="back-button" type="button">Undo</button>
+          <button id="editor-export" class="back-button" type="button">Export JSON</button>
+          <button id="editor-test-drive" class="start-button" type="button">Test Drive This Track</button>
+          <button id="editor-back" class="start-button" type="button">Back to Menu</button>
+        </div>
+        <div class="editor-status" id="editor-status">Road: 6 nodes</div>
+        <textarea id="track-json-output" class="track-json-output" spellcheck="false" aria-label="Track JSON output"></textarea>
+      </aside>
+      <div class="editor-workspace">
+        <svg id="track-editor-canvas" viewBox="0 0 18000 12600" role="img" aria-label="Track editor canvas">
+          <defs>
+            <pattern id="editor-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(246,242,232,0.12)" stroke-width="1" />
+            </pattern>
+          </defs>
+          <rect width="18000" height="12600" fill="url(#editor-grid)" />
+          <g id="editor-scenery-layer"></g>
+          <g id="editor-track-layer"></g>
+          <g id="editor-node-layer"></g>
+          <g id="editor-ghost-layer"></g>
+        </svg>
+        <div class="editor-zoom">
+          <span>Zoom</span>
+          <button id="editor-zoom-out" type="button" aria-label="Zoom out">-</button>
+          <input id="editor-zoom-slider" type="range" min="0.3" max="3" step="0.05" value="1" />
+          <button id="editor-zoom-in" type="button" aria-label="Zoom in">+</button>
+          <strong id="editor-zoom-readout">100%</strong>
+        </div>
+        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
+      </div>
+    </section>
+    <div class="hud">
+      <div class="left-hud">
+        <div class="brand">The Paddock</div>
+        <div class="ers-panel">
+          <div class="ers-label">
+            <span>ERS</span>
+            <strong id="ers-readout">100%</strong>
+          </div>
+          <div class="ers-track">
+            <div id="ers-fill" class="ers-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div class="readouts">
+        <span id="speed">0 mph</span>
+        <span id="gear">N</span>
+        <span id="surface">Track</span>
+      </div>
+    </div>
+    <div id="rev-meter" class="rev-meter" hidden>
+      <strong id="manual-gear">1</strong>
+      <span>Revs</span>
+      <div class="rev-track">
+        <div id="rev-fill" class="rev-fill"></div>
+      </div>
+    </div>
+    <button id="back-to-editor" class="back-to-editor" type="button" hidden>Back to Track Editor</button>
+    <div id="pause-badge" class="pause-badge" hidden>Paused</div>
+    <div class="controls">
+      <span>W / Up: throttle</span>
+      <span>S / Down: brake</span>
+      <span>A / D: steer</span>
+      <span id="ers-control-hint">Shift: ERS</span>
+      <span>Space: camera</span>
+      <span>C: handbrake</span>
+      <span>Mouse: shift</span>
+      <span>P: pause</span>
+      <span>Esc: cars</span>
+      <span>R: reset</span>
+    </div>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:paddock": "vite --host 127.0.0.1 --port 5180 --strictPort --base=/ThePaddockV2/",
     "build": "vite build --base=/ThePaddockV2/",
     "preview": "vite preview --host 127.0.0.1"
   },

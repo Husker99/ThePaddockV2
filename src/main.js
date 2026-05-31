@@ -1,5 +1,6 @@
-import * as THREE from "three";
+import * as THREE from "../node_modules/three/build/three.module.js";
 import "./styles.css";
+import kataraSpeedwayTrack from "./tracks/katara-speedway.json";
 
 const canvas = document.querySelector("#game");
 const startMenu = document.querySelector("#start-menu");
@@ -168,6 +169,7 @@ const editorTrack = {
   kerbs: [],
   pitLane: [],
 };
+const KATARA_TRACK_ID = "katara-speedway";
 const chaseCamera = {
   dragging: false,
   lastX: 0,
@@ -604,7 +606,9 @@ const trackDefinitions = {
     grassSize: [650, 430],
     cornerOnlyKerbs: true,
     extras: addGeneratedLayoutDetails,
-  },  "race-1": {
+  },
+  [KATARA_TRACK_ID]: createTrackDefinitionFromEditorData(kataraSpeedwayTrack, KATARA_TRACK_ID),
+  "race-1": {
     points: [
       [342.5, 781.5],
       [760, 781.5],
@@ -1730,7 +1734,7 @@ function addGrandstandAtTrack(group, samples, spec) {
 
 function addKerbSurfaceObject(group, samples, spec, extraTrackAreas) {
   const material = new THREE.MeshStandardMaterial({ color: 0xffc83d, roughness: 0.72, metalness: 0.02, flatShading: true });
-  const segmentCount = Math.max(1, editorTrack.nodes.length);
+  const segmentCount = Math.max(1, spec.segmentCount ?? editorTrack.nodes.length);
   const segmentStart = THREE.MathUtils.clamp((spec.segment ?? 0) / segmentCount, 0, 0.999);
   const segmentSpan = 1 / segmentCount;
   const startT = segmentStart + segmentSpan * THREE.MathUtils.clamp(spec.start ?? 0.16, 0, 0.96);
@@ -4327,40 +4331,45 @@ function returnToTrackEditor() {
 }
 
 function createTrackDefinitionFromEditor() {
-  const startNode = THREE.MathUtils.clamp(editorTrack.startNode ?? 0, 0, editorTrack.nodes.length - 1);
-  const direction = editorTrack.startDirection ?? 1;
+  return createTrackDefinitionFromEditorData(editorTrack, "editor-test");
+}
+
+function createTrackDefinitionFromEditorData(sourceTrack, definitionId) {
+  const nodes = sourceTrack.nodes ?? [];
+  const startNode = THREE.MathUtils.clamp(sourceTrack.startNode ?? 0, 0, nodes.length - 1);
+  const direction = sourceTrack.startDirection ?? 1;
   const nextNode = direction >= 0
-    ? (startNode + 1) % editorTrack.nodes.length
-    : (startNode - 1 + editorTrack.nodes.length) % editorTrack.nodes.length;
-  const sampled = getEditorTrackSampledPlan();
+    ? (startNode + 1) % nodes.length
+    : (startNode - 1 + nodes.length) % nodes.length;
+  const sampled = getEditorTrackSampledPlan(sourceTrack);
   const points = sampled.points;
 
   return {
     points,
-    start: editorPointToPlan(editorTrack.nodes[startNode]),
-    next: editorPointToPlan(editorTrack.nodes[nextNode]),
+    start: editorPointToPlan(nodes[startNode]),
+    next: editorPointToPlan(nodes[nextNode]),
     tension: 0.32,
     scale: 0.168,
-    halfWidth: Math.max(6, averageEditorTrackWidth() * 0.62),
+    halfWidth: Math.max(6, averageEditorTrackWidth(sourceTrack) * 0.62),
     widthSamples: sampled.widths,
     kerbWidth: 1.2,
     detailSamples: 720,
     grassSize: [560, 420],
     cornerOnlyKerbs: true,
-    extras: addEditorTestTrackDetails,
+    extras: (group, extraTrackAreas, samples, obstacles) => addEditorTrackDetails(group, extraTrackAreas, samples, obstacles, sourceTrack, definitionId),
   };
 }
 
-function getEditorTrackSampledPlan() {
+function getEditorTrackSampledPlan(sourceTrack = editorTrack) {
   const points = [];
   const widths = [];
   const samplesPerSegment = 12;
-  for (let segmentIndex = 0; segmentIndex < editorTrack.nodes.length; segmentIndex += 1) {
-    const segment = getEditorSegment(segmentIndex);
+  for (let segmentIndex = 0; segmentIndex < sourceTrack.nodes.length; segmentIndex += 1) {
+    const segment = getEditorSegmentFromTrack(sourceTrack, segmentIndex);
     if (!segment) continue;
     const segmentSamples = sampleEditorSegment(segment.a, segment.b, segment.b.curve ?? 0, samplesPerSegment);
     const currentWidth = getEditorSegmentWidth(segment, segmentIndex) * 0.62;
-    const nextSegment = getEditorSegment(segmentIndex + 1);
+    const nextSegment = getEditorSegmentFromTrack(sourceTrack, segmentIndex + 1);
     const nextWidth = nextSegment ? getEditorSegmentWidth(nextSegment, segmentIndex + 1) * 0.62 : currentWidth;
     for (let i = 0; i < segmentSamples.length - 1; i += 1) {
       const t = i / Math.max(1, segmentSamples.length - 1);
@@ -4372,6 +4381,15 @@ function getEditorTrackSampledPlan() {
   return { points, widths };
 }
 
+function getEditorSegmentFromTrack(sourceTrack, index) {
+  if (!sourceTrack.nodes?.length) return null;
+  const safeIndex = ((index % sourceTrack.nodes.length) + sourceTrack.nodes.length) % sourceTrack.nodes.length;
+  return {
+    a: sourceTrack.nodes[safeIndex],
+    b: sourceTrack.nodes[(safeIndex + 1) % sourceTrack.nodes.length],
+  };
+}
+
 function editorPointToPlan(node) {
   return [
     800 + (node.x - EDITOR_WORLD_WIDTH * 0.5) * 0.1733333333,
@@ -4379,14 +4397,18 @@ function editorPointToPlan(node) {
   ];
 }
 
-function averageEditorTrackWidth() {
-  if (!editorTrack.nodes.length) return 12;
-  return editorTrack.nodes.reduce((sum, node) => sum + (node.width ?? 12), 0) / editorTrack.nodes.length;
+function averageEditorTrackWidth(sourceTrack = editorTrack) {
+  if (!sourceTrack.nodes?.length) return 12;
+  return sourceTrack.nodes.reduce((sum, node) => sum + (node.width ?? 12), 0) / sourceTrack.nodes.length;
 }
 
 function addEditorTestTrackDetails(group, extraTrackAreas, samples, obstacles = []) {
-  const halfWidth = trackDefinitions["editor-test"].halfWidth;
-  for (const kerb of editorTrack.kerbs) {
+  addEditorTrackDetails(group, extraTrackAreas, samples, obstacles, editorTrack, "editor-test");
+}
+
+function addEditorTrackDetails(group, extraTrackAreas, samples, obstacles = [], sourceTrack = editorTrack, definitionId = "editor-test") {
+  const halfWidth = trackDefinitions[definitionId].halfWidth;
+  for (const kerb of sourceTrack.kerbs ?? []) {
     addKerbSurfaceObject(group, samples, {
       segment: kerb.segment ?? 0,
       side: kerb.side ?? 1,
@@ -4395,23 +4417,39 @@ function addEditorTestTrackDetails(group, extraTrackAreas, samples, obstacles = 
       width: kerb.width ?? 1.35,
       height: kerb.height ?? 0.28,
       trackHalfWidth: halfWidth,
+      segmentCount: sourceTrack.nodes.length,
     }, extraTrackAreas);
   }
-  for (let segmentIndex = 0; segmentIndex < editorTrack.nodes.length; segmentIndex += 1) {
-    const features = getEditorRoadFeatures(segmentIndex);
-    const segment = getEditorSegment(segmentIndex);
+  for (let segmentIndex = 0; segmentIndex < sourceTrack.nodes.length; segmentIndex += 1) {
+    const features = getEditorTrackRoadFeatures(sourceTrack, segmentIndex);
+    const segment = getEditorSegmentFromTrack(sourceTrack, segmentIndex);
     const segmentHalfWidth = segment ? getEditorSegmentWidth(segment, segmentIndex) * 0.62 : halfWidth;
-    if (features.kerbRight) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, 1, segmentHalfWidth), extraTrackAreas);
-    if (features.kerbLeft) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, -1, segmentHalfWidth), extraTrackAreas);
-    if (features.wallRight) addEditorWallObject(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth }, obstacles);
-    if (features.wallLeft) addEditorWallObject(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth }, obstacles);
-    if (features.grandstandRight) addRoadAttachedGrandstand(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth });
-    if (features.grandstandLeft) addRoadAttachedGrandstand(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth });
+    const segmentCount = sourceTrack.nodes.length;
+    if (features.kerbRight) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, 1, segmentHalfWidth, segmentCount), extraTrackAreas);
+    if (features.kerbLeft) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, -1, segmentHalfWidth, segmentCount), extraTrackAreas);
+    if (features.wallRight) addEditorWallObject(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, obstacles);
+    if (features.wallLeft) addEditorWallObject(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, obstacles);
+    if (features.grandstandRight) addRoadAttachedGrandstand(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth, segmentCount });
+    if (features.grandstandLeft) addRoadAttachedGrandstand(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth, segmentCount });
   }
-  addEditorSceneryObjects(group, obstacles);
+  addEditorSceneryObjects(group, obstacles, sourceTrack);
 }
 
-function createRoadFeatureKerbSpec(segment, side, trackHalfWidth) {
+function getEditorTrackRoadFeatures(sourceTrack, segmentIndex) {
+  if (sourceTrack === editorTrack) return getEditorRoadFeatures(segmentIndex);
+  const feature = sourceTrack.roadFeatures?.[segmentIndex] ?? {};
+  return {
+    kerbRight: false,
+    kerbLeft: false,
+    wallRight: false,
+    wallLeft: false,
+    grandstandRight: false,
+    grandstandLeft: false,
+    ...feature,
+  };
+}
+
+function createRoadFeatureKerbSpec(segment, side, trackHalfWidth, segmentCount = editorTrack.nodes.length) {
   return {
     segment,
     side,
@@ -4420,11 +4458,12 @@ function createRoadFeatureKerbSpec(segment, side, trackHalfWidth) {
     width: 2.15,
     height: 0.34,
     trackHalfWidth,
+    segmentCount,
   };
 }
 
-function addEditorSceneryObjects(group, obstacles = []) {
-  for (const item of editorTrack.scenery) {
+function addEditorSceneryObjects(group, obstacles = [], sourceTrack = editorTrack) {
+  for (const item of sourceTrack.scenery ?? []) {
     const position = editorPointToWorld(item);
     if (item.type === "trees") {
       addEditorTreeCluster(group, position.x, position.z, item.rotation ?? 0, obstacles);
@@ -4443,12 +4482,13 @@ function addEditorSceneryObjects(group, obstacles = []) {
 function addEditorWallObject(group, samples, spec, obstacles) {
   const concreteMaterial = new THREE.MeshStandardMaterial({ color: 0xd5d7d2, roughness: 0.68, metalness: 0.03, flatShading: true });
   const capMaterial = new THREE.MeshStandardMaterial({ color: 0xf05a3f, roughness: 0.56, metalness: 0.08, flatShading: true });
-  const segmentCount = Math.max(1, editorTrack.nodes.length);
+  const segmentCount = Math.max(1, spec.segmentCount ?? editorTrack.nodes.length);
   const segmentStart = THREE.MathUtils.clamp((spec.segment ?? 0) / segmentCount, 0, 0.999);
   const segmentSpan = 1 / segmentCount;
   const startIndex = Math.floor(segmentStart * samples.length);
   const endIndex = Math.max(startIndex + 4, Math.floor((segmentStart + segmentSpan) * samples.length));
-  const widthSamples = getTrackWidthProfile(trackDefinitions["editor-test"], samples.length, spec.trackHalfWidth ?? 7.2);
+  const definition = trackDefinitions[spec.definitionId ?? "editor-test"];
+  const widthSamples = getTrackWidthProfile(definition, samples.length, spec.trackHalfWidth ?? 7.2);
   const side = spec.side ?? 1;
   const wallHeight = 1.6;
   const wallDepth = 0.72;
@@ -4463,7 +4503,7 @@ function addEditorWallObject(group, samples, spec, obstacles) {
     const current = wallPoints[i];
     const next = wallPoints[i + 1];
     const center = current.clone().lerp(next, 0.5);
-    if (!isWallSegmentClearOfAsphalt(center, samples, widthSamples, startIndex, endIndex)) continue;
+    if (!isWallSegmentClearOfAsphalt(center, samples, widthSamples, startIndex, endIndex, definition)) continue;
     const length = Math.max(1.1, current.distanceTo(next));
     const angle = Math.atan2(next.x - current.x, next.z - current.z);
 
@@ -4489,13 +4529,13 @@ function addEditorWallObject(group, samples, spec, obstacles) {
   }
 }
 
-function isWallSegmentClearOfAsphalt(point, samples, widthSamples, ownStartIndex, ownEndIndex) {
+function isWallSegmentClearOfAsphalt(point, samples, widthSamples, ownStartIndex, ownEndIndex, definition = trackDefinitions["editor-test"]) {
   const nearbyBuffer = 18;
   for (let i = 0; i < samples.length; i += 1) {
     const forwardDistance = Math.abs(i - ownStartIndex);
     const inOwnRange = i >= ownStartIndex - nearbyBuffer && i <= ownEndIndex + nearbyBuffer;
     if (inOwnRange || forwardDistance > samples.length - nearbyBuffer) continue;
-    const width = widthSamples[i] ?? trackDefinitions["editor-test"]?.halfWidth ?? 7.2;
+    const width = widthSamples[i] ?? definition?.halfWidth ?? 7.2;
     const dx = point.x - samples[i].x;
     const dz = point.z - samples[i].z;
     if (Math.sqrt(dx * dx + dz * dz) < width + 0.9) return false;
@@ -4504,7 +4544,7 @@ function isWallSegmentClearOfAsphalt(point, samples, widthSamples, ownStartIndex
 }
 
 function addRoadAttachedGrandstand(group, samples, spec) {
-  const segmentCount = Math.max(1, editorTrack.nodes.length);
+  const segmentCount = Math.max(1, spec.segmentCount ?? editorTrack.nodes.length);
   const t = THREE.MathUtils.clamp(((spec.segment ?? 0) + 0.5) / segmentCount, 0, 0.999);
   const offset = (spec.trackHalfWidth ?? 7.2) + EDITOR_WALL_OUTER_EDGE + EDITOR_GRANDSTAND_WALL_GAP + EDITOR_GRANDSTAND_FRONT_EDGE;
   const pose = getTrackPoseAt(samples, t, spec.side * offset);
