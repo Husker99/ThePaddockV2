@@ -33,6 +33,7 @@ const curveBendControl = curveBendSlider?.closest(".editor-slider");
 const curveBendReadout = document.querySelector("#curve-bend-readout");
 const sceneryTypeSelect = document.querySelector("#scenery-type-select");
 const trackNameInput = document.querySelector("#track-name-input");
+const trackTimeOfDaySelect = document.querySelector("#track-time-of-day-select");
 const trackEssentialsPanel = document.querySelector("#track-essentials-panel");
 const roadOptionsPanel = document.querySelector("#road-options");
 const roadFeatureInputs = [...document.querySelectorAll("[data-road-feature]")];
@@ -114,6 +115,53 @@ let menuPreviewReady = false;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa9d7f0);
 scene.fog = new THREE.Fog(0xa9d7f0, 120, 330);
+const skyDomeMaterial = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  fog: false,
+  uniforms: {
+    eastColor: { value: new THREE.Color(0x173d79) },
+    westColor: { value: new THREE.Color(0xff8fa0) },
+    horizonColor: { value: new THREE.Color(0xffbf7c) },
+    zenithColor: { value: new THREE.Color(0x0f2c58) },
+  },
+  vertexShader: `
+    varying vec3 vWorldDirection;
+    void main() {
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldDirection = normalize(position);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vWorldDirection;
+    uniform vec3 eastColor;
+    uniform vec3 westColor;
+    uniform vec3 horizonColor;
+    uniform vec3 zenithColor;
+    void main() {
+      float westMix = 1.0 - smoothstep(-0.85, 0.85, vWorldDirection.x);
+      float horizon = pow(1.0 - clamp(abs(vWorldDirection.y), 0.0, 1.0), 2.25);
+      float zenith = smoothstep(0.12, 0.9, vWorldDirection.y);
+      vec3 horizontalGradient = mix(eastColor, westColor, westMix);
+      vec3 color = mix(horizontalGradient, horizonColor, horizon * 0.45);
+      color = mix(color, zenithColor, zenith * 0.25);
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+});
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(650, 48, 24), skyDomeMaterial);
+skyDome.visible = false;
+scene.add(skyDome);
+const moonGroup = new THREE.Group();
+const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xf3f0d6, fog: false, depthWrite: false, depthTest: false });
+const moonCutoutMaterial = new THREE.MeshBasicMaterial({ color: 0x101b2d, fog: false, depthWrite: false, depthTest: false });
+const moonFace = new THREE.Mesh(new THREE.CircleGeometry(10, 42), moonMaterial);
+const moonCutout = new THREE.Mesh(new THREE.CircleGeometry(9.4, 42), moonCutoutMaterial);
+moonCutout.position.set(4.1, 0.8, 0.08);
+moonGroup.add(moonFace, moonCutout);
+moonGroup.visible = false;
+scene.add(moonGroup);
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -136,6 +184,142 @@ sun.shadow.camera.bottom = -140;
 sun.shadow.camera.near = 10;
 sun.shadow.camera.far = 220;
 scene.add(sun);
+
+const TIME_OF_DAY_SETTINGS = {
+  day: {
+    background: 0xa9d7f0,
+    fog: 0xa9d7f0,
+    fogNear: 120,
+    fogFar: 330,
+    hemiSky: 0xeef8ff,
+    hemiGround: 0x6f8b4a,
+    hemiIntensity: 2.4,
+    sunColor: 0xfff1c8,
+    sunIntensity: 3.7,
+    sunPosition: [-60, 95, 42],
+  },
+  sunset: {
+    background: 0xff8fa0,
+    fog: 0xdc7c55,
+    fogNear: 95,
+    fogFar: 300,
+    hemiSky: 0xffc18a,
+    hemiGround: 0x4c3b42,
+    hemiIntensity: 1.65,
+    sunColor: 0xff9a4d,
+    sunIntensity: 3.15,
+    sunPosition: [-105, 32, 18],
+  },
+  night: {
+    background: 0x101b2d,
+    fog: 0x101b2d,
+    fogNear: 78,
+    fogFar: 275,
+    hemiSky: 0x4b638c,
+    hemiGround: 0x05070a,
+    hemiIntensity: 0.82,
+    sunColor: 0xb9d0ff,
+    sunIntensity: 0.72,
+    sunPosition: [-30, 65, -58],
+  },
+};
+let activeTimeOfDay = "day";
+
+function applyTimeOfDay(timeOfDay = "day") {
+  const setting = TIME_OF_DAY_SETTINGS[timeOfDay] ?? TIME_OF_DAY_SETTINGS.day;
+  activeTimeOfDay = TIME_OF_DAY_SETTINGS[timeOfDay] ? timeOfDay : "day";
+  scene.background = new THREE.Color(setting.background);
+  scene.fog = new THREE.Fog(setting.fog, setting.fogNear, setting.fogFar);
+  skyDome.visible = activeTimeOfDay === "sunset";
+  moonGroup.visible = activeTimeOfDay === "night";
+  hemiLight.color.setHex(setting.hemiSky);
+  hemiLight.groundColor.setHex(setting.hemiGround);
+  hemiLight.intensity = setting.hemiIntensity;
+  sun.color.setHex(setting.sunColor);
+  sun.intensity = setting.sunIntensity;
+  sun.position.set(...setting.sunPosition);
+}
+
+function sceneryLightIntensity(baseIntensity, role = "ambient") {
+  const sunsetMultiplier = role === "lamp" ? 5.2 : 1.75;
+  const nightMultiplier = role === "lamp" ? 6.4 : 2.25;
+  if (activeTimeOfDay === "sunset") return baseIntensity * sunsetMultiplier;
+  if (activeTimeOfDay === "night") return baseIntensity * nightMultiplier;
+  return baseIntensity;
+}
+
+function sceneryLightDistance(baseDistance, role = "ambient") {
+  const sunsetMultiplier = role === "lamp" ? 2.7 : 1.18;
+  const nightMultiplier = role === "lamp" ? 3 : 1.3;
+  if (activeTimeOfDay === "sunset") return baseDistance * sunsetMultiplier;
+  if (activeTimeOfDay === "night") return baseDistance * nightMultiplier;
+  return baseDistance;
+}
+
+function addSoftLightBand(parent, count, spacing, y, z, color, intensity, distance) {
+  for (let i = 0; i < count; i += 1) {
+    const light = new THREE.PointLight(color, intensity / count, distance, 1.35);
+    light.position.set((i - (count - 1) * 0.5) * spacing, y, z);
+    parent.add(light);
+  }
+}
+
+function addBuildingWindows(building, spec, glassMaterial, litWindowMaterial) {
+  const rows = Math.max(1, Math.floor(spec.height / 3.6));
+  const columns = Math.max(2, Math.floor(spec.width / 2.3));
+  const startY = Math.min(2.2, spec.height * 0.32);
+  const rowSpacing = Math.max(1.35, (spec.height - startY - 1.1) / Math.max(1, rows - 1));
+  const columnSpacing = spec.width / (columns + 1);
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const localX = spec.x - spec.width * 0.5 + columnSpacing * (column + 1);
+      const localY = startY + row * rowSpacing;
+      const material = (row + column) % 3 === 0 ? litWindowMaterial : glassMaterial;
+      const frontWindow = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.72, 0.08), material);
+      frontWindow.position.set(localX, localY, spec.z + spec.depth / 2 + 0.055);
+      building.add(frontWindow);
+
+      const rearWindow = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.72, 0.08), material);
+      rearWindow.position.set(localX, localY, spec.z - spec.depth / 2 - 0.055);
+      rearWindow.rotation.y = Math.PI;
+      building.add(rearWindow);
+    }
+  }
+
+  const sideRows = Math.max(1, Math.floor(spec.height / 5));
+  const sideColumns = Math.max(1, Math.floor(spec.depth / 3.2));
+  const sideSpacing = spec.depth / (sideColumns + 1);
+  for (let row = 0; row < sideRows; row += 1) {
+    for (let column = 0; column < sideColumns; column += 1) {
+      const localY = startY + row * Math.max(2.2, rowSpacing);
+      const localZ = spec.z - spec.depth * 0.5 + sideSpacing * (column + 1);
+      for (const side of [-1, 1]) {
+        const sideWindow = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.66, 0.86), (row + column) % 2 === 0 ? litWindowMaterial : glassMaterial);
+        sideWindow.position.set(spec.x + side * (spec.width / 2 + 0.055), localY, localZ);
+        building.add(sideWindow);
+      }
+    }
+  }
+}
+
+function updateSkyObjects() {
+  skyDome.position.copy(camera.position);
+  moonGroup.position.copy(camera.position).add(new THREE.Vector3(-145, 118, -210));
+  moonGroup.lookAt(camera.position);
+}
+
+function randomBuildingVariant(type) {
+  if (type === "building-small") return SMALL_BUILDING_VARIANTS[Math.floor(Math.random() * SMALL_BUILDING_VARIANTS.length)].id;
+  if (type === "building-skyscraper" || type === "building-super-tall") return SKYSCRAPER_VARIANTS[Math.floor(Math.random() * SKYSCRAPER_VARIANTS.length)].id;
+  return undefined;
+}
+
+function buildingVariantColor(type, variantId) {
+  if (type === "building-small") return (SMALL_BUILDING_VARIANTS.find((variant) => variant.id === variantId) ?? SMALL_BUILDING_VARIANTS[0]).color;
+  if (type === "building-skyscraper" || type === "building-super-tall") return (SKYSCRAPER_VARIANTS.find((variant) => variant.id === variantId) ?? SKYSCRAPER_VARIANTS[0]).color;
+  return null;
+}
 
 const keys = new Set();
 let gameStarted = false;
@@ -164,6 +348,8 @@ const timeTrialState = {
   invalidated: false,
   wallPenaltyCooldown: 0,
   wallPenaltyMessageTime: 0,
+  trackLimitsPenaltyCooldown: 0,
+  trackLimitsPenaltyMessageTime: 0,
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
@@ -185,6 +371,15 @@ const TRACK_NAME_OPTIONS = [
   "Imola Grand Prix",
   "Mount Panorama Circuit",
 ];
+const SMALL_BUILDING_VARIANTS = [
+  { id: "grey", color: 0xb8bec4 },
+  { id: "pink", color: 0xf0a9bd },
+  { id: "pale-yellow", color: 0xf2df8f },
+];
+const SKYSCRAPER_VARIANTS = [
+  { id: "dark-grey", color: 0x2f343a },
+  { id: "dark-blue-grey", color: 0x273a4a },
+];
 let editorZoom = EDITOR_DEFAULT_ZOOM;
 const editorViewCenter = {
   x: EDITOR_WORLD_WIDTH * 0.5,
@@ -192,6 +387,7 @@ const editorViewCenter = {
 };
 const editorTrack = {
   name: randomEditorTrackName(),
+  timeOfDay: "day",
   closed: true,
   startNode: 0,
   startDirection: 1,
@@ -242,7 +438,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (gameStarted && !isPaused) startEngineAudio();
-  if (event.code === "KeyR" && !isPaused) resetCar();
+  if (event.code === "KeyR" && !isPaused) resetCar({ keepTimeTrialLaps: true });
   if (event.code === "KeyH" && gameStarted && !event.repeat) toggleHeadlights();
   if (event.code === "Space" && gameStarted && !event.repeat) toggleCameraMode();
 });
@@ -295,6 +491,10 @@ trackWidthSlider.addEventListener("change", commitEditorUndoAction);
 curveBendSlider.addEventListener("change", commitEditorUndoAction);
 trackNameInput?.addEventListener("input", () => {
   editorTrack.name = trackNameInput.value.trim() || "Untitled Speedway";
+  updateEditorJsonOutput();
+});
+trackTimeOfDaySelect?.addEventListener("change", () => {
+  editorTrack.timeOfDay = trackTimeOfDaySelect.value || "day";
   updateEditorJsonOutput();
 });
 editorZoomSlider?.addEventListener("input", () => updateEditorZoom(Number(editorZoomSlider.value)));
@@ -792,6 +992,10 @@ const carState = {
   grassRockRoll: 0,
   grassRockPitch: 0,
   kerbJoltCooldown: 0,
+  kerbKickRoll: 0,
+  kerbKickPitch: 0,
+  kerbKickRollTarget: 0,
+  kerbKickPitchTarget: 0,
   collisionSmokeCooldown: 0,
   gear: 0,
   rpm: 2400,
@@ -873,6 +1077,7 @@ function update() {
   if (selectedGameMode === "time-trial") updateTimeTrialHud();
   if (isMenuOpen()) updateMenuPreview(dt);
   updateCamera(dt);
+  updateSkyObjects();
   renderer.render(scene, camera);
 }
 
@@ -900,9 +1105,9 @@ function updateCar(dt) {
   const boostPowerScale = profile.boostPowerScale ?? 1.18;
   const boostActive = profile.hasErs && throttle && ersPressed && carState.ers > 0;
   const surfaceAccelerationScale =
-    surface.kind === "grass" ? profile.grassAccelerationScale : surface.kind === "kerb" ? 0.88 : 1;
+    surface.kind === "grass" ? profile.grassAccelerationScale : surface.kind === "sausage" ? 0.78 : surface.kind === "kerb" ? 0.88 : 1;
   const surfaceTopSpeedScale =
-    surface.kind === "grass" ? profile.grassTopSpeedScale : surface.kind === "kerb" ? 0.92 : 1;
+    surface.kind === "grass" ? profile.grassTopSpeedScale : surface.kind === "sausage" ? 0.84 : surface.kind === "kerb" ? 0.92 : 1;
   const maxForwardSpeed = profile.maxForwardSpeed * surfaceTopSpeedScale * (boostActive ? boostPowerScale : 1);
   updateErs(dt, ersPressed, brake, profile);
   const maxSteer = THREE.MathUtils.lerp(
@@ -921,6 +1126,8 @@ function updateCar(dt) {
   const surfaceGrip =
     surface.kind === "grass"
       ? profile.grassGrip
+      : surface.kind === "sausage"
+        ? tuning.kerbGrip * 0.72
       : surface.kind === "kerb"
         ? tuning.kerbGrip
         : profile.baseGrip;
@@ -981,8 +1188,16 @@ function updateCar(dt) {
   }
 
   lateralSpeed = THREE.MathUtils.damp(lateralSpeed, 0, grip, dt);
-  if (surface.kind === "kerb") {
-    forwardSpeed = moveToward(forwardSpeed, 0, 0.95 * wheelSurface.kerbRatio * dt);
+  if (surface.kind === "kerb" || surface.kind === "sausage") {
+    const flatKerbDrag = 0.95 * Math.max(0, wheelSurface.kerbRatio - wheelSurface.sausageRatio);
+    const sausageDrag = profile.grassOverspeedBleed * 2 * THREE.MathUtils.clamp(wheelSurface.sausageRatio * 1.35, 0, 1);
+    forwardSpeed = moveToward(forwardSpeed, 0, (flatKerbDrag + sausageDrag) * dt);
+  }
+  if (wheelSurface.sausageRatio > 0 && speedAbs > 4) {
+    const sideBias = wheelSurface.rightSausageCount - wheelSurface.leftSausageCount;
+    const speedKick = THREE.MathUtils.clamp(speedAbs / 32, 0.2, 1.35);
+    lateralSpeed += -sideBias * speedKick * 2.8 * dt;
+    carState.yawRate += -sideBias * speedKick * 0.62 * dt;
   }
 
   const cornerDemand = Math.abs(forwardSpeed * Math.tan(carState.steer) / profile.wheelbase);
@@ -992,7 +1207,7 @@ function updateCar(dt) {
     topSpeedRatio,
   ) *
     coastRotationBoost *
-    (surface.kind === "grass" ? 0.32 : surface.kind === "kerb" ? 0.66 : 1);
+    (surface.kind === "grass" ? 0.32 : surface.kind === "sausage" ? 0.48 : surface.kind === "kerb" ? 0.66 : 1);
   const tireAuthority = THREE.MathUtils.clamp(slipLimit / Math.max(cornerDemand, 0.001), 0.22, 1);
   const lowSpeedAssist = speedAbs < 0.7 ? 0 : THREE.MathUtils.clamp(1 - Math.abs(forwardSpeed) / 7, 0, 1);
   const assistedSpeed =
@@ -1029,6 +1244,7 @@ function updateCar(dt) {
   updateTimeTrial(dt, wheelSurface);
   const grassBumpIntensity = wheelSurface.grassRatio * THREE.MathUtils.clamp(speedAbs / 24, 0, 1) * 0.8;
   const kerbBumpIntensity = wheelSurface.kerbRatio * THREE.MathUtils.clamp(speedAbs / 20, 0, 1) * 0.82;
+  const sausageBumpIntensity = wheelSurface.sausageRatio * THREE.MathUtils.clamp(speedAbs / 18, 0, 1) * 0.85;
   const grassBumpStrength = profile.kind === "formula" ? 0.105 : profile.kind === "lmp" ? 0.075 : profile.kind === "stock" ? 0.052 : 0.09;
   const grassBump = grassBumpIntensity * grassBumpStrength * (
     Math.sin(clock.elapsedTime * 18 + forwardSpeed * 0.55) + Math.sin(clock.elapsedTime * 29) * 0.42
@@ -1036,10 +1252,24 @@ function updateCar(dt) {
   const kerbBump = kerbBumpIntensity * 0.095 * (
     Math.sin(clock.elapsedTime * 34 + forwardSpeed * 0.7) + Math.sin(clock.elapsedTime * 51) * 0.35
   );
-  carState.position.y = (surface.kind === "kerb" ? track.kerbY : track.groundY) + grassBump + kerbBump;
+  const sausageBump = sausageBumpIntensity * 0.055 * (
+    Math.sin(clock.elapsedTime * 21 + forwardSpeed * 0.38) + Math.sin(clock.elapsedTime * 31) * 0.35
+  );
+  const surfaceY = surface.kind === "kerb" ? track.kerbY : track.groundY;
+  const rideLift = Math.max(wheelSurface.averageWheelLift * 0.95, wheelSurface.maxWheelLift * 0.42);
+  carState.position.y = surfaceY + rideLift + grassBump + kerbBump + sausageBump;
   carState.kerbJoltCooldown = Math.max(0, carState.kerbJoltCooldown - dt);
-  if (surface.kind === "kerb" && speedAbs > 5 && carState.kerbJoltCooldown <= 0 && Math.random() < 0.5) {
-    carState.heading += THREE.MathUtils.degToRad(THREE.MathUtils.randFloat(1, 5)) * (Math.random() < 0.5 ? -1 : 1);
+  if (wheelSurface.sausageRatio > 0.12 && speedAbs > 5 && carState.kerbJoltCooldown <= 0) {
+    const kickAngle = THREE.MathUtils.degToRad(THREE.MathUtils.randFloat(1, 5)) * THREE.MathUtils.clamp(wheelSurface.sausageRatio * 2.2, 0.25, 1);
+    const sideBias = wheelSurface.rightSausageCount - wheelSurface.leftSausageCount;
+    const frontBias = wheelSurface.frontSausageCount - wheelSurface.rearSausageCount;
+    carState.kerbKickRollTarget = kickAngle * (sideBias ? Math.sign(sideBias) : (Math.random() < 0.5 ? -1 : 1));
+    carState.kerbKickPitchTarget = kickAngle * 0.7 * (frontBias ? -Math.sign(frontBias) : (Math.random() < 0.5 ? -1 : 1));
+    carState.kerbJoltCooldown = 0.95;
+  } else if (surface.kind === "kerb" && speedAbs > 5 && carState.kerbJoltCooldown <= 0 && Math.random() < 0.5) {
+    const kickAngle = THREE.MathUtils.degToRad(THREE.MathUtils.randFloat(0.6, 2.2));
+    carState.kerbKickRollTarget = kickAngle * (Math.random() < 0.5 ? -1 : 1);
+    carState.kerbKickPitchTarget = kickAngle * 0.45 * (Math.random() < 0.5 ? -1 : 1);
     carState.kerbJoltCooldown = 0.65;
   }
 
@@ -1049,17 +1279,21 @@ function updateCar(dt) {
   const rollStrength = profile.kind === "jeep" ? 0.42 : 0.1;
   const rollTarget = -carState.steer * THREE.MathUtils.clamp(speedAbs / (profile.kind === "jeep" ? 24 : 45), 0, 1) * rollStrength;
   const grassRockScale = profile.kind === "formula" ? 1.25 : profile.kind === "lmp" ? 0.9 : profile.kind === "stock" ? 0.65 : 0.85;
-  const rockIntensity = grassBumpIntensity + kerbBumpIntensity * 0.92;
+  const rockIntensity = grassBumpIntensity + kerbBumpIntensity * 0.92 + sausageBumpIntensity * 0.75;
   const grassRockRoll = rockIntensity * grassRockScale * 0.035 * Math.sin(clock.elapsedTime * 16 + forwardSpeed * 0.3);
   const grassRockPitch = rockIntensity * grassRockScale * 0.028 * Math.sin(clock.elapsedTime * 21 + forwardSpeed * 0.38);
-  const kerbWheelRoll = (wheelSurface.rightKerbCount - wheelSurface.leftKerbCount) * 0.035;
-  const kerbWheelPitch = (wheelSurface.rearKerbCount - wheelSurface.frontKerbCount) * 0.026;
+  const kerbWheelRoll = (wheelSurface.rightKerbCount - wheelSurface.leftKerbCount) * 0.035 + (wheelSurface.rightSausageCount - wheelSurface.leftSausageCount) * 0.025;
+  const kerbWheelPitch = (wheelSurface.rearKerbCount - wheelSurface.frontKerbCount) * 0.026 + (wheelSurface.rearSausageCount - wheelSurface.frontSausageCount) * 0.018;
   carState.grassBump = grassBump;
   carState.grassRockRoll = grassRockRoll;
   carState.grassRockPitch = grassRockPitch;
   carState.visualRoll = THREE.MathUtils.damp(carState.visualRoll, rollTarget, profile.kind === "jeep" ? 3.3 : 7, dt);
-  car.body.rotation.z = carState.visualRoll + grassRockRoll + kerbWheelRoll;
-  car.body.rotation.x = grassRockPitch + kerbWheelPitch;
+  carState.kerbKickRollTarget = THREE.MathUtils.damp(carState.kerbKickRollTarget, 0, 1.15, dt);
+  carState.kerbKickPitchTarget = THREE.MathUtils.damp(carState.kerbKickPitchTarget, 0, 1.15, dt);
+  carState.kerbKickRoll = THREE.MathUtils.damp(carState.kerbKickRoll, carState.kerbKickRollTarget, 2.9, dt);
+  carState.kerbKickPitch = THREE.MathUtils.damp(carState.kerbKickPitch, carState.kerbKickPitchTarget, 2.9, dt);
+  car.body.rotation.z = carState.visualRoll + grassRockRoll + kerbWheelRoll + carState.kerbKickRoll;
+  car.body.rotation.x = grassRockPitch + kerbWheelPitch + carState.kerbKickPitch;
 
   if (car.wheels.frontLeft) car.wheels.frontLeft.rotation.y = carState.steer;
   if (car.wheels.frontRight) car.wheels.frontRight.rotation.y = carState.steer;
@@ -1067,6 +1301,7 @@ function updateCar(dt) {
   for (const wheel of car.wheelMeshes) {
     wheel.rotation.x = carState.wheelSpin;
   }
+  updateWheelRideHeights(wheelSurface, dt);
 
   if (profile.transmission !== "manual") carState.gear = getAutoGear(forwardSpeed, profile);
   carState.rpm = getEngineRpm(forwardSpeed, throttle, carState.gear, profile);
@@ -1077,7 +1312,7 @@ function updateCar(dt) {
 
   speedEl.textContent = `${Math.round(Math.abs(forwardSpeed) * 2.237)} mph`;
   gearEl.textContent = carState.gear === -1 ? "R" : carState.gear === 0 ? "N" : `${carState.gear}`;
-  surfaceEl.textContent = surface.kind === "grass" ? "Grass" : surface.kind === "kerb" ? "Kerb" : "Track";
+  surfaceEl.textContent = surface.kind === "grass" ? "Grass" : surface.kind === "sausage" ? "Sausage" : surface.kind === "kerb" ? "Kerb" : "Track";
   updateErsHud();
   updateRevMeter(profile);
   spawnFormulaSparks(dt, profile, boostActive, forwardSpeed, speedAbs);
@@ -1195,13 +1430,25 @@ function getWheelSurfaceState() {
     grassCount: 0,
     leftGrassCount: 0,
     rightGrassCount: 0,
+    frontGrassCount: 0,
+    rearGrassCount: 0,
     kerbCount: 0,
     leftKerbCount: 0,
     rightKerbCount: 0,
     frontKerbCount: 0,
     rearKerbCount: 0,
+    sausageCount: 0,
+    leftSausageCount: 0,
+    rightSausageCount: 0,
+    frontSausageCount: 0,
+    rearSausageCount: 0,
     grassRatio: 0,
     kerbRatio: 0,
+    sausageRatio: 0,
+    sausageStrength: 0,
+    wheelLifts: {},
+    averageWheelLift: 0,
+    maxWheelLift: 0,
     leftBrakeScale: 1,
     rightBrakeScale: 1,
     brakeScale: 1,
@@ -1213,27 +1460,64 @@ function getWheelSurfaceState() {
 
     const wheelPosition = new THREE.Vector3();
     wheel.getWorldPosition(wheelPosition);
-    const wheelSurface = track.sample(wheelPosition.x, wheelPosition.z).kind;
-    if (wheelSurface === "kerb") {
-      state.kerbCount += 1;
-      if (wheelName.endsWith("Left")) state.leftKerbCount += 1;
-      if (wheelName.endsWith("Right")) state.rightKerbCount += 1;
-      if (wheelName.startsWith("front")) state.frontKerbCount += 1;
-      if (wheelName.startsWith("rear")) state.rearKerbCount += 1;
+    const wheelSample = track.sample(wheelPosition.x, wheelPosition.z);
+    const wheelSurface = wheelSample.kind;
+    const contactAmount = wheelSample.amount ?? 1;
+    const wheelLift = wheelSurface === "sausage" ? 0.11 * contactAmount : wheelSurface === "kerb" ? 0.06 : 0;
+    state.wheelLifts[wheelName] = wheelLift;
+    state.averageWheelLift += wheelLift;
+    state.maxWheelLift = Math.max(state.maxWheelLift, wheelLift);
+    if (wheelSurface === "kerb" || wheelSurface === "sausage") {
+      const kerbAmount = wheelSurface === "sausage" ? contactAmount : 1;
+      state.kerbCount += kerbAmount;
+      if (wheelName.endsWith("Left")) state.leftKerbCount += kerbAmount;
+      if (wheelName.endsWith("Right")) state.rightKerbCount += kerbAmount;
+      if (wheelName.startsWith("front")) state.frontKerbCount += kerbAmount;
+      if (wheelName.startsWith("rear")) state.rearKerbCount += kerbAmount;
+    }
+    if (wheelSurface === "sausage") {
+      state.sausageStrength += contactAmount;
+      state.sausageCount += contactAmount;
+      if (wheelName.endsWith("Left")) state.leftSausageCount += contactAmount;
+      if (wheelName.endsWith("Right")) state.rightSausageCount += contactAmount;
+      if (wheelName.startsWith("front")) state.frontSausageCount += contactAmount;
+      if (wheelName.startsWith("rear")) state.rearSausageCount += contactAmount;
     }
     if (wheelSurface !== "grass") continue;
 
     state.grassCount += 1;
     if (wheelName.endsWith("Left")) state.leftGrassCount += 1;
     if (wheelName.endsWith("Right")) state.rightGrassCount += 1;
+    if (wheelName.startsWith("front")) state.frontGrassCount += 1;
+    if (wheelName.startsWith("rear")) state.rearGrassCount += 1;
   }
 
   state.grassRatio = state.grassCount / wheelNames.length;
   state.kerbRatio = state.kerbCount / wheelNames.length;
+  state.sausageRatio = state.sausageStrength / wheelNames.length;
+  state.averageWheelLift /= wheelNames.length;
   state.leftBrakeScale = 1 - 0.3 * (state.leftGrassCount / 2);
   state.rightBrakeScale = 1 - 0.3 * (state.rightGrassCount / 2);
   state.brakeScale = (state.leftBrakeScale + state.rightBrakeScale) * 0.5;
   return state;
+}
+
+function updateWheelRideHeights(wheelSurface, dt) {
+  if (!car?.wheels) return;
+  for (const [wheelName, wheel] of Object.entries(car.wheels)) {
+    if (!wheel) continue;
+    if (wheel.userData.baseY === undefined) wheel.userData.baseY = wheel.position.y;
+    const lift = wheelSurface.wheelLifts?.[wheelName] ?? 0;
+    const targetY = wheel.userData.baseY + Math.max(0, lift - wheelSurface.averageWheelLift * 0.35);
+    wheel.position.y = THREE.MathUtils.damp(wheel.position.y, targetY, lift > 0 ? 5.2 : 4.4, dt);
+  }
+}
+
+function rememberWheelBaseHeights(carModel) {
+  for (const wheel of Object.values(carModel.wheels ?? {})) {
+    if (wheel) wheel.userData.baseY = wheel.position.y;
+  }
+  return carModel;
 }
 function updateErs(dt, ersPressed, brake, profile) {
   if (!profile.hasErs) {
@@ -1255,8 +1539,18 @@ function updateTimeTrial(dt, wheelSurface) {
   if (timeTrialState.running) timeTrialState.currentTime += dt;
   timeTrialState.wallPenaltyCooldown = Math.max(0, timeTrialState.wallPenaltyCooldown - dt);
   timeTrialState.wallPenaltyMessageTime = Math.max(0, timeTrialState.wallPenaltyMessageTime - dt);
+  timeTrialState.trackLimitsPenaltyCooldown = Math.max(0, timeTrialState.trackLimitsPenaltyCooldown - dt);
+  timeTrialState.trackLimitsPenaltyMessageTime = Math.max(0, timeTrialState.trackLimitsPenaltyMessageTime - dt);
   if (timeTrialState.running && wheelSurface?.grassCount === 4) {
     timeTrialState.invalidated = true;
+  } else if (
+    timeTrialState.running &&
+    timeTrialState.trackLimitsPenaltyCooldown <= 0 &&
+    (wheelSurface?.frontGrassCount === 2 || wheelSurface?.rearGrassCount === 2)
+  ) {
+    timeTrialState.currentTime += 2;
+    timeTrialState.trackLimitsPenaltyCooldown = 5;
+    timeTrialState.trackLimitsPenaltyMessageTime = 5;
   }
 
   const currentSide = getStartLineSide(carState.position);
@@ -1274,6 +1568,8 @@ function updateTimeTrial(dt, wheelSurface) {
     timeTrialState.running = true;
     timeTrialState.currentTime = 0;
     timeTrialState.invalidated = false;
+    carState.ers = 100;
+    updateErsHud();
   }
 
   timeTrialState.lastLineSide = currentSide;
@@ -1298,6 +1594,8 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   timeTrialState.invalidated = false;
   timeTrialState.wallPenaltyCooldown = 0;
   timeTrialState.wallPenaltyMessageTime = 0;
+  timeTrialState.trackLimitsPenaltyCooldown = 0;
+  timeTrialState.trackLimitsPenaltyMessageTime = 0;
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
@@ -1318,7 +1616,7 @@ function recordTimeTrialLap() {
 function updateTimeTrialHud() {
   const isTimeTrial = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen();
   if (timeTrialTimerEl) timeTrialTimerEl.hidden = !isTimeTrial;
-  if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0);
+  if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0 && timeTrialState.trackLimitsPenaltyMessageTime <= 0);
   if (timeTrialResultsEl) timeTrialResultsEl.hidden = !isTimeTrial;
   if (!isTimeTrial) return;
 
@@ -1326,7 +1624,9 @@ function updateTimeTrialHud() {
   if (timeTrialMessageEl && !timeTrialMessageEl.hidden) {
     timeTrialMessageEl.textContent = timeTrialState.invalidated
       ? "Invalidated Lap - Off Track"
-      : "1 Second Penalty - Wall Contact";
+      : timeTrialState.trackLimitsPenaltyMessageTime > 0
+        ? "2 Second Penalty - Track Limits"
+        : "1 Second Penalty - Wall Contact";
     timeTrialMessageEl.classList.toggle("is-invalidated", timeTrialState.invalidated);
   }
   if (!timeTrialLapsEl) return;
@@ -1366,22 +1666,27 @@ function toggleHeadlights() {
 
 function updateCarLights(brake = false, boostActive = false) {
   if (!car?.lights) return;
+  const nitrousFlameActive = getCarProfile().kind === "corvette" && boostActive;
   const headlightsOn = carState.headlightsOn;
   for (const light of car.lights.headlights ?? []) {
     light.visible = headlightsOn;
   }
   for (const mesh of car.lights.headlightMeshes ?? []) {
-    mesh.material.emissiveIntensity = headlightsOn ? 0.78 : 0.08;
+    mesh.material.emissiveIntensity = headlightsOn
+      ? (mesh.userData.headlightOnIntensity ?? 2.4)
+      : (mesh.userData.headlightOffIntensity ?? 0.12);
   }
   for (const mesh of car.lights.brakeLights ?? []) {
     mesh.material.emissiveIntensity = brake ? 1.35 : 0.22;
     mesh.scale.y = brake ? 1.18 : 1;
   }
   for (const flame of car.lights.nitrousFlames ?? []) {
-    flame.visible = boostActive;
-    if (boostActive) {
+    flame.visible = nitrousFlameActive;
+    if (nitrousFlameActive) {
       const flicker = 0.85 + Math.random() * 0.35;
       flame.scale.set(0.55 * flicker, 0.55 * flicker, 1.05 * flicker);
+    } else {
+      flame.scale.set(0, 0, 0);
     }
   }
 }
@@ -1545,7 +1850,7 @@ function updateSparkParticles(dt) {
 
 function spawnFormulaSparks(dt, profile, boostActive, forwardSpeed, speedAbs) {
   if (profile.kind !== "formula" || boostActive || forwardSpeed <= 0) return;
-  if (speedAbs < profile.maxForwardSpeed * 0.96) return;
+  if (speedAbs < profile.maxForwardSpeed * 0.98) return;
   if (Math.random() > dt * 14.4) return;
 
   const rearPosition = carState.position
@@ -1680,6 +1985,7 @@ function resetChaseCamera() {
 
 function createTrack(trackId = KATARA_TRACK_ID) {
   const definition = trackDefinitions[trackId] ?? trackDefinitions[KATARA_TRACK_ID];
+  applyTimeOfDay(definition.timeOfDay ?? "day");
   const group = new THREE.Group();
   const halfWidth = definition.halfWidth ?? 7.2;
   const kerbWidth = definition.kerbWidth ?? 1.15;
@@ -1748,12 +2054,14 @@ function createTrack(trackId = KATARA_TRACK_ID) {
     obstacles,
     groundY: 0.14,
     kerbY: 0.28,
+    sausageY: 0.34,
     sample(x, z) {
       for (const area of extraTrackAreas) {
         if (area.kind === "curve" && isPointInExtraTrackArea(x, z, area)) return { kind: "track", distance: 0 };
       }
       for (const area of extraTrackAreas) {
-        if (area.kind === "kerb" && isPointInExtraTrackArea(x, z, area)) return { kind: "kerb", distance: 0 };
+        const contact = getExtraTrackAreaContact(x, z, area);
+        if (contact > 0 && (area.kind === "kerb" || area.kind === "sausage")) return { kind: area.kind, distance: 0, amount: contact };
       }
 
       let bestDistance = Infinity;
@@ -1773,7 +2081,8 @@ function createTrack(trackId = KATARA_TRACK_ID) {
       if (distance <= widthProfile[bestIndex]) return { kind: "track", distance };
       if (definition.cornerOnlyKerbs) {
         for (const area of extraTrackAreas) {
-          if (area.kind === "kerb" && isPointInExtraTrackArea(x, z, area)) return { kind: "kerb", distance };
+          const contact = getExtraTrackAreaContact(x, z, area);
+          if (contact > 0 && (area.kind === "kerb" || area.kind === "sausage")) return { kind: area.kind, distance, amount: contact };
         }
         return { kind: "grass", distance };
       }
@@ -2246,16 +2555,19 @@ function makeKerbBlockGeometry(length, width, height) {
   return geometry;
 }
 function isPointInExtraTrackArea(x, z, area) {
-  if (area.kind === "curve" || area.kind === "kerb") {
-    let bestDistance = Infinity;
-    for (let i = 0; i < area.points.length - 1; i += 1) {
-      const distance = distanceToSegment2D(x, z, area.points[i], area.points[i + 1]);
-      if (distance < bestDistance) bestDistance = distance;
-    }
-    return bestDistance <= area.halfWidth;
-  }
+  return getExtraTrackAreaContact(x, z, area) > 0;
+}
 
-  return false;
+function getExtraTrackAreaContact(x, z, area) {
+  if (area.kind !== "curve" && area.kind !== "kerb" && area.kind !== "sausage") return 0;
+  let bestDistance = Infinity;
+  for (let i = 0; i < area.points.length - 1; i += 1) {
+    const distance = distanceToSegment2D(x, z, area.points[i], area.points[i + 1]);
+    if (distance < bestDistance) bestDistance = distance;
+  }
+  if (bestDistance > area.halfWidth) return 0;
+  if (area.kind !== "sausage") return 1;
+  return THREE.MathUtils.smoothstep(1 - bestDistance / Math.max(0.001, area.halfWidth), 0, 1);
 }
 
 function distanceToSegment2D(x, z, start, end) {
@@ -2337,20 +2649,28 @@ function addCloudsAndSun(group) {
 
   const cloudMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f5f0, roughness: 1, flatShading: true });
   const cloudPositions = [
-    [-65, 48, -58],
-    [8, 54, -72],
-    [62, 46, -42],
-    [-24, 58, 34],
+    [-92, 50, -72, 1.55],
+    [-54, 58, -118, 1.9],
+    [8, 54, -72, 1.7],
+    [58, 49, -98, 1.45],
+    [92, 47, -38, 1.65],
+    [-74, 61, 22, 1.75],
+    [-18, 57, 42, 1.5],
+    [48, 63, 36, 1.95],
+    [110, 55, 82, 1.55],
+    [-118, 66, 92, 1.8],
   ];
 
-  for (const [x, y, z] of cloudPositions) {
+  for (const [x, y, z, scale] of cloudPositions) {
     const cloud = new THREE.Group();
-    for (let i = 0; i < 4; i += 1) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(3.2 - i * 0.25, 8, 6), cloudMaterial);
-      puff.scale.set(1.5, 0.62, 0.78);
-      puff.position.set(i * 3.8, Math.sin(i) * 0.6, Math.cos(i) * 1.2);
+    for (let i = 0; i < 8; i += 1) {
+      const radius = 4.1 + Math.sin(i * 1.7) * 0.75 + (i % 3) * 0.35;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(radius, 10, 8), cloudMaterial);
+      puff.scale.set(1.75 + (i % 2) * 0.45, 0.82 + (i % 3) * 0.1, 1.0 + (i % 4) * 0.12);
+      puff.position.set((i - 3.5) * 4.4, Math.sin(i * 0.95) * 1.2, Math.cos(i * 1.25) * 2.2);
       cloud.add(puff);
     }
+    cloud.scale.setScalar(scale);
     cloud.position.set(x, y, z);
     group.add(cloud);
   }
@@ -3034,11 +3354,69 @@ function createStockCar(paint = "orange-stock") {
 }
 
 function createSelectedCar(carId) {
-  if (corvettePaintSchemes[carId]) return createCorvette(carId);
-  if (lmpPaintSchemes[carId]) return createLeMansPrototype(carId);
-  if (stockPaintSchemes[carId]) return createStockCar(carId);
-  if (jeepPaintSchemes[carId]) return createJeep(carId);
-  return createFormulaCar(carId);
+  if (corvettePaintSchemes[carId]) return addUniversalHeadlights(createCorvette(carId), "corvette");
+  if (lmpPaintSchemes[carId]) return addUniversalHeadlights(createLeMansPrototype(carId), "lmp");
+  if (stockPaintSchemes[carId]) return addUniversalHeadlights(createStockCar(carId), "stock");
+  if (jeepPaintSchemes[carId]) return addUniversalHeadlights(createJeep(carId), "jeep");
+  return addUniversalHeadlights(createFormulaCar(carId), "formula");
+}
+
+function addUniversalHeadlights(car, kind = "formula") {
+  const headlightIntensity = 7.6;
+  const headlightDistance = 345;
+  const headlightAngle = kind === "jeep" ? 0.46 : 0.42;
+  car.lights ??= {};
+  car.lights.headlights ??= [];
+  car.lights.headlightMeshes ??= [];
+  car.lights.brakeLights ??= [];
+  car.lights.nitrousFlames ??= [];
+
+  for (const light of car.lights.headlights) {
+    light.intensity = headlightIntensity;
+    light.distance = headlightDistance;
+    light.angle = headlightAngle;
+    light.penumbra = 0.55;
+    light.decay = 1.08;
+  }
+  for (const mesh of car.lights.headlightMeshes) {
+    mesh.userData.headlightOnIntensity = 2.4;
+    mesh.userData.headlightOffIntensity = 0.12;
+  }
+  if (car.lights.headlights.length) return rememberWheelBaseHeights(car);
+
+  const layouts = {
+    formula: { xs: [-0.34, 0.34], y: 0.43, z: 2.92, targetY: 0.18, targetZ: 24, width: 0.24, height: 0.08 },
+    lmp: { xs: [-0.58, 0.58], y: 0.46, z: 2.18, targetY: 0.18, targetZ: 24, width: 0.34, height: 0.1 },
+    stock: { xs: [-0.64, 0.64], y: 0.68, z: 2.82, targetY: 0.2, targetZ: 25, width: 0.38, height: 0.14 },
+    jeep: { xs: [-0.78, 0.78], y: 0.98, z: 2.36, targetY: 0.28, targetZ: 25, width: 0.3, height: 0.3 },
+  };
+  const layout = layouts[kind] ?? layouts.formula;
+  const lampMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf6f2dc,
+    emissive: 0xffd782,
+    emissiveIntensity: 2.4,
+    roughness: 0.24,
+    metalness: 0.08,
+    flatShading: true,
+  });
+
+  for (const x of layout.xs) {
+    const headlight = new THREE.Mesh(new THREE.BoxGeometry(layout.width, layout.height, 0.08), lampMaterial.clone());
+    headlight.position.set(x, layout.y, layout.z);
+    headlight.rotation.x = -0.14;
+    headlight.rotation.z = -x * 0.12;
+    headlight.userData.headlightOnIntensity = 2.4;
+    headlight.userData.headlightOffIntensity = 0.12;
+    car.body.add(headlight);
+    car.lights.headlightMeshes.push(headlight);
+
+    const beam = new THREE.SpotLight(0xbfe8ff, headlightIntensity, headlightDistance, headlightAngle, 0.55, 1.08);
+    beam.position.set(x, layout.y + 0.08, layout.z + 0.06);
+    beam.target.position.set(x * 0.55, layout.targetY, layout.targetZ);
+    car.body.add(beam, beam.target);
+    car.lights.headlights.push(beam);
+  }
+  return rememberWheelBaseHeights(car);
 }
 
 function createCorvette(paint = "vette-yellow") {
@@ -3148,6 +3526,7 @@ function createCorvette(paint = "vette-yellow") {
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.62, 9), flameMaterial.clone());
     flame.rotation.x = -Math.PI / 2;
     flame.position.set(x, 0.36, -2.98);
+    flame.scale.set(0, 0, 0);
     flame.visible = false;
     body.add(flame);
     nitrousFlames.push(flame);
@@ -3768,6 +4147,7 @@ function openTrackEditor() {
   startMenu.classList.add("is-hidden");
   trackEditor.classList.remove("is-hidden");
   if (trackNameInput) trackNameInput.value = editorTrack.name;
+  if (trackTimeOfDaySelect) trackTimeOfDaySelect.value = editorTrack.timeOfDay ?? "day";
   startEditorMusic();
   updateEditorZoom(editorZoom);
   updateTrackWidthReadout();
@@ -3795,6 +4175,7 @@ function startTrackEditorFrom(sourceId) {
 function resetEditorTrack() {
   Object.assign(editorTrack, {
     name: randomEditorTrackName(),
+    timeOfDay: "day",
     closed: true,
     startNode: 0,
     startDirection: 1,
@@ -3821,6 +4202,7 @@ function resetEditorTrack() {
 function loadEditorTrackData(trackData) {
   Object.assign(editorTrack, {
     name: trackData.name || randomEditorTrackName(),
+    timeOfDay: trackData.timeOfDay ?? "day",
     closed: trackData.closed ?? true,
     startNode: trackData.startNode ?? 0,
     startDirection: trackData.startDirection ?? 1,
@@ -3856,6 +4238,7 @@ function restoreEditorTrackState(snapshot) {
   if (!snapshot) return;
   Object.assign(editorTrack, cloneEditorSnapshot(snapshot));
   if (trackNameInput) trackNameInput.value = editorTrack.name;
+  if (trackTimeOfDaySelect) trackTimeOfDaySelect.value = editorTrack.timeOfDay ?? "day";
   syncEditorControlsFromSelection();
 }
 
@@ -3983,7 +4366,9 @@ function handleEditorPointerDown(event) {
     editorTrack.pitLane.push({ ...point, width: 6, curve: 0 });
   } else if (editorTool === "scenery") {
     pushEditorUndoState();
-    editorTrack.scenery.push({ type: sceneryTypeSelect.value, rotation: 0, ...point });
+    const type = sceneryTypeSelect.value;
+    const variant = randomBuildingVariant(type);
+    editorTrack.scenery.push({ type, ...(variant ? { variant } : {}), rotation: 0, ...point });
     selectedEditorScenery = editorTrack.scenery.length - 1;
   }
 
@@ -4184,6 +4569,7 @@ function getEditorTrackExportData() {
   return {
     version: 2,
     name: editorTrack.name,
+    timeOfDay: editorTrack.timeOfDay ?? "day",
     closed: editorTrack.closed,
     startNode: editorTrack.startNode,
     startDirection: editorTrack.startDirection,
@@ -4197,7 +4583,13 @@ function getEditorTrackExportData() {
     kerbs: editorTrack.kerbs.map(normalizeEditorKerbForExport),
     roadFeatures: editorTrack.nodes.map((_, index) => ({ ...getEditorRoadFeatures(index) })),
     pitLane: editorTrack.pitLane.map((node) => ({ x: Math.round(node.x), y: Math.round(node.y), width: node.width })),
-    scenery: editorTrack.scenery.map((item) => ({ type: item.type, x: Math.round(item.x), y: Math.round(item.y), rotation: Number((item.rotation ?? 0).toFixed(2)) })),
+    scenery: editorTrack.scenery.map((item) => ({
+      type: item.type,
+      ...(item.variant ? { variant: item.variant } : {}),
+      x: Math.round(item.x),
+      y: Math.round(item.y),
+      rotation: Number((item.rotation ?? 0).toFixed(2)),
+    })),
   };
 }
 
@@ -4697,7 +5089,8 @@ function renderEditorScenery() {
     }
 
     if (item.type.startsWith("building")) {
-      const size = (item.type === "building-super-tall" ? 44 : item.type === "building-tall" ? 34 : item.type === "building-group" ? 30 : 24) * EDITOR_VISUAL_SCALE;
+      const isSkyscraper = item.type === "building-skyscraper" || item.type === "building-super-tall";
+      const size = (isSkyscraper ? 44 : item.type === "building-tall" ? 34 : item.type === "building-group" ? 30 : 24) * EDITOR_VISUAL_SCALE;
       const group = svgElement("g", {
         class: `editor-scenery-group${selectedClass}`,
         transform: getEditorSceneryTransform(item),
@@ -4710,6 +5103,7 @@ function renderEditorScenery() {
         height: size,
         rx: 12,
         class: `editor-scenery editor-scenery-${item.type}`,
+        ...(buildingVariantColor(item.type, item.variant) ? { fill: `#${buildingVariantColor(item.type, item.variant).toString(16).padStart(6, "0")}` } : {}),
       }));
       group.appendChild(svgElement("path", {
         d: `M 0 ${-size * 0.72} L ${size * 0.2} ${-size * 0.46} L ${size * 0.07} ${-size * 0.5} L ${size * 0.07} ${-size * 0.22} L ${-size * 0.07} ${-size * 0.22} L ${-size * 0.07} ${-size * 0.5} L ${-size * 0.2} ${-size * 0.46} Z`,
@@ -4821,7 +5215,7 @@ function getNearestEditorScenery(point) {
 function getEditorSceneryHitRadius(item) {
   if (!item) return 0;
   if (item.type === "building-tall") return 34 * EDITOR_VISUAL_SCALE;
-  if (item.type === "building-super-tall") return 44 * EDITOR_VISUAL_SCALE;
+  if (item.type === "building-super-tall" || item.type === "building-skyscraper") return 44 * EDITOR_VISUAL_SCALE;
   if (item.type === "building-group") return 31 * EDITOR_VISUAL_SCALE;
   if (item.type === "building-small") return 28 * EDITOR_VISUAL_SCALE;
   if (item.type === "flower-bed") return 30 * EDITOR_VISUAL_SCALE;
@@ -5158,6 +5552,7 @@ function createTrackDefinitionFromEditorData(sourceTrack, definitionId) {
   const points = sampled.points;
 
   return {
+    timeOfDay: sourceTrack.timeOfDay ?? "day",
     points,
     start: editorPointToPlan(nodes[startNode]),
     next: editorPointToPlan(nodes[nextNode]),
@@ -5240,8 +5635,8 @@ function addEditorTrackDetails(group, extraTrackAreas, samples, obstacles = [], 
     const segment = getEditorSegmentFromTrack(sourceTrack, segmentIndex);
     const segmentHalfWidth = segment ? getEditorSegmentWidth(segment, segmentIndex) * 0.62 : halfWidth;
     const segmentCount = sourceTrack.nodes.length;
-    if (features.kerbRight) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, 1, segmentHalfWidth, segmentCount), extraTrackAreas);
-    if (features.kerbLeft) addKerbSurfaceObject(group, samples, createRoadFeatureKerbSpec(segmentIndex, -1, segmentHalfWidth, segmentCount), extraTrackAreas);
+    if (features.kerbRight) addSausageKerbObject(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, extraTrackAreas);
+    if (features.kerbLeft) addSausageKerbObject(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, extraTrackAreas);
     if (features.wallRight) addEditorWallObject(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, obstacles);
     if (features.wallLeft) addEditorWallObject(group, samples, { segment: segmentIndex, side: -1, trackHalfWidth: segmentHalfWidth, segmentCount, definitionId }, obstacles);
     if (features.grandstandRight) addRoadAttachedGrandstand(group, samples, { segment: segmentIndex, side: 1, trackHalfWidth: segmentHalfWidth, segmentCount });
@@ -5277,6 +5672,74 @@ function createRoadFeatureKerbSpec(segment, side, trackHalfWidth, segmentCount =
   };
 }
 
+function addSausageKerbObject(group, samples, spec, extraTrackAreas) {
+  const material = new THREE.MeshStandardMaterial({ color: 0xffc400, roughness: 0.62, metalness: 0.03, flatShading: true });
+  const segmentCount = Math.max(1, spec.segmentCount ?? editorTrack.nodes.length);
+  const segmentStart = THREE.MathUtils.clamp((spec.segment ?? 0) / segmentCount, 0, 0.999);
+  const segmentSpan = 1 / segmentCount;
+  const startIndex = Math.floor(segmentStart * samples.length);
+  const endIndex = Math.max(startIndex + 4, Math.floor((segmentStart + segmentSpan) * samples.length));
+  const definition = trackDefinitions[spec.definitionId ?? "editor-test"];
+  const widthSamples = getTrackWidthProfile(definition, samples.length, spec.trackHalfWidth ?? 7.2);
+  const side = spec.side ?? 1;
+  const sausageHeight = 0.2;
+  const sausageTopWidth = 0.72;
+  const sausageBaseWidth = sausageTopWidth * 2;
+  const centerOffset = side * ((spec.trackHalfWidth ?? 7.2) + sausageBaseWidth * 0.28);
+  const kerbPoints = [];
+
+  for (let i = startIndex; i <= endIndex; i += 4) {
+    kerbPoints.push(getTrackPoseAt(samples, (i % samples.length) / samples.length, centerOffset).position);
+  }
+
+  for (let i = 0; i < kerbPoints.length - 1; i += 1) {
+    const current = kerbPoints[i];
+    const next = kerbPoints[i + 1];
+    const center = current.clone().lerp(next, 0.5);
+    if (!isWallSegmentClearOfAsphalt(center, samples, widthSamples, startIndex, endIndex, definition)) continue;
+    const length = Math.max(1.1, current.distanceTo(next));
+    const angle = Math.atan2(next.x - current.x, next.z - current.z);
+    const sausage = new THREE.Mesh(makeSausageKerbGeometry(length, sausageBaseWidth, sausageTopWidth, sausageHeight), material);
+    sausage.position.copy(center);
+    sausage.position.y = sausageHeight * 0.5 + 0.05;
+    sausage.rotation.y = angle;
+    sausage.castShadow = true;
+    sausage.receiveShadow = true;
+    group.add(sausage);
+  }
+
+  extraTrackAreas.push({ kind: "sausage", points: kerbPoints, halfWidth: sausageBaseWidth * 0.69, height: sausageHeight, surface: "sausage" });
+}
+
+function makeSausageKerbGeometry(length, baseWidth, topWidth, height) {
+  const halfLength = length * 0.5;
+  const halfBase = baseWidth * 0.5;
+  const halfTop = topWidth * 0.5;
+  const vertices = new Float32Array([
+    -halfBase, 0, -halfLength,
+    halfBase, 0, -halfLength,
+    -halfTop, height, -halfLength,
+    halfTop, height, -halfLength,
+    -halfBase, 0, halfLength,
+    halfBase, 0, halfLength,
+    -halfTop, height, halfLength,
+    halfTop, height, halfLength,
+  ]);
+  const indices = [
+    0, 4, 6, 0, 6, 2,
+    1, 3, 7, 1, 7, 5,
+    2, 6, 7, 2, 7, 3,
+    0, 1, 5, 0, 5, 4,
+    4, 5, 7, 4, 7, 6,
+    0, 2, 3, 0, 3, 1,
+  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function addEditorSceneryObjects(group, obstacles = [], sourceTrack = editorTrack) {
   for (const item of sourceTrack.scenery ?? []) {
     const position = editorPointToWorld(item);
@@ -5287,7 +5750,7 @@ function addEditorSceneryObjects(group, obstacles = [], sourceTrack = editorTrac
     } else if (item.type === "douglas-pines") {
       addEditorDouglasPines(group, position.x, position.z, item.rotation ?? 0, obstacles);
     } else if (item.type.startsWith("building")) {
-      addEditorBuilding(group, position.x, position.z, item.rotation ?? 0, item.type, obstacles);
+      addEditorBuilding(group, position.x, position.z, item.rotation ?? 0, item.type, obstacles, item.variant);
     } else if (item.type === "lamp") {
       addEditorLamp(group, position.x, position.z, item.rotation ?? 0);
     } else if (item.type === "flower-bed") {
@@ -5579,32 +6042,39 @@ function addEditorGrandstand(group, x, z, rotation = 0) {
   }
 
   const frontZ = frontEdge - visualCenterZ;
-  const glow = new THREE.PointLight(0xffc45c, 3.2, 34, 1.5);
-  glow.position.set(0, 5.8, frontZ + 1.2);
-  const wash = new THREE.SpotLight(0xffd27a, 5.5, 58, 0.72, 0.55, 1.3);
-  wash.position.set(0, 7.2, frontZ + 0.8);
-  wash.target.position.set(0, 0.8, frontZ + 17);
-  stand.add(glow, wash, wash.target);
+  addSoftLightBand(
+    stand,
+    6,
+    length / 6.4,
+    5.8,
+    frontZ + 1.6,
+    0xffcf72,
+    sceneryLightIntensity(4.8, "lamp") * 0.6,
+    sceneryLightDistance(58, "lamp") * 0.75,
+  );
 
   stand.position.set(x, 0, z);
   stand.rotation.y = editorRotationToWorld(rotation);
   group.add(stand);
 }
 
-function addEditorBuilding(group, x, z, rotation = 0, type = "building-small", obstacles = []) {
+function addEditorBuilding(group, x, z, rotation = 0, type = "building-small", obstacles = [], variant = undefined) {
+  const buildingColor = buildingVariantColor(type, variant);
   const specs = {
-    "building-small": [{ x: 0, z: 0, width: 10, depth: 10, height: 7, color: 0x9bd4f5 }],
+    "building-small": [{ x: 0, z: 0, width: 10, depth: 10, height: 7, color: buildingColor ?? 0xb8bec4 }],
     "building-group": [
       { x: -5.5, z: -3.5, width: 8, depth: 8, height: 6, color: 0x4d91d4 },
       { x: 4.5, z: -1.5, width: 7, depth: 9, height: 8, color: 0x407fc0 },
       { x: -1.5, z: 6, width: 9, depth: 6, height: 5, color: 0x5fa5e6 },
     ],
     "building-tall": [{ x: 0, z: 0, width: 11, depth: 11, height: 26, color: 0x153f7a }],
-    "building-super-tall": [{ x: 0, z: 0, width: 13, depth: 13, height: 58, color: 0x1d385e }],
+    "building-super-tall": [{ x: 0, z: 0, width: 13, depth: 13, height: 58, color: buildingColor ?? 0x273a4a }],
+    "building-skyscraper": [{ x: 0, z: 0, width: 13, depth: 13, height: 58, color: buildingColor ?? 0x273a4a }],
   }[type] ?? [{ x: 0, z: 0, width: 10, depth: 10, height: 7, color: 0x9bd4f5 }];
   const building = new THREE.Group();
   const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x26313a, roughness: 0.5, metalness: 0.14, flatShading: true });
   const glassMaterial = new THREE.MeshStandardMaterial({ color: 0xd9f5ff, roughness: 0.35, metalness: 0.08, flatShading: true });
+  const litWindowMaterial = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffc45c, emissiveIntensity: 1.4, roughness: 0.28, metalness: 0.04, flatShading: true });
 
   for (const spec of specs) {
     const wallMaterial = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.58, metalness: 0.04, flatShading: true });
@@ -5618,17 +6088,16 @@ function addEditorBuilding(group, x, z, rotation = 0, type = "building-small", o
     roof.receiveShadow = true;
     building.add(body, roof);
 
-    for (let row = 0; row < Math.max(1, Math.floor(spec.height / 5)); row += 1) {
-      const window = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 0.08), glassMaterial);
-      window.position.set(spec.x, 2.2 + row * 4.4, spec.z + spec.depth / 2 + 0.05);
-      window.castShadow = true;
-      building.add(window);
-    }
+    addBuildingWindows(building, spec, glassMaterial, litWindowMaterial);
   }
 
   building.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   building.rotation.y = worldRotation;
+  const frontMost = specs.reduce((max, spec) => Math.max(max, spec.z + spec.depth * 0.5), -Infinity);
+  const lightWidth = Math.max(...specs.map((spec) => spec.width));
+  const lightHeight = Math.max(...specs.map((spec) => spec.height));
+  addSoftLightBand(building, 4, lightWidth * 0.28, Math.min(lightHeight * 0.45, 12), frontMost + 0.3, 0xffd28a, sceneryLightIntensity(4.8, "lamp") * 0.4, sceneryLightDistance(58, "lamp") * 0.42);
   group.add(building);
 
   for (const spec of specs) {
@@ -5647,18 +6116,18 @@ function addEditorBuilding(group, x, z, rotation = 0, type = "building-small", o
 function addEditorLamp(group, x, z, rotation = 0) {
   const lamp = new THREE.Group();
   const poleMaterial = new THREE.MeshStandardMaterial({ color: 0xc6ced2, roughness: 0.42, metalness: 0.34, flatShading: true });
-  const glowMaterial = new THREE.MeshStandardMaterial({ color: 0xffe28a, emissive: 0xffcf4a, emissiveIntensity: 0.75, roughness: 0.4, flatShading: true });
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 8, 6), poleMaterial);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.22, 0.22), poleMaterial);
-  const light = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), glowMaterial);
-  pole.position.y = 4;
-  arm.position.set(1.9, 7.85, 0);
-  light.position.set(4.1, 7.7, 0);
-  const glow = new THREE.PointLight(0xffc45c, 2.4, 24, 1.6);
-  glow.position.set(4.1, 7.65, 0);
-  const beam = new THREE.SpotLight(0xffd27a, 4.2, 34, 0.6, 0.55, 1.25);
-  beam.position.set(4.1, 7.65, 0);
-  beam.target.position.set(9, 0.5, 0);
+  const glowMaterial = new THREE.MeshStandardMaterial({ color: 0xffe28a, emissive: 0xffcf4a, emissiveIntensity: activeTimeOfDay === "sunset" ? 1.35 : 0.75, roughness: 0.4, flatShading: true });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 16, 6), poleMaterial);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 5.8), poleMaterial);
+  const light = new THREE.Mesh(new THREE.SphereGeometry(0.68, 10, 7), glowMaterial);
+  pole.position.y = 8;
+  arm.position.set(0, 15.7, 2.65);
+  light.position.set(0, 15.45, 5.55);
+  const glow = new THREE.PointLight(0xffc45c, sceneryLightIntensity(4.8, "lamp"), sceneryLightDistance(58, "lamp"), 1.25);
+  glow.position.set(0, 15.4, 5.55);
+  const beam = new THREE.SpotLight(0xffd27a, sceneryLightIntensity(8.4, "lamp"), sceneryLightDistance(78, "lamp"), 1.32, 0.72, 1.05);
+  beam.position.set(0, 15.4, 5.55);
+  beam.target.position.set(0, 0.45, 28);
   pole.castShadow = true;
   pole.receiveShadow = true;
   arm.castShadow = true;
@@ -5666,7 +6135,8 @@ function addEditorLamp(group, x, z, rotation = 0) {
   light.castShadow = true;
   lamp.add(pole, arm, light, glow, beam, beam.target);
   lamp.position.set(x, 0, z);
-  lamp.rotation.y = editorRotationToWorld(rotation) + Math.PI;
+  lamp.rotation.y = editorRotationToWorld(rotation);
+  lamp.scale.setScalar(0.85);
   group.add(lamp);
 }
 
@@ -6166,7 +6636,7 @@ function moveToward(value, target, amount) {
   return target;
 }
 
-function resetCar() {
+function resetCar({ keepTimeTrialLaps = false } = {}) {
   const spawn = selectedGameMode === "time-trial" && track.timeTrialStart ? track.timeTrialStart : track.start;
   carState.position.set(spawn.x, track.groundY, spawn.z);
   carState.velocity.set(0, 0, 0);
@@ -6182,6 +6652,10 @@ function resetCar() {
   carState.grassRockRoll = 0;
   carState.grassRockPitch = 0;
   carState.kerbJoltCooldown = 0;
+  carState.kerbKickRoll = 0;
+  carState.kerbKickPitch = 0;
+  carState.kerbKickRollTarget = 0;
+  carState.kerbKickPitchTarget = 0;
   updateErsHud();
   updateRevMeter();
   cameraPosition
@@ -6189,7 +6663,7 @@ function resetCar() {
     .add(new THREE.Vector3(-8 * Math.sin(carState.heading), 5.2, -8 * Math.cos(carState.heading)));
   cameraTarget.copy(carState.position);
   updateCarLights(false, false);
-  if (selectedGameMode === "time-trial") resetTimeTrialState();
+  if (selectedGameMode === "time-trial") resetTimeTrialState({ clearLaps: !keepTimeTrialLaps });
   else updateTimeTrialHud();
 }
 

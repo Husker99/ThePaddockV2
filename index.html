@@ -291,6 +291,14 @@
             <span>Track Name</span>
             <input id="track-name-input" type="text" maxlength="48" />
           </label>
+          <label class="editor-select">
+            <span>Time of Day</span>
+            <select id="track-time-of-day-select">
+              <option value="day">Daytime</option>
+              <option value="sunset">Sunset</option>
+              <option value="night">Night</option>
+            </select>
+          </label>
           <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
           <button id="editor-export" class="back-button" type="button">Export JSON</button>
           <textarea id="track-json-output" class="track-json-output" spellcheck="false" aria-label="Track JSON output"></textarea>
@@ -315,14 +323,14 @@
             <option value="building-small">Small Building</option>
             <option value="building-group">Building Group</option>
             <option value="building-tall">Tall Building</option>
-            <option value="building-super-tall">Super Tall Building</option>
+            <option value="building-skyscraper">Skyscraper</option>
             <option value="flower-bed">Flower Bed</option>
           </select>
         </label>
         <div id="road-options" class="road-options is-hidden">
           <span>Selected Road</span>
-          <label><input id="road-kerb-right" type="checkbox" data-road-feature="kerbRight" /> Kerb right</label>
-          <label><input id="road-kerb-left" type="checkbox" data-road-feature="kerbLeft" /> Kerb left</label>
+          <label><input id="road-kerb-right" type="checkbox" data-road-feature="kerbRight" /> Sausage right</label>
+          <label><input id="road-kerb-left" type="checkbox" data-road-feature="kerbLeft" /> Sausage left</label>
           <label><input id="road-wall-right" type="checkbox" data-road-feature="wallRight" /> Wall right</label>
           <label><input id="road-wall-left" type="checkbox" data-road-feature="wallLeft" /> Wall left</label>
           <label><input id="road-grandstand-right" type="checkbox" data-road-feature="grandstandRight" /> Grandstand right</label>
@@ -356,7 +364,7 @@
           <button id="editor-zoom-in" type="button" aria-label="Zoom in">+</button>
           <strong id="editor-zoom-readout">100%</strong>
         </div>
-        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
+        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds sausage kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
       </div>
     </section>
     <div class="hud">

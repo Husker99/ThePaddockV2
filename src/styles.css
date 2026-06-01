@@ -82,6 +82,24 @@ body {
   display: none;
 }
 
+.start-menu[data-menu-step="track"] .menu-header .eyebrow {
+  display: none;
+}
+
+.start-menu[data-menu-step="track"] .menu-step[data-menu-step="track"] {
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(210, 214, 216, 0.58);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.start-menu[data-menu-step="track"] .showroom-label span,
+.start-menu[data-menu-step="track"] .showroom-label strong {
+  color: #34383a;
+  text-shadow: 0 1px 12px rgba(255, 255, 255, 0.35);
+}
+
 .menu-header {
   display: grid;
   gap: 4px;
@@ -915,6 +933,7 @@ h1 {
 .editor-scenery-building-group { fill: #4d91d4; }
 .editor-scenery-building-tall { fill: #153f7a; }
 .editor-scenery-building-super-tall { fill: #1d385e; }
+.editor-scenery-building-skyscraper { fill: #273a4a; }
 .editor-scenery-flower-bed { fill: #9b4d2e; }
 .editor-scenery-grandstand { fill: #ff7a1f; }
 
@@ -1985,6 +2004,7 @@ h1 {
 .editor-scenery-building-group { fill: #4d91d4; }
 .editor-scenery-building-tall { fill: #153f7a; }
 .editor-scenery-building-super-tall { fill: #1d385e; }
+.editor-scenery-building-skyscraper { fill: #273a4a; }
 .editor-scenery-flower-bed { fill: #9b4d2e; }
 .editor-scenery-grandstand { fill: #ff7a1f; }
 
