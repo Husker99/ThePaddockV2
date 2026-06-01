@@ -310,8 +310,8 @@
     },
     {
       "type": "cherry-trees",
-      "x": 3652,
-      "y": 9575,
+      "x": 3676,
+      "y": 9440,
       "rotation": 0
     },
     {
@@ -340,8 +340,8 @@
     },
     {
       "type": "cherry-trees",
-      "x": 6479,
-      "y": 10778,
+      "x": 6572,
+      "y": 11098,
       "rotation": 0
     },
     {
@@ -652,8 +652,8 @@
     },
     {
       "type": "douglas-pines",
-      "x": 15026,
-      "y": 3843,
+      "x": 12842,
+      "y": 5757,
       "rotation": 0
     },
     {
@@ -790,14 +790,14 @@
     },
     {
       "type": "douglas-pines",
-      "x": 11544,
-      "y": 237,
+      "x": 11542,
+      "y": 153,
       "rotation": 0
     },
     {
       "type": "douglas-pines",
-      "x": 13421,
-      "y": 2101,
+      "x": 13435,
+      "y": 2368,
       "rotation": 0
     },
     {
@@ -838,8 +838,8 @@
     },
     {
       "type": "cherry-trees",
-      "x": 11340,
-      "y": 1631,
+      "x": 11497,
+      "y": 1825,
       "rotation": 0
     },
     {
@@ -850,14 +850,182 @@
     },
     {
       "type": "cherry-trees",
-      "x": 10029,
-      "y": 2258,
+      "x": 10037,
+      "y": 2500,
       "rotation": 0
     },
     {
       "type": "cherry-trees",
-      "x": 14009,
-      "y": 4018,
+      "x": 13936,
+      "y": 4319,
+      "rotation": 0
+    },
+    {
+      "type": "lamp",
+      "x": 5614,
+      "y": 10628,
+      "rotation": 1.95
+    },
+    {
+      "type": "lamp",
+      "x": 3904,
+      "y": 5933,
+      "rotation": 2.51
+    },
+    {
+      "type": "building-tall",
+      "x": 4223,
+      "y": 7371,
+      "rotation": -0.7
+    },
+    {
+      "type": "building-super-tall",
+      "x": 12454,
+      "y": 6990,
+      "rotation": -0.87
+    },
+    {
+      "type": "building-super-tall",
+      "x": 8829,
+      "y": 7885,
+      "rotation": 2.34
+    },
+    {
+      "type": "douglas-pines",
+      "x": 6526,
+      "y": 6505,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 9467,
+      "y": 4789,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 8008,
+      "y": 6417,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 6002,
+      "y": 1561,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 1784,
+      "y": 1590,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 2878,
+      "y": 783,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 7780,
+      "y": 960,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 17493,
+      "y": 2177,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 17607,
+      "y": 9586,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 15054,
+      "y": 10027,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 12454,
+      "y": 9763,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 13344,
+      "y": 7664,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 11246,
+      "y": 9381,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 4064,
+      "y": 3072,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 1350,
+      "y": 4877,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3995,
+      "y": 3307,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3950,
+      "y": 2632,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16353,
+      "y": 9924,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 12705,
+      "y": 9630,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 13526,
+      "y": 10100,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15715,
+      "y": 10305,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 16467,
+      "y": 10320,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 17949,
+      "y": 7356,
       "rotation": 0
     }
   ]

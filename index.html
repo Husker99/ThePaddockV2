@@ -19,7 +19,36 @@
           <div class="menu-step" data-menu-step="intro">
             <div class="menu-actions">
               <button id="play-game" class="start-button" type="button">Just Drive</button>
+              <button id="time-trial-game" class="start-button" type="button">Time Trial</button>
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
+            </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="editor-choice">
+            <button class="back-button" type="button" data-menu-back="intro">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card" type="button" data-editor-start="scratch">
+                <span>Track Editor</span>
+                <strong>Start from scratch</strong>
+              </button>
+              <button class="selection-card" type="button" data-menu-next="editor-default-track">
+                <span>Track Editor</span>
+                <strong>Start from a default track</strong>
+              </button>
+            </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="editor-default-track">
+            <button class="back-button" type="button" data-menu-back="editor-choice">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card" type="button" data-editor-start="katara-speedway">
+                <span>Default Track</span>
+                <strong>Katara Speedway</strong>
+              </button>
+              <button class="selection-card" type="button" data-editor-start="kyoshi-circuit">
+                <span>Default Track</span>
+                <strong>Kyoshi Circuit</strong>
+              </button>
             </div>
           </div>
 
@@ -29,6 +58,10 @@
               <button class="selection-card is-selected" type="button" data-track="katara-speedway">
                 <span>Track</span>
                 <strong>Katara Speedway</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="kyoshi-circuit">
+                <span>Track</span>
+                <strong>Kyoshi Circuit</strong>
               </button>
             </div>
             <button id="track-next" class="start-button" type="button">Next</button>
@@ -52,6 +85,10 @@
               <button class="selection-card" type="button" data-car-category="jeep">
                 <span>Class</span>
                 <strong>Jeep</strong>
+              </button>
+              <button class="selection-card" type="button" data-car-category="corvette">
+                <span>Class</span>
+                <strong>Corvette</strong>
               </button>
             </div>
           </div>
@@ -159,6 +196,29 @@
             </div>
             <button class="start-button" type="button" data-start-race>Start</button>
           </div>
+
+          <div class="menu-step is-hidden" data-menu-step="corvette">
+            <button class="back-button" type="button" data-menu-back="car-category">Back</button>
+            <div class="selection-grid">
+              <button class="selection-card is-selected" type="button" data-car="vette-yellow">
+                <span>Corvette</span>
+                <strong>Racing Yellow</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="vette-white">
+                <span>Corvette</span>
+                <strong>Arctic Sting</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="vette-red">
+                <span>Corvette</span>
+                <strong>Torch Red</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="vette-striped">
+                <span>Corvette</span>
+                <strong>Carbon Stripe</strong>
+              </button>
+            </div>
+            <button class="start-button" type="button" data-start-race>Start</button>
+          </div>
         </div>
         <aside class="menu-showroom">
           <div class="showroom-label">
@@ -179,9 +239,19 @@
             <svg class="track-map track-map-katara is-selected" viewBox="0 0 180 130" data-track-map="katara-speedway">
               <path class="map-kerb" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
               <path class="map-road" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
-              <circle class="map-start" cx="20.9" cy="62.1" r="4" />
+              <g class="map-start-line" transform="translate(20.9 62.1) rotate(35)">
+                <rect x="-12" y="-4" width="24" height="8" rx="1.5" />
+                <path d="M -12 -4 H 12 M -12 0 H 12 M -12 4 H 12 M -8 -4 V 4 M -4 -4 V 4 M 0 -4 V 4 M 4 -4 V 4 M 8 -4 V 4" />
+              </g>
             </svg>
-            <div class="track-showcase-car" aria-hidden="true"><span></span></div>
+            <svg class="track-map track-map-kyoshi is-hidden" viewBox="0 0 180 130" data-track-map="kyoshi-circuit">
+              <path class="map-kerb" d="M62.3 21.8 L86.4 22.4 L103 42.4 L118.1 53.2 L136.5 28.8 L156.1 27.6 L168 46.8 L162.4 59.6 L123.7 65.5 L88.2 52.2 L79.4 52.6 L72.7 52.9 L65.3 41.4 L47.1 44.1 L48.6 62.5 L57.2 68.5 L152.7 90 L162.4 101.5 L151.4 108.2 L79.4 92.8 L21.4 80.7 L12 67 L16.5 38.7 L22.6 27.8 L32.7 23 L44.4 22 Z" />
+              <path class="map-road" d="M62.3 21.8 L86.4 22.4 L103 42.4 L118.1 53.2 L136.5 28.8 L156.1 27.6 L168 46.8 L162.4 59.6 L123.7 65.5 L88.2 52.2 L79.4 52.6 L72.7 52.9 L65.3 41.4 L47.1 44.1 L48.6 62.5 L57.2 68.5 L152.7 90 L162.4 101.5 L151.4 108.2 L79.4 92.8 L21.4 80.7 L12 67 L16.5 38.7 L22.6 27.8 L32.7 23 L44.4 22 Z" />
+              <g class="map-start-line" transform="translate(44.4 22) rotate(-0.6)">
+                <rect x="-12" y="-4" width="24" height="8" rx="1.5" />
+                <path d="M -12 -4 H 12 M -12 0 H 12 M -12 4 H 12 M -8 -4 V 4 M -4 -4 V 4 M 0 -4 V 4 M 4 -4 V 4 M 8 -4 V 4" />
+              </g>
+            </svg>
             <div class="track-map-floor"></div>
           </div>
           <div class="showroom-visual driver-visual is-hidden" data-showroom-visual="driver" aria-hidden="true">
@@ -208,18 +278,23 @@
           <h1>Track Editor</h1>
         </div>
         <div class="editor-tools" role="toolbar" aria-label="Track editor tools">
+          <button class="editor-tool" type="button" data-editor-tool="essentials">Track Essentials</button>
           <button class="editor-tool is-selected" type="button" data-editor-tool="select">Select Node</button>
           <button class="editor-tool" type="button" data-editor-tool="select-road">Select Road</button>
           <button class="editor-tool" type="button" data-editor-tool="select-scenery">Select Scenery</button>
-          <button class="editor-tool" type="button" data-editor-tool="add-node">Add Node</button>
-          <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
-          <button class="editor-tool" type="button" data-editor-tool="pit">Pit Lane</button>
           <button class="editor-tool" type="button" data-editor-tool="scenery">Add Scenery</button>
+          <button class="editor-tool" type="button" data-editor-tool="add-node">Add Node</button>
+          <button class="editor-tool" type="button" data-editor-tool="pit">Pit Lane</button>
         </div>
-        <label class="editor-select">
-          <span>Track Name</span>
-          <input id="track-name-input" type="text" maxlength="48" />
-        </label>
+        <div id="track-essentials-panel" class="track-essentials-panel is-hidden">
+          <label class="editor-select">
+            <span>Track Name</span>
+            <input id="track-name-input" type="text" maxlength="48" />
+          </label>
+          <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
+          <button id="editor-export" class="back-button" type="button">Export JSON</button>
+          <textarea id="track-json-output" class="track-json-output" spellcheck="false" aria-label="Track JSON output"></textarea>
+        </div>
         <label class="editor-slider">
           <span>Track Width</span>
           <input id="track-width-slider" type="range" min="5" max="35" step="0.5" value="15" />
@@ -240,6 +315,8 @@
             <option value="building-small">Small Building</option>
             <option value="building-group">Building Group</option>
             <option value="building-tall">Tall Building</option>
+            <option value="building-super-tall">Super Tall Building</option>
+            <option value="flower-bed">Flower Bed</option>
           </select>
         </label>
         <div id="road-options" class="road-options is-hidden">
@@ -253,12 +330,10 @@
         </div>
         <div class="editor-actions">
           <button id="editor-undo" class="back-button" type="button">Undo</button>
-          <button id="editor-export" class="back-button" type="button">Export JSON</button>
           <button id="editor-test-drive" class="start-button" type="button">Test Drive This Track</button>
           <button id="editor-back" class="start-button" type="button">Back to Menu</button>
         </div>
         <div class="editor-status" id="editor-status">Road: 6 nodes</div>
-        <textarea id="track-json-output" class="track-json-output" spellcheck="false" aria-label="Track JSON output"></textarea>
       </aside>
       <div class="editor-workspace">
         <svg id="track-editor-canvas" viewBox="0 0 18000 12600" role="img" aria-label="Track editor canvas">
@@ -289,7 +364,7 @@
         <div class="brand">The Paddock</div>
         <div class="ers-panel">
           <div class="ers-label">
-            <span>ERS</span>
+            <span id="ers-label">ERS</span>
             <strong id="ers-readout">100%</strong>
           </div>
           <div class="ers-track">
@@ -303,6 +378,12 @@
         <span id="surface">Track</span>
       </div>
     </div>
+    <div id="time-trial-timer" class="time-trial-timer" hidden>0:00.0</div>
+    <div id="time-trial-message" class="time-trial-message" hidden></div>
+    <section id="time-trial-results" class="time-trial-results" hidden aria-label="Time trial lap times">
+      <h2>Lap Times</h2>
+      <ol id="time-trial-laps"></ol>
+    </section>
     <div id="rev-meter" class="rev-meter" hidden>
       <strong id="manual-gear">1</strong>
       <span>Revs</span>
@@ -317,6 +398,7 @@
       <span>S / Down: brake</span>
       <span>A / D: steer</span>
       <span id="ers-control-hint">Shift: ERS</span>
+      <span>H: headlights</span>
       <span>Space: camera</span>
       <span>C: handbrake</span>
       <span>Mouse: shift</span>
