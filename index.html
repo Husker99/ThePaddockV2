@@ -26,21 +26,9 @@
           <div class="menu-step is-hidden" data-menu-step="track">
             <button class="back-button" type="button" data-menu-back="intro">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-track="practice">
-                <span>Track</span>
-                <strong>Practice Track</strong>
-              </button>
-              <button class="selection-card" type="button" data-track="race-1">
-                <span>Track</span>
-                <strong>Race Track 1</strong>
-              </button>
-              <button class="selection-card" type="button" data-track="katara-speedway">
+              <button class="selection-card is-selected" type="button" data-track="katara-speedway">
                 <span>Track</span>
                 <strong>Katara Speedway</strong>
-              </button>
-              <button class="selection-card" type="button" data-track="generated">
-                <span>Track</span>
-                <strong>Generated Layout</strong>
               </button>
             </div>
             <button id="track-next" class="start-button" type="button">Next</button>
@@ -188,27 +176,10 @@
             <div class="flag-shadow"></div>
           </div>
           <div class="showroom-visual track-visual is-hidden" data-showroom-visual="track" aria-hidden="true">
-            <svg class="track-map track-map-practice is-selected" viewBox="0 0 180 130" data-track-map="practice">
-              <path class="map-kerb" d="M42 93 C28 68 38 35 71 26 C108 16 147 36 146 67 C145 94 113 112 78 104 C64 101 51 100 42 93 Z" />
-              <path class="map-road" d="M42 93 C28 68 38 35 71 26 C108 16 147 36 146 67 C145 94 113 112 78 104 C64 101 51 100 42 93 Z" />
-              <path class="map-extension" d="M132 62 C151 48 158 32 144 21" />
-              <circle class="map-start" cx="48" cy="90" r="4" />
-            </svg>
-            <svg class="track-map track-map-race is-hidden" viewBox="0 0 180 130" data-track-map="race-1">
-              <path class="map-kerb" d="M33 88 C30 49 55 26 92 27 C131 28 157 53 148 83 C140 109 104 113 80 97 C64 87 47 100 33 88 Z" />
-              <path class="map-road" d="M33 88 C30 49 55 26 92 27 C131 28 157 53 148 83 C140 109 104 113 80 97 C64 87 47 100 33 88 Z" />
-              <circle class="map-start" cx="38" cy="86" r="4" />
-            </svg>
-            <svg class="track-map track-map-katara is-hidden" viewBox="0 0 180 130" data-track-map="katara-speedway">
+            <svg class="track-map track-map-katara is-selected" viewBox="0 0 180 130" data-track-map="katara-speedway">
               <path class="map-kerb" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
               <path class="map-road" d="M88 12 L168 26.7 L160.2 35.1 L154.4 27.3 L146.7 25.1 L69.6 99.2 L60.7 98.6 L51.8 99.5 L47.4 112.7 L30.3 118 L12 74.8 L20.9 62.1 Z" />
               <circle class="map-start" cx="20.9" cy="62.1" r="4" />
-            </svg>
-            <svg class="track-map track-map-generated is-hidden" viewBox="0 0 180 130" data-track-map="generated">
-              <path class="map-kerb" d="M18 96 L56 96 L101 96 L137 96 C162 93 172 75 158 61 C140 45 174 40 164 20 C150 1 120 9 96 26 C79 18 55 19 51 37 C48 50 62 57 49 67 C35 78 13 73 11 88 C10 94 13 96 18 96 Z" />
-              <path class="map-road" d="M18 96 L56 96 L101 96 L137 96 C162 93 172 75 158 61 C140 45 174 40 164 20 C150 1 120 9 96 26 C79 18 55 19 51 37 C48 50 62 57 49 67 C35 78 13 73 11 88 C10 94 13 96 18 96 Z" />
-              <path class="map-extension" d="M29 96 L88 96" />
-              <circle class="map-start" cx="24" cy="96" r="4" />
             </svg>
             <div class="track-showcase-car" aria-hidden="true"><span></span></div>
             <div class="track-map-floor"></div>
@@ -245,22 +216,26 @@
           <button class="editor-tool" type="button" data-editor-tool="pit">Pit Lane</button>
           <button class="editor-tool" type="button" data-editor-tool="scenery">Add Scenery</button>
         </div>
+        <label class="editor-select">
+          <span>Track Name</span>
+          <input id="track-name-input" type="text" maxlength="48" />
+        </label>
         <label class="editor-slider">
           <span>Track Width</span>
-          <input id="track-width-slider" type="range" min="5" max="35" step="0.5" value="12" />
-          <strong id="track-width-readout">12m</strong>
+          <input id="track-width-slider" type="range" min="5" max="35" step="0.5" value="15" />
+          <strong id="track-width-readout">15m</strong>
         </label>
         <label class="editor-slider">
           <span>Curve Bend</span>
-          <input id="curve-bend-slider" type="range" min="-1.65" max="1.65" step="0.05" value="0" />
+          <input id="curve-bend-slider" type="range" min="-3" max="3" step="0.05" value="0" />
           <strong id="curve-bend-readout">Gentle R</strong>
         </label>
         <label class="editor-select">
           <span>Scenery Type</span>
           <select id="scenery-type-select">
             <option value="trees">Trees</option>
-            <option value="cherry-trees">Pink Trees</option>
-            <option value="douglas-pines">Douglas Pines</option>
+            <option value="cherry-trees">Cherry Blossoms</option>
+            <option value="douglas-pines">Douglas Firs</option>
             <option value="lamp">Lamp</option>
             <option value="building-small">Small Building</option>
             <option value="building-group">Building Group</option>
@@ -296,6 +271,7 @@
           <g id="editor-scenery-layer"></g>
           <g id="editor-track-layer"></g>
           <g id="editor-node-layer"></g>
+          <g id="editor-scenery-top-layer"></g>
           <g id="editor-ghost-layer"></g>
         </svg>
         <div class="editor-zoom">

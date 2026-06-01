@@ -18,6 +18,7 @@ const editorCanvas = document.querySelector("#track-editor-canvas");
 const editorTrackLayer = document.querySelector("#editor-track-layer");
 const editorNodeLayer = document.querySelector("#editor-node-layer");
 const editorSceneryLayer = document.querySelector("#editor-scenery-layer");
+const editorSceneryTopLayer = document.querySelector("#editor-scenery-top-layer");
 const editorGhostLayer = document.querySelector("#editor-ghost-layer");
 const editorToolButtons = [...document.querySelectorAll("[data-editor-tool]")];
 const trackWidthSlider = document.querySelector("#track-width-slider");
@@ -27,6 +28,7 @@ const curveBendSlider = document.querySelector("#curve-bend-slider");
 const curveBendControl = curveBendSlider?.closest(".editor-slider");
 const curveBendReadout = document.querySelector("#curve-bend-readout");
 const sceneryTypeSelect = document.querySelector("#scenery-type-select");
+const trackNameInput = document.querySelector("#track-name-input");
 const roadOptionsPanel = document.querySelector("#road-options");
 const roadFeatureInputs = [...document.querySelectorAll("[data-road-feature]")];
 const editorStatus = document.querySelector("#editor-status");
@@ -129,7 +131,7 @@ let gameStarted = false;
 let isPaused = false;
 let menuStep = "intro";
 let selectedCar = "ferraro";
-let selectedTrack = "practice";
+let selectedTrack = "katara-speedway";
 let cameraMode = "chase";
 let editorTool = "select";
 let selectedEditorNode = 0;
@@ -139,6 +141,8 @@ let draggedEditorNode = null;
 let draggedEditorCurveSegment = null;
 let editorGhostPoint = null;
 let isEditorTestDrive = false;
+let pendingEditorUndoSnapshot = null;
+const editorUndoStack = [];
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
 const EDITOR_WALL_OUTER_EDGE = 0.85;
@@ -147,22 +151,34 @@ const EDITOR_WORLD_HEIGHT = 12600;
 const EDITOR_DEFAULT_ZOOM = 1;
 const EDITOR_VISUAL_SCALE = 15;
 const EDITOR_TRACK_VISUAL_SCALE = 20;
+const TRACK_NAME_OPTIONS = [
+  "Silverstone Park",
+  "Monza Autodromo",
+  "Suzuka International",
+  "Spa Valley Circuit",
+  "Interlagos Raceway",
+  "Laguna Ridge",
+  "Daytona Road Course",
+  "Brands Hatch GP",
+  "Imola Grand Prix",
+  "Mount Panorama Circuit",
+];
 let editorZoom = EDITOR_DEFAULT_ZOOM;
 const editorViewCenter = {
   x: EDITOR_WORLD_WIDTH * 0.5,
   y: EDITOR_WORLD_HEIGHT * 0.5,
 };
 const editorTrack = {
-  name: "New Paddock Track",
+  name: randomEditorTrackName(),
   closed: true,
   startNode: 0,
   startDirection: 1,
   startSegment: 0,
   nodes: [
-    { x: 2400, y: 6300, width: 14, curve: 0 },
-    { x: 9000, y: 2700, width: 14, curve: 0 },
-    { x: 15600, y: 6300, width: 14, curve: 0 },
-    { x: 9000, y: 9900, width: 14, curve: 0 },
+    { x: 2400, y: 6300, width: 15, curve: 0 },
+    { x: 9000, y: 2700, width: 15, curve: 0 },
+    { x: 15600, y: 6300, width: 15, curve: 0 },
+    { x: 9000, y: 9900, width: 15, curve: 0 },
   ],
   roadFeatures: [],
   scenery: [],
@@ -246,6 +262,16 @@ editorUndoButton.addEventListener("click", undoEditorAction);
 editorExportButton.addEventListener("click", exportEditorTrack);
 trackWidthSlider.addEventListener("input", updateSelectedTrackWidth);
 curveBendSlider.addEventListener("input", updateSelectedCurveBend);
+trackWidthSlider.addEventListener("pointerdown", beginEditorUndoAction);
+curveBendSlider.addEventListener("pointerdown", beginEditorUndoAction);
+trackWidthSlider.addEventListener("focus", beginEditorUndoAction);
+curveBendSlider.addEventListener("focus", beginEditorUndoAction);
+trackWidthSlider.addEventListener("change", commitEditorUndoAction);
+curveBendSlider.addEventListener("change", commitEditorUndoAction);
+trackNameInput?.addEventListener("input", () => {
+  editorTrack.name = trackNameInput.value.trim() || "Untitled Speedway";
+  updateEditorJsonOutput();
+});
 editorZoomSlider?.addEventListener("input", () => updateEditorZoom(Number(editorZoomSlider.value)));
 editorZoomOutButton?.addEventListener("click", () => updateEditorZoom(editorZoom - 0.2));
 editorZoomInButton?.addEventListener("click", () => updateEditorZoom(editorZoom + 0.2));
@@ -1325,8 +1351,8 @@ function resetChaseCamera() {
   chaseCamera.dragging = false;
 }
 
-function createTrack(trackId = "practice") {
-  const definition = trackDefinitions[trackId] ?? trackDefinitions.practice;
+function createTrack(trackId = KATARA_TRACK_ID) {
+  const definition = trackDefinitions[trackId] ?? trackDefinitions[KATARA_TRACK_ID];
   const group = new THREE.Group();
   const halfWidth = definition.halfWidth ?? 7.2;
   const kerbWidth = definition.kerbWidth ?? 1.15;
@@ -3140,6 +3166,7 @@ function openTrackEditor() {
   stopMenuMusic();
   startMenu.classList.add("is-hidden");
   trackEditor.classList.remove("is-hidden");
+  if (trackNameInput) trackNameInput.value = editorTrack.name;
   startEditorMusic();
   updateEditorZoom(editorZoom);
   updateTrackWidthReadout();
@@ -3147,6 +3174,41 @@ function openTrackEditor() {
   sceneryTypeSelect.closest(".editor-select")?.classList.add("is-hidden");
   updateEditorControlVisibility();
   renderTrackEditor();
+}
+
+function randomEditorTrackName() {
+  return TRACK_NAME_OPTIONS[Math.floor(Math.random() * TRACK_NAME_OPTIONS.length)];
+}
+
+function cloneEditorTrackState() {
+  return JSON.parse(JSON.stringify(editorTrack));
+}
+
+function restoreEditorTrackState(snapshot) {
+  if (!snapshot) return;
+  Object.assign(editorTrack, cloneEditorSnapshot(snapshot));
+  if (trackNameInput) trackNameInput.value = editorTrack.name;
+  syncEditorControlsFromSelection();
+}
+
+function cloneEditorSnapshot(snapshot) {
+  return JSON.parse(JSON.stringify(snapshot));
+}
+
+function pushEditorUndoState() {
+  editorUndoStack.push(cloneEditorTrackState());
+  if (editorUndoStack.length > 80) editorUndoStack.shift();
+}
+
+function beginEditorUndoAction() {
+  if (!pendingEditorUndoSnapshot) pendingEditorUndoSnapshot = cloneEditorTrackState();
+}
+
+function commitEditorUndoAction() {
+  if (!pendingEditorUndoSnapshot) return;
+  editorUndoStack.push(pendingEditorUndoSnapshot);
+  if (editorUndoStack.length > 80) editorUndoStack.shift();
+  pendingEditorUndoSnapshot = null;
 }
 
 function closeTrackEditor() {
@@ -3198,6 +3260,7 @@ function handleEditorPointerDown(event) {
   if (!point) return;
 
   if (editorTool === "add-node") {
+    pushEditorUndoState();
     const insertAfter = getEditorAddNodeSegment(point);
     const previous = editorTrack.nodes[insertAfter];
     const next = editorTrack.nodes[(insertAfter + 1) % editorTrack.nodes.length];
@@ -3211,26 +3274,15 @@ function handleEditorPointerDown(event) {
     selectedEditorSegment = insertAfter;
     selectedEditorScenery = -1;
   } else if (editorTool === "select") {
-    const curveSegment = getNearestEditorCurveHandle(point);
-    if (curveSegment >= 0) {
-      draggedEditorCurveSegment = curveSegment;
-      selectedEditorNode = (curveSegment + 1) % editorTrack.nodes.length;
-      selectedEditorScenery = -1;
-      draggedEditorNode = null;
-      editorCanvas.setPointerCapture(event.pointerId);
-      trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 12;
-      curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
-      updateEditorControlVisibility();
-    } else {
-      selectedEditorNode = getNearestEditorNode(point);
-      selectedEditorScenery = -1;
-      draggedEditorNode = selectedEditorNode;
-      draggedEditorCurveSegment = null;
-      editorCanvas.setPointerCapture(event.pointerId);
-      trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 12;
-      curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
-      updateEditorControlVisibility();
-    }
+    selectedEditorNode = getNearestEditorNode(point);
+    selectedEditorScenery = -1;
+    draggedEditorNode = selectedEditorNode;
+    draggedEditorCurveSegment = null;
+    beginEditorUndoAction();
+    editorCanvas.setPointerCapture(event.pointerId);
+    trackWidthSlider.value = editorTrack.nodes[selectedEditorNode]?.width ?? 15;
+    curveBendSlider.value = editorTrack.nodes[selectedEditorNode]?.curve ?? 0;
+    updateEditorControlVisibility();
   } else if (editorTool === "select-road") {
     selectedEditorSegment = getNearestEditorSegment(point);
     selectedEditorNode = -1;
@@ -3250,15 +3302,19 @@ function handleEditorPointerDown(event) {
     selectedEditorScenery = nearestScenery.index;
     draggedEditorNode = null;
     if (selectedEditorScenery >= 0) {
+      beginEditorUndoAction();
       renderTrackEditor();
       editorCanvas.setPointerCapture(event.pointerId);
     }
   } else if (editorTool === "start") {
+    pushEditorUndoState();
     editorTrack.startNode = getNearestEditorNode(point);
     editorTrack.startSegment = editorTrack.startNode;
   } else if (editorTool === "pit") {
+    pushEditorUndoState();
     editorTrack.pitLane.push({ ...point, width: 6, curve: 0 });
   } else if (editorTool === "scenery") {
+    pushEditorUndoState();
     editorTrack.scenery.push({ type: sceneryTypeSelect.value, rotation: 0, ...point });
     selectedEditorScenery = editorTrack.scenery.length - 1;
   }
@@ -3296,6 +3352,7 @@ function handleEditorPointerMove(event) {
 function handleEditorPointerUp(event) {
   draggedEditorNode = null;
   draggedEditorCurveSegment = null;
+  commitEditorUndoAction();
   if (editorCanvas.hasPointerCapture(event.pointerId)) editorCanvas.releasePointerCapture(event.pointerId);
 }
 
@@ -3347,9 +3404,11 @@ function isEditorTypingTarget(target) {
 
 function deleteSelectedEditorItem() {
   if (selectedEditorScenery >= 0 && editorTrack.scenery[selectedEditorScenery]) {
+    pushEditorUndoState();
     editorTrack.scenery.splice(selectedEditorScenery, 1);
     selectedEditorScenery = -1;
   } else if (editorTool === "select" && editorTrack.nodes.length > 3 && editorTrack.nodes[selectedEditorNode]) {
+    pushEditorUndoState();
     editorTrack.nodes.splice(selectedEditorNode, 1);
     selectedEditorNode = Math.max(0, Math.min(selectedEditorNode, editorTrack.nodes.length - 1));
     editorTrack.startNode = Math.max(0, Math.min(editorTrack.startNode ?? 0, editorTrack.nodes.length - 1));
@@ -3388,6 +3447,20 @@ function updateEditorControlVisibility() {
   roadOptionsPanel?.classList.toggle("is-hidden", !hasRoadSelection);
 }
 
+function syncEditorControlsFromSelection() {
+  if (editorTool === "select-road" && selectedEditorSegment >= 0) {
+    const features = getEditorRoadFeatures(selectedEditorSegment);
+    const segment = getEditorSegment(selectedEditorSegment);
+    if (trackWidthSlider && segment) trackWidthSlider.value = features.width ?? getEditorSegmentWidth(segment);
+    if (curveBendSlider && segment) curveBendSlider.value = segment.b.curve ?? 0;
+  } else if (editorTool === "select" && editorTrack.nodes[selectedEditorNode]) {
+    trackWidthSlider.value = editorTrack.nodes[selectedEditorNode].width ?? 15;
+    curveBendSlider.value = editorTrack.nodes[selectedEditorNode].curve ?? 0;
+  }
+  updateTrackWidthReadout();
+  updateCurveBendReadout();
+}
+
 function getEditorRoadFeatures(segmentIndex = selectedEditorSegment) {
   const safeIndex = ((segmentIndex % editorTrack.nodes.length) + editorTrack.nodes.length) % editorTrack.nodes.length;
   if (!editorTrack.roadFeatures[safeIndex]) {
@@ -3416,6 +3489,7 @@ function syncRoadFeatureInputs() {
 
 function updateSelectedRoadFeatures() {
   if (selectedEditorSegment < 0) return;
+  pushEditorUndoState();
   const features = getEditorRoadFeatures(selectedEditorSegment);
   for (const input of roadFeatureInputs) {
     features[input.dataset.roadFeature] = input.checked;
@@ -3424,19 +3498,20 @@ function updateSelectedRoadFeatures() {
 }
 
 function undoEditorAction() {
-  if (editorTool === "add-node" && editorTrack.nodes.length > 3) {
-    editorTrack.nodes.splice(selectedEditorNode, 1);
-    selectedEditorNode = Math.max(0, Math.min(selectedEditorNode - 1, editorTrack.nodes.length - 1));
-  } else if (editorTool === "pit" && editorTrack.pitLane.length > 0) {
-    editorTrack.pitLane.pop();
-  } else if (editorTrack.scenery.length > 0) {
-    editorTrack.scenery.pop();
-  }
+  const previous = editorUndoStack.pop();
+  if (!previous) return;
+  restoreEditorTrackState(previous);
+  selectedEditorNode = Math.max(-1, Math.min(selectedEditorNode, editorTrack.nodes.length - 1));
+  selectedEditorSegment = Math.max(-1, Math.min(selectedEditorSegment, editorTrack.nodes.length - 1));
+  selectedEditorScenery = Math.max(-1, Math.min(selectedEditorScenery, editorTrack.scenery.length - 1));
+  updateTrackWidthReadout();
+  updateCurveBendReadout();
+  syncRoadFeatureInputs();
   renderTrackEditor();
 }
 
-function exportEditorTrack() {
-  const exportData = {
+function getEditorTrackExportData() {
+  return {
     version: 2,
     name: editorTrack.name,
     closed: editorTrack.closed,
@@ -3454,7 +3529,28 @@ function exportEditorTrack() {
     pitLane: editorTrack.pitLane.map((node) => ({ x: Math.round(node.x), y: Math.round(node.y), width: node.width })),
     scenery: editorTrack.scenery.map((item) => ({ type: item.type, x: Math.round(item.x), y: Math.round(item.y), rotation: Number((item.rotation ?? 0).toFixed(2)) })),
   };
+}
+
+function updateEditorJsonOutput() {
+  trackJsonOutput.value = JSON.stringify(getEditorTrackExportData(), null, 2);
+}
+
+function exportEditorTrack() {
+  const exportData = {
+    ...getEditorTrackExportData(),
+  };
   trackJsonOutput.value = JSON.stringify(exportData, null, 2);
+  const safeName = (exportData.name || "paddock-track").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "paddock-track";
+  const blob = new Blob([trackJsonOutput.value], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${safeName}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  editorStatus.textContent = `Exported ${link.download} to your downloads folder`;
 }
 
 function renderTrackEditor() {
@@ -3462,6 +3558,7 @@ function renderTrackEditor() {
   editorTrackLayer.innerHTML = "";
   editorNodeLayer.innerHTML = "";
   editorSceneryLayer.innerHTML = "";
+  if (editorSceneryTopLayer) editorSceneryTopLayer.innerHTML = "";
   editorGhostLayer.innerHTML = "";
 
   renderEditorSegments(editorTrack.nodes, true, "editor-road-edge", 7.5);
@@ -3472,9 +3569,8 @@ function renderTrackEditor() {
   renderEditorStartLine();
   renderEditorScenery();
   renderEditorNodes();
-  renderEditorCurveHandles();
   renderEditorGhost();
-  exportEditorTrack();
+  updateEditorJsonOutput();
   updateEditorStatus();
 }
 
@@ -3482,7 +3578,7 @@ function renderEditorSegments(nodes, closed, className, widthOffset) {
   const segmentCount = closed ? nodes.length : Math.max(0, nodes.length - 1);
   if (nodes.length < 2) return;
   if (closed && className === "editor-road-edge") {
-    const averageWidth = nodes.reduce((sum, node) => sum + (node.width ?? 10), 0) / nodes.length;
+    const averageWidth = nodes.reduce((sum, node) => sum + (node.width ?? 15), 0) / nodes.length;
     editorTrackLayer.appendChild(svgElement("path", {
       class: className,
       "stroke-width": (averageWidth + widthOffset) * EDITOR_TRACK_VISUAL_SCALE,
@@ -3632,7 +3728,7 @@ function getEditorTrackPath(nodes) {
 
 function getEditorSegmentWidth(segment, segmentIndex = -1) {
   const featureWidth = segmentIndex >= 0 ? getEditorRoadFeatures(segmentIndex).width : null;
-  return featureWidth ?? ((segment.a.width ?? 10) + (segment.b.width ?? 10)) * 0.5;
+  return featureWidth ?? ((segment.a.width ?? 15) + (segment.b.width ?? 15)) * 0.5;
 }
 
 function getEditorSegmentPath(a, b, curve = 0) {
@@ -3701,7 +3797,7 @@ function getEditorStartPose(nodeIndex, direction = 1) {
     y: node.y,
     tx: dx / length,
     ty: dy / length,
-    width: node.width ?? 12,
+    width: node.width ?? 15,
   };
 }
 
@@ -3815,7 +3911,7 @@ function renderEditorKerbs() {
     if (!segment) continue;
     const { a, b } = segment;
     const curve = b.curve ?? 0;
-    const width = ((a.width ?? 10) + (b.width ?? 10)) * 0.5;
+    const width = ((a.width ?? 15) + (b.width ?? 15)) * 0.5;
     const samples = sampleEditorSegment(a, b, curve, 16);
     const start = Math.floor(samples.length * THREE.MathUtils.clamp(kerb.start ?? 0.16, 0.02, 0.9));
     const end = Math.max(start + 2, Math.floor(samples.length * THREE.MathUtils.clamp(kerb.end ?? 0.58, 0.08, 0.98)));
@@ -3954,7 +4050,8 @@ function renderEditorScenery() {
       continue;
     }
 
-    const symbol = { trees: "T", "cherry-trees": "P", "douglas-pines": "D" }[item.type] ?? "S";
+    const visualScale = item.type === "cherry-trees" ? 2 : item.type === "douglas-pines" ? 3 : 1;
+    const symbol = { trees: "T", "cherry-trees": "C", "douglas-pines": "D" }[item.type] ?? "S";
     const group = svgElement("g", {
       class: `editor-scenery-group${selectedClass}`,
       transform: getEditorSceneryTransform(item),
@@ -3963,11 +4060,11 @@ function renderEditorScenery() {
     group.appendChild(svgElement("circle", {
       cx: 0,
       cy: 0,
-      r: 11 * EDITOR_VISUAL_SCALE,
+      r: 11 * EDITOR_VISUAL_SCALE * visualScale,
       class: `editor-scenery editor-scenery-${item.type}`,
     }));
     group.appendChild(svgElement("path", {
-      d: `M 0 ${-18 * EDITOR_VISUAL_SCALE} L ${4 * EDITOR_VISUAL_SCALE} ${-10 * EDITOR_VISUAL_SCALE} L ${-4 * EDITOR_VISUAL_SCALE} ${-10 * EDITOR_VISUAL_SCALE} Z`,
+      d: `M 0 ${-18 * EDITOR_VISUAL_SCALE * visualScale} L ${4 * EDITOR_VISUAL_SCALE * visualScale} ${-10 * EDITOR_VISUAL_SCALE * visualScale} L ${-4 * EDITOR_VISUAL_SCALE * visualScale} ${-10 * EDITOR_VISUAL_SCALE * visualScale} Z`,
       fill: "#fff1a8",
       stroke: "rgba(0, 0, 0, 0.5)",
       "stroke-width": 7,
@@ -3980,7 +4077,7 @@ function renderEditorScenery() {
     }, symbol));
     fragment.appendChild(group);
   }
-  editorSceneryLayer.appendChild(fragment);
+  (editorSceneryTopLayer ?? editorSceneryLayer).appendChild(fragment);
 }
 
 function getEditorSceneryTransform(item) {
@@ -3989,7 +4086,7 @@ function getEditorSceneryTransform(item) {
 
 function syncEditorSceneryElement(index) {
   const item = editorTrack.scenery[index];
-  const element = editorSceneryLayer.querySelector(`[data-editor-scenery-index="${index}"]`);
+  const element = (editorSceneryTopLayer ?? editorSceneryLayer).querySelector(`[data-editor-scenery-index="${index}"]`);
   if (!item || !element) {
     renderTrackEditor();
     return;
@@ -4004,6 +4101,7 @@ function editorRotationDegrees(rotation = 0) {
 function rotateSelectedEditorDirectionalScenery(direction) {
   const selected = editorTrack.scenery[selectedEditorScenery];
   if (!isEditorRotatableScenery(selected)) return;
+  pushEditorUndoState();
   selected.rotation = (selected.rotation ?? 0) + direction * THREE.MathUtils.degToRad(2);
   syncEditorSceneryElement(selectedEditorScenery);
 }
@@ -4032,8 +4130,8 @@ function getEditorSceneryHitRadius(item) {
   if (item.type === "building-group") return 31 * EDITOR_VISUAL_SCALE;
   if (item.type === "building-small") return 28 * EDITOR_VISUAL_SCALE;
   if (item.type === "lamp") return 22 * EDITOR_VISUAL_SCALE;
-  if (item.type === "douglas-pines") return 30 * EDITOR_VISUAL_SCALE;
-  if (item.type === "cherry-trees") return 28 * EDITOR_VISUAL_SCALE;
+  if (item.type === "douglas-pines") return 90 * EDITOR_VISUAL_SCALE;
+  if (item.type === "cherry-trees") return 56 * EDITOR_VISUAL_SCALE;
   return 24 * EDITOR_VISUAL_SCALE;
 }
 
@@ -4321,7 +4419,7 @@ function returnToTrackEditor() {
   backToEditorButton.hidden = true;
   isEditorTestDrive = false;
   scene.remove(track.group);
-  selectedTrack = "practice";
+  selectedTrack = KATARA_TRACK_ID;
   track = createTrack(selectedTrack);
   scene.add(track.group);
   resetCar();
@@ -4399,7 +4497,7 @@ function editorPointToPlan(node) {
 
 function averageEditorTrackWidth(sourceTrack = editorTrack) {
   if (!sourceTrack.nodes?.length) return 12;
-  return sourceTrack.nodes.reduce((sum, node) => sum + (node.width ?? 12), 0) / sourceTrack.nodes.length;
+  return sourceTrack.nodes.reduce((sum, node) => sum + (node.width ?? 15), 0) / sourceTrack.nodes.length;
 }
 
 function addEditorTestTrackDetails(group, extraTrackAreas, samples, obstacles = []) {
@@ -4608,6 +4706,7 @@ function addEditorTreeCluster(group, x, z, rotation = 0, obstacles = []) {
 
 function addEditorCherryTreeCluster(group, x, z, rotation = 0, obstacles = []) {
   const cluster = new THREE.Group();
+  const sizeMultiplier = 2;
   const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x7a5237, roughness: 0.9, flatShading: true });
   const blossomMaterials = [
     new THREE.MeshStandardMaterial({ color: 0xffa7cf, roughness: 0.9, flatShading: true }),
@@ -4620,7 +4719,7 @@ function addEditorCherryTreeCluster(group, x, z, rotation = 0, obstacles = []) {
     [2.4, 1.2, 1.0],
     [-1.4, -2.2, 0.78],
     [2.0, -2.0, 0.86],
-  ];
+  ].map(([localX, localZ, scale]) => [localX * sizeMultiplier, localZ * sizeMultiplier, scale * sizeMultiplier]);
 
   for (const [localX, localZ, scale] of spots) {
     const tree = new THREE.Group();
@@ -4650,6 +4749,7 @@ function addEditorCherryTreeCluster(group, x, z, rotation = 0, obstacles = []) {
 
 function addEditorDouglasPines(group, x, z, rotation = 0, obstacles = []) {
   const cluster = new THREE.Group();
+  const sizeMultiplier = 3;
   const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4b32, roughness: 0.92, flatShading: true });
   const needleMaterials = [
     new THREE.MeshStandardMaterial({ color: 0x1f5f42, roughness: 0.94, flatShading: true }),
@@ -4660,7 +4760,7 @@ function addEditorDouglasPines(group, x, z, rotation = 0, obstacles = []) {
     [-3.3, 1.7, 1.05],
     [3.0, 1.3, 1.16],
     [-1.6, -2.8, 0.92],
-  ];
+  ].map(([localX, localZ, scale]) => [localX * sizeMultiplier, localZ * sizeMultiplier, scale * sizeMultiplier]);
 
   for (const [localX, localZ, scale] of spots) {
     const tree = new THREE.Group();
