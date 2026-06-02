@@ -71,6 +71,8 @@ const revMeterEl = document.querySelector("#rev-meter");
 const revFillEl = document.querySelector("#rev-fill");
 const manualGearEl = document.querySelector("#manual-gear");
 const timeTrialTimerEl = document.querySelector("#time-trial-timer");
+const timeTrialTimerValueEl = document.querySelector("#time-trial-timer-value");
+const timeTrialSegmentEls = [...document.querySelectorAll("#time-trial-segments span")];
 const timeTrialMessageEl = document.querySelector("#time-trial-message");
 const timeTrialResultsEl = document.querySelector("#time-trial-results");
 const timeTrialLapsEl = document.querySelector("#time-trial-laps");
@@ -419,6 +421,15 @@ const timeTrialState = {
   laps: [],
   latestLapId: 0,
   lastLineSide: null,
+  lastSegmentSides: [null, null],
+  currentSegmentIndex: 0,
+  currentSegmentStartTime: 0,
+  currentSegments: [0, 0, 0],
+  segmentStatuses: [null, null, null],
+  heldSegmentStatuses: [null, null, null],
+  segmentStatusHoldTime: 0,
+  bestLapSegments: null,
+  fastestSegments: null,
   invalidated: false,
   wallPenaltyCooldown: 0,
   wallPenaltyMessageTime: 0,
@@ -1666,6 +1677,7 @@ function updateTimeTrial(dt, wheelSurface) {
   timeTrialState.wallPenaltyMessageTime = Math.max(0, timeTrialState.wallPenaltyMessageTime - dt);
   timeTrialState.trackLimitsPenaltyCooldown = Math.max(0, timeTrialState.trackLimitsPenaltyCooldown - dt);
   timeTrialState.trackLimitsPenaltyMessageTime = Math.max(0, timeTrialState.trackLimitsPenaltyMessageTime - dt);
+  timeTrialState.segmentStatusHoldTime = Math.max(0, timeTrialState.segmentStatusHoldTime - dt);
   if (timeTrialState.running && wheelSurface?.grassCount === 4) {
     timeTrialState.invalidated = true;
   } else if (
@@ -1678,6 +1690,8 @@ function updateTimeTrial(dt, wheelSurface) {
     timeTrialState.trackLimitsPenaltyMessageTime = 5;
   }
 
+  updateTimeTrialSegments();
+
   const currentSide = getStartLineSide(carState.position);
   const forwardSpeedThroughLine = carState.velocity.dot(track.startLine.tangent);
   const acrossDistance = Math.abs(carState.position.clone().sub(track.startLine.start).dot(track.startLine.across));
@@ -1689,15 +1703,70 @@ function updateTimeTrial(dt, wheelSurface) {
     acrossDistance <= track.startLine.halfWidth + 1.4;
 
   if (crossedCorrectly) {
-    if (timeTrialState.running && !timeTrialState.invalidated) recordTimeTrialLap();
+    if (timeTrialState.running && !timeTrialState.invalidated) {
+      completeTimeTrialSegment(2);
+      recordTimeTrialLap();
+      holdCompletedTimeTrialSegments();
+    }
     timeTrialState.running = true;
     timeTrialState.currentTime = 0;
+    resetTimeTrialSegments();
     timeTrialState.invalidated = false;
     carState.ers = 100;
     updateErsHud();
   }
 
   timeTrialState.lastLineSide = currentSide;
+}
+
+function updateTimeTrialSegments() {
+  if (!track.segmentLines?.length) return;
+  for (const [index, line] of track.segmentLines.entries()) {
+    const currentSide = getTimeTrialLineSide(line, carState.position);
+    if (timeTrialState.running && timeTrialState.currentSegmentIndex === index) {
+      const forwardSpeedThroughLine = carState.velocity.dot(line.tangent);
+      const acrossDistance = Math.abs(carState.position.clone().sub(line.start).dot(line.across));
+      const crossedCorrectly =
+        timeTrialState.lastSegmentSides[index] !== null &&
+        timeTrialState.lastSegmentSides[index] <= 0 &&
+        currentSide > 0 &&
+        forwardSpeedThroughLine > 1 &&
+        acrossDistance <= line.halfWidth + 1.4;
+      if (crossedCorrectly) completeTimeTrialSegment(index);
+    }
+    timeTrialState.lastSegmentSides[index] = currentSide;
+  }
+}
+
+function completeTimeTrialSegment(index) {
+  if (index < 0 || index > 2 || timeTrialState.currentSegments[index] > 0) return;
+  const segmentTime = Math.max(0, timeTrialState.currentTime - timeTrialState.currentSegmentStartTime);
+  timeTrialState.currentSegments[index] = segmentTime;
+  timeTrialState.segmentStatuses[index] = getTimeTrialSegmentStatus(index, segmentTime);
+  timeTrialState.currentSegmentStartTime = timeTrialState.currentTime;
+  timeTrialState.currentSegmentIndex = Math.min(3, index + 1);
+  updateTimeTrialHud();
+}
+
+function getTimeTrialSegmentStatus(index, segmentTime) {
+  const fastest = timeTrialState.fastestSegments?.[index];
+  if (fastest && segmentTime < fastest) return "purple";
+  const reference = timeTrialState.bestLapSegments?.[index];
+  if (!reference || segmentTime <= 0) return null;
+  return segmentTime <= reference * 1.03 ? "green" : "yellow";
+}
+
+function resetTimeTrialSegments() {
+  timeTrialState.currentSegmentIndex = 0;
+  timeTrialState.currentSegmentStartTime = 0;
+  timeTrialState.currentSegments = [0, 0, 0];
+  timeTrialState.segmentStatuses = [null, null, null];
+  timeTrialState.lastSegmentSides = (track.segmentLines ?? []).map((line) => getTimeTrialLineSide(line, carState.position));
+}
+
+function holdCompletedTimeTrialSegments() {
+  timeTrialState.heldSegmentStatuses = [...timeTrialState.segmentStatuses];
+  timeTrialState.segmentStatusHoldTime = 2;
 }
 
 function registerTimeTrialWallContact() {
@@ -1710,7 +1779,11 @@ function registerTimeTrialWallContact() {
 }
 
 function getStartLineSide(position) {
-  return position.clone().sub(track.startLine.start).dot(track.startLine.tangent);
+  return getTimeTrialLineSide(track.startLine, position);
+}
+
+function getTimeTrialLineSide(line, position) {
+  return position.clone().sub(line.start).dot(line.tangent);
 }
 
 function resetTimeTrialState({ clearLaps = true } = {}) {
@@ -1724,7 +1797,12 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
+    timeTrialState.bestLapSegments = null;
+    timeTrialState.fastestSegments = null;
   }
+  timeTrialState.heldSegmentStatuses = [null, null, null];
+  timeTrialState.segmentStatusHoldTime = 0;
+  resetTimeTrialSegments();
   timeTrialState.lastLineSide = track.startLine ? getStartLineSide(carState.position) : null;
   updateTimeTrialHud();
 }
@@ -1733,8 +1811,15 @@ function recordTimeTrialLap() {
   const lapTime = timeTrialState.currentTime;
   if (lapTime <= 0) return;
   timeTrialState.latestLapId += 1;
-  timeTrialState.laps.push({ id: timeTrialState.latestLapId, time: lapTime });
+  timeTrialState.laps.push({ id: timeTrialState.latestLapId, time: lapTime, segments: [...timeTrialState.currentSegments] });
   timeTrialState.laps.sort((a, b) => a.time - b.time);
+  timeTrialState.bestLapSegments = timeTrialState.laps[0]?.segments ? [...timeTrialState.laps[0].segments] : null;
+  for (let i = 0; i < 3; i += 1) {
+    const segment = timeTrialState.currentSegments[i];
+    if (segment <= 0) continue;
+    if (!timeTrialState.fastestSegments) timeTrialState.fastestSegments = [Infinity, Infinity, Infinity];
+    timeTrialState.fastestSegments[i] = Math.min(timeTrialState.fastestSegments[i] || segment, segment);
+  }
   updateTimeTrialHud();
 }
 
@@ -1745,7 +1830,17 @@ function updateTimeTrialHud() {
   if (timeTrialResultsEl) timeTrialResultsEl.hidden = !isTimeTrial;
   if (!isTimeTrial) return;
 
-  timeTrialTimerEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
+  if (timeTrialTimerValueEl) timeTrialTimerValueEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
+  else timeTrialTimerEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
+  const activeSegmentStatuses = timeTrialState.segmentStatuses.some(Boolean) || timeTrialState.segmentStatusHoldTime <= 0
+    ? timeTrialState.segmentStatuses
+    : timeTrialState.heldSegmentStatuses;
+  for (const [index, segmentEl] of timeTrialSegmentEls.entries()) {
+    const status = activeSegmentStatuses[index];
+    segmentEl.classList.toggle("is-purple", status === "purple");
+    segmentEl.classList.toggle("is-green", status === "green");
+    segmentEl.classList.toggle("is-yellow", status === "yellow");
+  }
   if (timeTrialMessageEl && !timeTrialMessageEl.hidden) {
     timeTrialMessageEl.textContent = timeTrialState.invalidated
       ? "Invalidated Lap - Off Track"
@@ -2181,6 +2276,7 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   const timeTrialSpawnNext = definition.timeTrialNext ? pointFromPlan(...definition.timeTrialNext, planScale) : next;
   const timeTrialHeading = Math.atan2(timeTrialSpawnNext.x - timeTrialSpawn.x, timeTrialSpawnNext.z - timeTrialSpawn.z);
   const startLine = getStartFinishLineState(definition, samples, widthProfile, planScale);
+  const segmentLines = getTimeTrialSegmentLines(samples, widthProfile, startLine);
 
   return {
     group,
@@ -2188,6 +2284,7 @@ function createTrack(trackId = KATARA_TRACK_ID) {
     start: { x: start.x, z: start.z, heading },
     timeTrialStart: { x: timeTrialSpawn.x, z: timeTrialSpawn.z, heading: timeTrialHeading },
     startLine,
+    segmentLines,
     extraTrackAreas,
     obstacles,
     groundY: 0.14,
@@ -2311,6 +2408,39 @@ function getStartFinishLineState(definition, samples, widthProfile, planScale) {
 
   const halfWidth = widthProfile[nearestIndex] ?? definition.halfWidth ?? 7.2;
   return { start, tangent, across, halfWidth };
+}
+
+function getTimeTrialSegmentLines(samples, widthProfile, startLine) {
+  if (!samples.length) return [];
+  const startIndex = startLine ? getNearestSampleIndex(samples, startLine.start) : 0;
+  return [1 / 3, 2 / 3].map((ratio) => {
+    const index = (startIndex + Math.round(ratio * samples.length)) % samples.length;
+    const prev = samples[(index - 1 + samples.length) % samples.length];
+    const next = samples[(index + 1) % samples.length];
+    const tangent = next.clone().sub(prev);
+    tangent.y = 0;
+    if (tangent.lengthSq() < 0.0001) tangent.set(0, 0, 1);
+    tangent.normalize();
+    return {
+      start: samples[index].clone(),
+      tangent,
+      across: new THREE.Vector3(tangent.z, 0, -tangent.x),
+      halfWidth: widthProfile[index] ?? widthProfile[0] ?? 7.2,
+    };
+  });
+}
+
+function getNearestSampleIndex(samples, point) {
+  let nearestIndex = 0;
+  let nearestDistance = Infinity;
+  for (let i = 0; i < samples.length; i += 1) {
+    const distance = point.distanceToSquared(samples[i]);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = i;
+    }
+  }
+  return nearestIndex;
 }
 
 function createAsphaltMaterial() {

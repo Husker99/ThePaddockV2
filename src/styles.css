@@ -1249,6 +1249,43 @@ h1 {
   pointer-events: none;
 }
 
+.time-trial-timer > span:first-child {
+  display: block;
+}
+
+.time-trial-segments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 7px;
+  height: 5px;
+}
+
+.time-trial-segments span {
+  border-radius: 999px;
+  background: rgba(246, 242, 232, 0.18);
+  opacity: 0;
+  transition: opacity 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.time-trial-segments span.is-purple {
+  opacity: 1;
+  background: #a25cff;
+  box-shadow: 0 0 10px rgba(162, 92, 255, 0.72);
+}
+
+.time-trial-segments span.is-green {
+  opacity: 1;
+  background: #4fd071;
+  box-shadow: 0 0 10px rgba(79, 208, 113, 0.68);
+}
+
+.time-trial-segments span.is-yellow {
+  opacity: 1;
+  background: #ffcf4a;
+  box-shadow: 0 0 10px rgba(255, 207, 74, 0.62);
+}
+
 .time-trial-message {
   position: fixed;
   top: 58px;
