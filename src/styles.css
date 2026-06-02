@@ -928,6 +928,8 @@ h1 {
 .editor-scenery-trees { fill: #4f9b52; }
 .editor-scenery-cherry-trees { fill: #ff9cc9; }
 .editor-scenery-douglas-pines { fill: #1f5f42; }
+.editor-scenery-maple-tree { fill: #6fa642; }
+.editor-scenery-boulder-cluster { fill: #8d928b; }
 .editor-scenery-lamp { fill: #ffcf4a; }
 .editor-scenery-building-small { fill: #9bd4f5; }
 .editor-scenery-building-group { fill: #4d91d4; }
@@ -1010,6 +1012,15 @@ h1 {
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));
+}
+
+.editor-painted-kerb {
+  fill: none;
+  stroke: #c82024;
+  stroke-width: 86;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.22));
 }
 
 .editor-ghost-start-line {
@@ -1999,6 +2010,8 @@ h1 {
 .editor-scenery-trees { fill: #4f9b52; }
 .editor-scenery-cherry-trees { fill: #ff9cc9; }
 .editor-scenery-douglas-pines { fill: #1f5f42; }
+.editor-scenery-maple-tree { fill: #6fa642; }
+.editor-scenery-boulder-cluster { fill: #8d928b; }
 .editor-scenery-lamp { fill: #ffcf4a; }
 .editor-scenery-building-small { fill: #9bd4f5; }
 .editor-scenery-building-group { fill: #4d91d4; }
@@ -2078,6 +2091,15 @@ h1 {
   fill: none;
   stroke: #ffcf4a;
   stroke-width: 68;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));
+}
+
+.editor-painted-kerb {
+  fill: none;
+  stroke: #c82024;
+  stroke-width: 86;
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));

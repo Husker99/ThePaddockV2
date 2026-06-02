@@ -49,6 +49,14 @@
                 <span>Default Track</span>
                 <strong>Kyoshi Circuit</strong>
               </button>
+              <button class="selection-card" type="button" data-editor-start="mako-city">
+                <span>Default Track</span>
+                <strong>Mako City</strong>
+              </button>
+              <button class="selection-card" type="button" data-editor-start="yue-ring">
+                <span>Default Track</span>
+                <strong>Yue Ring</strong>
+              </button>
             </div>
           </div>
 
@@ -62,6 +70,14 @@
               <button class="selection-card" type="button" data-track="kyoshi-circuit">
                 <span>Track</span>
                 <strong>Kyoshi Circuit</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="mako-city">
+                <span>Track</span>
+                <strong>Mako City</strong>
+              </button>
+              <button class="selection-card" type="button" data-track="yue-ring">
+                <span>Track</span>
+                <strong>Yue Ring</strong>
               </button>
             </div>
             <button id="track-next" class="start-button" type="button">Next</button>
@@ -252,6 +268,22 @@
                 <path d="M -12 -4 H 12 M -12 0 H 12 M -12 4 H 12 M -8 -4 V 4 M -4 -4 V 4 M 0 -4 V 4 M 4 -4 V 4 M 8 -4 V 4" />
               </g>
             </svg>
+            <svg class="track-map track-map-mako is-hidden" viewBox="0 0 180 130" data-track-map="mako-city">
+              <path class="map-kerb" d="M83.9 42.7 L112.1 43.3 L119.9 50.3 L128.6 58.1 L149 57.8 L156.7 48.4 L144.5 35.3 L127 28.5 L128 17.5 L167.7 45.6 L169.4 60.5 L169.4 89.8 L161.8 97.5 L153.2 88.5 L153.2 81 L148 74 L83.3 74.9 L75.8 66.3 L68.2 57.6 L52.5 58 L39.9 49.9 L39.7 32.8 L49.7 15.3 L57 18.6 L55.6 24.5 L55.8 37.4 L61.5 42.4 Z" />
+              <path class="map-road" d="M83.9 42.7 L112.1 43.3 L119.9 50.3 L128.6 58.1 L149 57.8 L156.7 48.4 L144.5 35.3 L127 28.5 L128 17.5 L167.7 45.6 L169.4 60.5 L169.4 89.8 L161.8 97.5 L153.2 88.5 L153.2 81 L148 74 L83.3 74.9 L75.8 66.3 L68.2 57.6 L52.5 58 L39.9 49.9 L39.7 32.8 L49.7 15.3 L57 18.6 L55.6 24.5 L55.8 37.4 L61.5 42.4 Z" />
+              <g class="map-start-line" transform="translate(83.9 42.7) rotate(1)">
+                <rect x="-12" y="-4" width="24" height="8" rx="1.5" />
+                <path d="M -12 -4 H 12 M -12 0 H 12 M -12 4 H 12 M -8 -4 V 4 M -4 -4 V 4 M 0 -4 V 4 M 4 -4 V 4 M 8 -4 V 4" />
+              </g>
+            </svg>
+            <svg class="track-map track-map-yue is-hidden" viewBox="0 0 180 130" data-track-map="yue-ring">
+              <path class="map-kerb" d="M61.3 40 L94.6 40 L127.1 22.4 L151.3 12 L164.8 33.3 L154 84.8 L132.1 105.9 L119.6 94.5 L115.7 69.1 L82.1 74.8 L77 102.2 L60.2 118 L28.5 94.7 L34.8 75.4 L39.6 62.7 L22.8 54.6 L15.2 47.6 L23.2 40.5 Z" />
+              <path class="map-road" d="M61.3 40 L94.6 40 L127.1 22.4 L151.3 12 L164.8 33.3 L154 84.8 L132.1 105.9 L119.6 94.5 L115.7 69.1 L82.1 74.8 L77 102.2 L60.2 118 L28.5 94.7 L34.8 75.4 L39.6 62.7 L22.8 54.6 L15.2 47.6 L23.2 40.5 Z" />
+              <g class="map-start-line" transform="translate(61.3 40) rotate(0)">
+                <rect x="-12" y="-4" width="24" height="8" rx="1.5" />
+                <path d="M -12 -4 H 12 M -12 0 H 12 M -12 4 H 12 M -8 -4 V 4 M -4 -4 V 4 M 0 -4 V 4 M 4 -4 V 4 M 8 -4 V 4" />
+              </g>
+            </svg>
             <div class="track-map-floor"></div>
           </div>
           <div class="showroom-visual driver-visual is-hidden" data-showroom-visual="driver" aria-hidden="true">
@@ -299,6 +331,14 @@
               <option value="night">Night</option>
             </select>
           </label>
+          <label class="editor-select">
+            <span>Environment</span>
+            <select id="track-environment-select">
+              <option value="grass">Grass</option>
+              <option value="tarmac">Tarmac</option>
+              <option value="dirt">Dirt</option>
+            </select>
+          </label>
           <button class="editor-tool" type="button" data-editor-tool="start">Start Line</button>
           <button id="editor-export" class="back-button" type="button">Export JSON</button>
           <textarea id="track-json-output" class="track-json-output" spellcheck="false" aria-label="Track JSON output"></textarea>
@@ -319,6 +359,8 @@
             <option value="trees">Trees</option>
             <option value="cherry-trees">Cherry Blossoms</option>
             <option value="douglas-pines">Douglas Firs</option>
+            <option value="maple-tree">Maple Tree</option>
+            <option value="boulder-cluster">Boulder Cluster</option>
             <option value="lamp">Lamp</option>
             <option value="building-small">Small Building</option>
             <option value="building-group">Building Group</option>
@@ -331,6 +373,8 @@
           <span>Selected Road</span>
           <label><input id="road-kerb-right" type="checkbox" data-road-feature="kerbRight" /> Sausage right</label>
           <label><input id="road-kerb-left" type="checkbox" data-road-feature="kerbLeft" /> Sausage left</label>
+          <label><input id="road-painted-kerb-right" type="checkbox" data-road-feature="paintedKerbRight" /> Painted right</label>
+          <label><input id="road-painted-kerb-left" type="checkbox" data-road-feature="paintedKerbLeft" /> Painted left</label>
           <label><input id="road-wall-right" type="checkbox" data-road-feature="wallRight" /> Wall right</label>
           <label><input id="road-wall-left" type="checkbox" data-road-feature="wallLeft" /> Wall left</label>
           <label><input id="road-grandstand-right" type="checkbox" data-road-feature="grandstandRight" /> Grandstand right</label>
@@ -364,7 +408,7 @@
           <button id="editor-zoom-in" type="button" aria-label="Zoom in">+</button>
           <strong id="editor-zoom-readout">100%</strong>
         </div>
-        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds sausage kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
+        <div class="editor-hint">Start with the oval, use Add Node to split the road, then drag nodes to shape it. Select Road adds painted kerbs, sausage kerbs, walls, and grandstands. Select Scenery moves objects; Q and E rotate scenery.</div>
       </div>
     </section>
     <div class="hud">
