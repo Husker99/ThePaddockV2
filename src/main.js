@@ -1251,7 +1251,7 @@ function updateCar(dt) {
   const coastRotationBoost = 1 + coasting * THREE.MathUtils.lerp(0.08, 0.02, topSpeedRatio);
   const grip = surfaceGrip * downforceGrip * coastRotationBoost * (handbrake ? tuning.handbrakeGrip : 1);
 
-  if (throttle && forwardSpeed > -2) {
+  if (throttle) {
     const powerFade = 1 - THREE.MathUtils.clamp(forwardSpeed / maxForwardSpeed, 0, 1);
     const steeringLoad = Math.abs(carState.steer) / Math.max(maxSteer, 0.001);
     const cornerAccelPenalty = 1 - 0.28 * steeringLoad * THREE.MathUtils.smoothstep(speedAbs, 2, 42);
@@ -1422,7 +1422,7 @@ function updateCar(dt) {
   }
   updateWheelRideHeights(wheelSurface, dt);
 
-  if (profile.transmission !== "manual") carState.gear = getAutoGear(forwardSpeed, profile);
+  if (profile.transmission !== "manual") carState.gear = getAutoGear(forwardSpeed, profile, throttle, brake);
   carState.rpm = getEngineRpm(forwardSpeed, throttle, carState.gear, profile);
   const hardBraking = false;
   updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking);
@@ -4305,8 +4305,9 @@ function getManualGearBand(gear, profile) {
   return { start: band[0], end: band[1] };
 }
 
-function getAutoGear(forwardSpeed, profile = getCarProfile()) {
+function getAutoGear(forwardSpeed, profile = getCarProfile(), throttle = 0, brake = 0) {
   const gearSpeedBands = getGearSpeedBands(profile);
+  if (throttle) return forwardSpeed < gearSpeedBands[1] ? 1 : getAutoGear(forwardSpeed, profile, 0, brake);
   if (forwardSpeed < -0.6) return -1;
   if (forwardSpeed < 2) return 0;
 

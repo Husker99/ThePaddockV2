@@ -215,7 +215,7 @@
       "wallLeft": false,
       "grandstandRight": false,
       "grandstandLeft": false,
-      "width": 11
+      "width": 10
     },
     {
       "kerbRight": false,
@@ -226,7 +226,7 @@
       "wallLeft": false,
       "grandstandRight": false,
       "grandstandLeft": false,
-      "width": 12
+      "width": 9
     },
     {
       "kerbRight": false,
@@ -237,7 +237,7 @@
       "wallLeft": false,
       "grandstandRight": false,
       "grandstandLeft": false,
-      "width": 12
+      "width": 10.5
     },
     {
       "kerbRight": false,
@@ -263,7 +263,7 @@
     },
     {
       "kerbRight": false,
-      "kerbLeft": false,
+      "kerbLeft": true,
       "paintedKerbRight": false,
       "paintedKerbLeft": false,
       "wallRight": false,
@@ -284,7 +284,7 @@
     },
     {
       "kerbRight": true,
-      "kerbLeft": false,
+      "kerbLeft": true,
       "paintedKerbRight": false,
       "paintedKerbLeft": false,
       "wallRight": false,
@@ -293,7 +293,7 @@
       "grandstandLeft": false
     },
     {
-      "kerbRight": false,
+      "kerbRight": true,
       "kerbLeft": false,
       "paintedKerbRight": false,
       "paintedKerbLeft": false,
@@ -438,8 +438,8 @@
     },
     {
       "type": "douglas-pines",
-      "x": 1574,
-      "y": 4418,
+      "x": 1451,
+      "y": 4329,
       "rotation": 0
     },
     {
@@ -450,8 +450,8 @@
     },
     {
       "type": "douglas-pines",
-      "x": 2852,
-      "y": 3951,
+      "x": 4029,
+      "y": 4026,
       "rotation": 0
     },
     {
@@ -1086,8 +1086,8 @@
     },
     {
       "type": "maple-tree",
-      "x": 2248,
-      "y": 5212,
+      "x": 2274,
+      "y": 5109,
       "rotation": 0
     },
     {
@@ -1208,6 +1208,168 @@
       "type": "maple-tree",
       "x": 12540,
       "y": 0,
+      "rotation": 0
+    },
+    {
+      "type": "lamp",
+      "x": 14296,
+      "y": 1361,
+      "rotation": 0.24
+    },
+    {
+      "type": "lamp",
+      "x": 13083,
+      "y": 8379,
+      "rotation": -3.42
+    },
+    {
+      "type": "lamp",
+      "x": 6823,
+      "y": 9592,
+      "rotation": 2.44
+    },
+    {
+      "type": "lamp",
+      "x": 3552,
+      "y": 5065,
+      "rotation": 0.56
+    },
+    {
+      "type": "trees",
+      "x": 2708,
+      "y": 3961,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 3141,
+      "y": 3809,
+      "rotation": 0
+    },
+    {
+      "type": "douglas-pines",
+      "x": 5069,
+      "y": 2488,
+      "rotation": 0
+    },
+    {
+      "type": "maple-tree",
+      "x": 2729,
+      "y": 2661,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 5805,
+      "y": 2553,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 4310,
+      "y": 2639,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 10267,
+      "y": 2466,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 10397,
+      "y": 1881,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 9834,
+      "y": 1665,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 11329,
+      "y": 1123,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 12130,
+      "y": 11325,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 11653,
+      "y": 11694,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 12650,
+      "y": 12192,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 13408,
+      "y": 12170,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 15531,
+      "y": 11044,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14643,
+      "y": 8661,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 14058,
+      "y": 9008,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 13061,
+      "y": 9787,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 10592,
+      "y": 9159,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 9054,
+      "y": 11390,
+      "rotation": 0
+    },
+    {
+      "type": "trees",
+      "x": 8664,
+      "y": 10134,
+      "rotation": 0
+    },
+    {
+      "type": "maple-tree",
+      "x": 8686,
+      "y": 10740,
+      "rotation": 0
+    },
+    {
+      "type": "boulder-cluster",
+      "x": 7191,
+      "y": 7968,
       "rotation": 0
     }
   ]
