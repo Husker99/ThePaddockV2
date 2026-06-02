@@ -20,6 +20,7 @@
             <div class="menu-actions">
               <button id="play-game" class="start-button" type="button">Just Drive</button>
               <button id="time-trial-game" class="start-button" type="button">Time Trial</button>
+              <button id="quick-race-game" class="start-button" type="button">Quick Race</button>
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
             </div>
           </div>
@@ -235,6 +236,25 @@
             </div>
             <button class="start-button" type="button" data-start-race>Start</button>
           </div>
+
+          <div class="menu-step is-hidden" data-menu-step="ai-opponents">
+            <button id="ai-opponents-back" class="back-button" type="button">Back</button>
+            <div class="race-setup-panel">
+              <span>Quick Race</span>
+              <strong>AI Opponents</strong>
+              <label class="race-slider">
+                <span>Opponents</span>
+                <input id="ai-opponent-slider" type="range" min="1" max="5" step="1" value="3" />
+                <strong id="ai-opponent-readout">3</strong>
+              </label>
+              <label class="race-slider">
+                <span>Starting Position</span>
+                <input id="grid-position-slider" type="range" min="1" max="4" step="1" value="1" />
+                <strong id="grid-position-readout">1st</strong>
+              </label>
+            </div>
+            <button id="quick-race-start" class="start-button" type="button">Start Quick Race</button>
+          </div>
         </div>
         <aside class="menu-showroom">
           <div class="showroom-label">
@@ -439,6 +459,7 @@
       </div>
     </div>
     <div id="time-trial-message" class="time-trial-message" hidden></div>
+    <div id="race-countdown" class="race-countdown" hidden>5</div>
     <section id="time-trial-results" class="time-trial-results" hidden aria-label="Time trial lap times">
       <h2>Lap Times</h2>
       <ol id="time-trial-laps"></ol>

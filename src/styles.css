@@ -214,6 +214,57 @@ h1 {
   text-transform: uppercase;
 }
 
+.race-setup-panel {
+  display: grid;
+  gap: 16px;
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid rgba(255, 207, 74, 0.42);
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, rgba(246, 242, 232, 0.12), rgba(246, 242, 232, 0.025)),
+    rgba(16, 20, 19, 0.64);
+}
+
+.race-setup-panel > span,
+.race-slider span {
+  color: rgba(246, 242, 232, 0.68);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.race-setup-panel > strong {
+  color: #f6f2e8;
+  font-size: 24px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.race-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.race-slider input {
+  grid-column: 1;
+  width: 100%;
+  accent-color: #ffcf4a;
+}
+
+.race-slider strong {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 44px;
+  color: #ffcf4a;
+  font-family: Audiowide, Orbitron, sans-serif;
+  font-size: 34px;
+  line-height: 1;
+  text-align: right;
+}
+
 .start-button,
 .ghost-button {
   width: 100%;
@@ -1142,6 +1193,11 @@ h1 {
   transform-origin: left center;
 }
 
+.ers-fill.is-low {
+  background: #ffcf4a;
+  box-shadow: 0 0 12px rgba(255, 207, 74, 0.68);
+}
+
 .rev-meter[hidden] {
   display: none;
 }
@@ -1221,6 +1277,7 @@ h1 {
 
 .time-trial-timer[hidden],
 .time-trial-message[hidden],
+.race-countdown[hidden],
 .time-trial-results[hidden] {
   display: none;
 }
@@ -1315,6 +1372,39 @@ h1 {
   background: rgba(82, 51, 9, 0.78);
 }
 
+.race-countdown {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  z-index: 5;
+  min-width: 138px;
+  padding: 12px 24px;
+  border: 1px solid rgba(255, 207, 74, 0.58);
+  border-radius: 7px;
+  background: rgba(8, 10, 8, 0.66);
+  color: #ffcf4a;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34), 0 0 28px rgba(255, 207, 74, 0.2);
+  font-family: Audiowide, Orbitron, sans-serif;
+  font-size: 54px;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  transform: translateX(-50%) scale(1);
+  pointer-events: none;
+}
+
+.race-countdown.is-pulse {
+  animation: countdown-pop 220ms ease-out;
+}
+
+.race-countdown.is-go {
+  min-width: 190px;
+  color: #f6f2e8;
+  background: rgba(18, 166, 106, 0.82);
+  border-color: rgba(144, 255, 210, 0.78);
+  box-shadow: 0 18px 56px rgba(18, 166, 106, 0.32), 0 0 34px rgba(144, 255, 210, 0.28);
+}
+
 @keyframes penalty-drop {
   from {
     opacity: 0;
@@ -1323,6 +1413,16 @@ h1 {
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes countdown-pop {
+  from {
+    transform: translateX(-50%) scale(1.16);
+  }
+
+  to {
+    transform: translateX(-50%) scale(1);
   }
 }
 

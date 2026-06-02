@@ -16,6 +16,7 @@ const trackShowcaseCar = document.querySelector(".track-showcase-car");
 const menuSteps = [...document.querySelectorAll("[data-menu-step]")];
 const playGameButton = document.querySelector("#play-game");
 const timeTrialGameButton = document.querySelector("#time-trial-game");
+const quickRaceGameButton = document.querySelector("#quick-race-game");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
 const trackEditor = document.querySelector("#track-editor");
 const editorCanvas = document.querySelector("#track-editor-canvas");
@@ -54,6 +55,12 @@ const trackJsonOutput = document.querySelector("#track-json-output");
 const trackNextButton = document.querySelector("#track-next");
 const startButton = document.querySelector("#start-race");
 const startRaceButtons = [...document.querySelectorAll("[data-start-race], #start-race")];
+const quickRaceStartButton = document.querySelector("#quick-race-start");
+const aiOpponentsBackButton = document.querySelector("#ai-opponents-back");
+const aiOpponentSlider = document.querySelector("#ai-opponent-slider");
+const aiOpponentReadout = document.querySelector("#ai-opponent-readout");
+const gridPositionSlider = document.querySelector("#grid-position-slider");
+const gridPositionReadout = document.querySelector("#grid-position-readout");
 const carButtons = [...document.querySelectorAll("[data-car]")];
 const carCategoryButtons = [...document.querySelectorAll("[data-car-category]")];
 const backButtons = [...document.querySelectorAll("[data-menu-back]")];
@@ -74,6 +81,7 @@ const timeTrialTimerEl = document.querySelector("#time-trial-timer");
 const timeTrialTimerValueEl = document.querySelector("#time-trial-timer-value");
 const timeTrialSegmentEls = [...document.querySelectorAll("#time-trial-segments span")];
 const timeTrialMessageEl = document.querySelector("#time-trial-message");
+const raceCountdownEl = document.querySelector("#race-countdown");
 const timeTrialResultsEl = document.querySelector("#time-trial-results");
 const timeTrialLapsEl = document.querySelector("#time-trial-laps");
 const audioBasePath = `${import.meta.env.BASE_URL}audio/`;
@@ -402,6 +410,9 @@ let gameStarted = false;
 let isPaused = false;
 let menuStep = "intro";
 let selectedGameMode = "drive";
+let selectedAiOpponentCount = 3;
+let selectedGridPosition = 1;
+let quickRacePaintStep = "formula";
 let selectedCar = "ferraro";
 let selectedTrack = "katara-speedway";
 let cameraMode = "chase";
@@ -435,6 +446,12 @@ const timeTrialState = {
   wallPenaltyMessageTime: 0,
   trackLimitsPenaltyCooldown: 0,
   trackLimitsPenaltyMessageTime: 0,
+};
+const raceCountdownState = {
+  active: false,
+  elapsed: 0,
+  hideTime: 0,
+  lastCue: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
@@ -503,6 +520,13 @@ const chaseCamera = {
   zoom: 1,
 };
 const trackShowcaseColors = ["#d91f26", "#ff7a18", "#1769dc", "#f4f1e8", "#101d4a", "#12a66a"];
+const quickRaceAiCarPools = {
+  formula: ["ferraro", "mersedeez", "alpeen", "willems", "mclarsen", "racing-bats", "raging-bowl"],
+  lmp: ["lmp", "scarlet-lmp", "ocean-lmp", "volt-lmp"],
+  stock: ["orange-stock", "thunder-stock", "jade-stock", "grape-stock"],
+  jeep: ["dune-jeep", "forest-jeep", "rescue-jeep", "storm-jeep"],
+  corvette: ["vette-yellow", "vette-white", "vette-red", "vette-striped"],
+};
 if (trackShowcaseCar) {
   trackShowcaseCar.style.setProperty("--showcase-car-color", trackShowcaseColors[Math.floor(Math.random() * trackShowcaseColors.length)]);
 }
@@ -565,6 +589,7 @@ canvas.addEventListener("contextmenu", (event) => {
 startMenu.addEventListener("pointerdown", startMenuMusic);
 playGameButton.addEventListener("click", () => startGameModeSelection("drive"));
 timeTrialGameButton.addEventListener("click", () => startGameModeSelection("time-trial"));
+quickRaceGameButton?.addEventListener("click", () => startGameModeSelection("quick-race"));
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
 editorBackButton.addEventListener("click", closeTrackEditor);
 editorTestDriveButton.addEventListener("click", startEditorTestDrive);
@@ -621,8 +646,13 @@ trackNextButton.addEventListener("click", () => setMenuStep("car-category"));
 startButton.addEventListener("pointerenter", startMenuMusic);
 for (const button of startRaceButtons) {
   button.addEventListener("pointerenter", startMenuMusic);
-  button.addEventListener("click", startGame);
+  button.addEventListener("click", handleStartRaceClick);
 }
+quickRaceStartButton?.addEventListener("pointerenter", startMenuMusic);
+quickRaceStartButton?.addEventListener("click", startGame);
+aiOpponentsBackButton?.addEventListener("click", () => setMenuStep(quickRacePaintStep));
+aiOpponentSlider?.addEventListener("input", updateAiOpponentSelection);
+gridPositionSlider?.addEventListener("input", updateGridPositionSelection);
 for (const button of carButtons) {
   button.addEventListener("click", () => selectCar(button.dataset.car));
 }
@@ -915,7 +945,7 @@ const carProfiles = {
     slipLimitHighSpeed: 23,
     boostDrainRate: 20,
     boostRechargeRate: 6,
-    boostPowerScale: 1.18,
+    boostPowerScale: 1.53,
     cockpitPosition: { forward: 0.88, height: 1.2 },
     cockpitTarget: { forward: 20, height: 1.34, steerLook: 0.58 },
   },
@@ -1096,6 +1126,8 @@ const carState = {
   gear: 0,
   rpm: 2400,
   ers: 100,
+  boostActive: false,
+  nitrousFlameScale: 0,
   headlightsOn: false,
 };
 menuPreviewReady = true;
@@ -1159,6 +1191,8 @@ const dirtGroup = new THREE.Group();
 const dirtParticles = [];
 const smokeParticles = [];
 const sparkParticles = [];
+const aiOpponents = [];
+let aiRacingLineDebug = null;
 scene.add(dirtGroup);
 initDirtParticles();
 initCollisionSmokeParticles();
@@ -1169,7 +1203,9 @@ renderer.setAnimationLoop(update);
 
 function update() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
-  if (gameStarted && !isPaused && !isMenuOpen()) updateCar(dt);
+  const raceStartBlocked = updateRaceCountdown(dt);
+  if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateCar(dt);
+  if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateAiOpponents(dt);
   if (!gameStarted || isPaused || isMenuOpen()) updateRevMeter();
   if (selectedGameMode === "time-trial") updateTimeTrialHud();
   if (isMenuOpen()) updateMenuPreview(dt);
@@ -1222,8 +1258,10 @@ function updateCar(dt) {
   const lmpCoastTurnBoost = profile.kind === "lmp" && coasting
     ? THREE.MathUtils.lerp(1.38, 1.18, topSpeedRatio)
     : 1;
+  const canStartBoost = profile.kind === "corvette" ? carState.ers >= 20 : carState.ers > 0;
+  const boostActive = profile.hasErs && throttle && ersPressed && carState.ers > 0 && (carState.boostActive || canStartBoost);
+  carState.boostActive = boostActive;
   const boostPowerScale = profile.boostPowerScale ?? 1.18;
-  const boostActive = profile.hasErs && throttle && ersPressed && carState.ers > 0;
   const offTrackEnvironment = surface.kind === "grass" ? (track.environment ?? "grass") : "track";
   const offTrackSlowdownScale = offTrackEnvironment === "dirt" ? 2 : 1;
   const paintedKerbPowerScale = 1 - wheelSurface.paintedKerbRatio * 0.32;
@@ -1232,7 +1270,7 @@ function updateCar(dt) {
   const surfaceTopSpeedScale =
     surface.kind === "grass" ? profile.grassTopSpeedScale / offTrackSlowdownScale : surface.kind === "sausage" ? 0.84 : surface.kind === "kerb" ? 0.92 : 1;
   const maxForwardSpeed = profile.maxForwardSpeed * surfaceTopSpeedScale * (boostActive ? boostPowerScale : 1);
-  updateErs(dt, ersPressed, brake, profile);
+  updateErs(dt, boostActive, brake, profile);
   const maxSteer = THREE.MathUtils.lerp(
     profile.maxSteerLowSpeed,
     profile.maxSteerHighSpeed,
@@ -1438,7 +1476,7 @@ function updateCar(dt) {
   const hardBraking = false;
   updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking);
   updateRearWing(dt, boostActive);
-  updateCarLights(brake, boostActive);
+  updateCarLights(brake, boostActive, dt);
 
   speedEl.textContent = `${Math.round(Math.abs(forwardSpeed) * 2.237)} mph`;
   gearEl.textContent = carState.gear === -1 ? "R" : carState.gear === 0 ? "N" : `${carState.gear}`;
@@ -1655,13 +1693,13 @@ function rememberWheelBaseHeights(carModel) {
   }
   return carModel;
 }
-function updateErs(dt, ersPressed, brake, profile) {
+function updateErs(dt, boostActive, brake, profile) {
   if (!profile.hasErs) {
     carState.ers = 0;
     return;
   }
 
-  if (ersPressed && carState.ers > 0) {
+  if (boostActive && carState.ers > 0) {
     carState.ers = Math.max(0, carState.ers - (profile.boostDrainRate ?? 20) * dt);
     return;
   }
@@ -1884,9 +1922,10 @@ function toggleHeadlights() {
   updateCarLights(false, false);
 }
 
-function updateCarLights(brake = false, boostActive = false) {
+function updateCarLights(brake = false, boostActive = false, dt = 1 / 60) {
   if (!car?.lights) return;
   const nitrousFlameActive = getCarProfile().kind === "corvette" && boostActive;
+  carState.nitrousFlameScale = THREE.MathUtils.damp(carState.nitrousFlameScale, nitrousFlameActive ? 1 : 0, nitrousFlameActive ? 3.1 : 5.4, dt);
   const headlightsOn = carState.headlightsOn;
   for (const light of car.lights.headlights ?? []) {
     light.visible = headlightsOn;
@@ -1901,10 +1940,11 @@ function updateCarLights(brake = false, boostActive = false) {
     mesh.scale.y = brake ? 1.18 : 1;
   }
   for (const flame of car.lights.nitrousFlames ?? []) {
-    flame.visible = nitrousFlameActive;
-    if (nitrousFlameActive) {
+    flame.visible = carState.nitrousFlameScale > 0.02;
+    if (flame.visible) {
       const flicker = 0.85 + Math.random() * 0.35;
-      flame.scale.set(0.55 * flicker, 0.55 * flicker, 1.05 * flicker);
+      const scale = carState.nitrousFlameScale;
+      flame.scale.set(0.55 * flicker * scale, 0.55 * flicker * scale, 1.05 * flicker * scale);
     } else {
       flame.scale.set(0, 0, 0);
     }
@@ -1922,6 +1962,7 @@ function updateErsHud() {
   if (ersControlHintEl) ersControlHintEl.textContent = `Shift: ${label}`;
   const ratio = THREE.MathUtils.clamp(carState.ers / 100, 0, 1);
   ersFillEl.style.transform = `scaleX(${ratio})`;
+  ersFillEl.classList.toggle("is-low", profile.kind === "corvette" && carState.ers < 20);
   ersReadoutEl.textContent = `${Math.round(carState.ers)}%`;
 }
 
@@ -2277,10 +2318,16 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   const timeTrialHeading = Math.atan2(timeTrialSpawnNext.x - timeTrialSpawn.x, timeTrialSpawnNext.z - timeTrialSpawn.z);
   const startLine = getStartFinishLineState(definition, samples, widthProfile, planScale);
   const segmentLines = getTimeTrialSegmentLines(samples, widthProfile, startLine);
+  const startSampleIndex = startLine ? getNearestSampleIndex(samples, startLine.start) : getNearestSampleIndex(samples, start);
+  const sampleSpacing = getAverageSampleSpacing(samples);
 
   return {
     group,
     environment,
+    samples,
+    widthProfile,
+    sampleSpacing,
+    startSampleIndex,
     start: { x: start.x, z: start.z, heading },
     timeTrialStart: { x: timeTrialSpawn.x, z: timeTrialSpawn.z, heading: timeTrialHeading },
     startLine,
@@ -2335,6 +2382,15 @@ function createTrack(trackId = KATARA_TRACK_ID) {
 
 function pointFromPlan(x, y, scale = 0.168) {
   return new THREE.Vector3((x - 800) * scale, 0, (y - 450) * scale);
+}
+
+function getAverageSampleSpacing(samples) {
+  if (!samples.length) return 1;
+  let total = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    total += samples[i].distanceTo(samples[(i + 1) % samples.length]);
+  }
+  return Math.max(0.25, total / samples.length);
 }
 
 function getTrackWidthProfile(definition, sampleCount, fallbackHalfWidth) {
@@ -4418,6 +4474,10 @@ function getCarProfile() {
   return carProfiles[selectedCar] ?? carProfiles.ferraro;
 }
 
+function getCarProfileById(carId) {
+  return carProfiles[carId] ?? carProfiles.ferraro;
+}
+
 function getGearSpeedBands(profile) {
   if (profile.transmission === "manual") return [0, 7.8, 14.8, 22.5, 28.5, profile.maxForwardSpeed];
   return [0, 11, 24, 39, 54, profile.maxForwardSpeed];
@@ -5801,12 +5861,16 @@ function selectCarCategory(category) {
 
 function startGameModeSelection(mode) {
   selectedGameMode = mode;
+  clearAiOpponents();
+  if (selectedGameMode !== "quick-race") selectedAiOpponentCount = 0;
+  else updateAiOpponentSelection();
   updateTimeTrialHud();
   setMenuStep("track");
 }
 
 function selectTrack(trackId) {
   selectedTrack = trackId;
+  clearAiOpponents();
   for (const button of trackButtons) {
     button.classList.toggle("is-selected", button.dataset.track === selectedTrack);
   }
@@ -5832,6 +5896,7 @@ function setMenuStep(step) {
     stock: "Stock Paint",
     jeep: "Jeep Paint",
     corvette: "Corvette Paint",
+    "ai-opponents": "Quick Race",
   };
 
   menuTitle.textContent = titles[menuStep] ?? titles.intro;
@@ -5850,7 +5915,7 @@ function getSelectedTrackLabel() {
 }
 
 function isPaintMenuStep() {
-  return ["formula", "lmp", "stock", "jeep", "corvette"].includes(menuStep);
+  return ["formula", "lmp", "stock", "jeep", "corvette", "ai-opponents"].includes(menuStep);
 }
 
 function updateMenuVisual() {
@@ -5870,6 +5935,7 @@ function updateMenuVisual() {
     "editor-default-track": ["Default Track", "Choose Layout"],
     track: ["Selected Track", getSelectedTrackLabel()],
     "car-category": ["Pick a Garage", "Driver Ready"],
+    "ai-opponents": ["Race Grid", `${selectedAiOpponentCount} AI Opponent${selectedAiOpponentCount === 1 ? "" : "s"}`],
   };
   const [label, title] = labels[menuStep] ?? ["Selected Machine", getSelectedCarLabel()];
   const labelEl = previewTitle?.previousElementSibling;
@@ -5883,6 +5949,54 @@ function updateMenuVisual() {
     previewCar = null;
     previewCarId = "";
   }
+}
+
+function updateAiOpponentSelection() {
+  const count = THREE.MathUtils.clamp(Math.round(Number(aiOpponentSlider?.value ?? selectedAiOpponentCount) || 3), 1, 5);
+  selectedAiOpponentCount = count;
+  if (aiOpponentSlider) aiOpponentSlider.value = String(count);
+  if (aiOpponentReadout) aiOpponentReadout.textContent = String(count);
+  if (gridPositionSlider) {
+    const maxPosition = count + 1;
+    gridPositionSlider.max = String(maxPosition);
+    selectedGridPosition = THREE.MathUtils.clamp(selectedGridPosition, 1, maxPosition);
+    gridPositionSlider.value = String(selectedGridPosition);
+  }
+  updateGridPositionReadout();
+  if (menuStep === "ai-opponents") updateMenuVisual();
+}
+
+function updateGridPositionSelection() {
+  const maxPosition = selectedAiOpponentCount + 1;
+  selectedGridPosition = THREE.MathUtils.clamp(Math.round(Number(gridPositionSlider?.value ?? selectedGridPosition) || 1), 1, maxPosition);
+  if (gridPositionSlider) gridPositionSlider.value = String(selectedGridPosition);
+  updateGridPositionReadout();
+}
+
+function updateGridPositionReadout() {
+  if (!gridPositionReadout) return;
+  gridPositionReadout.textContent = formatOrdinal(selectedGridPosition);
+}
+
+function formatOrdinal(value) {
+  const suffix = value % 10 === 1 && value % 100 !== 11
+    ? "st"
+    : value % 10 === 2 && value % 100 !== 12
+      ? "nd"
+      : value % 10 === 3 && value % 100 !== 13
+        ? "rd"
+        : "th";
+  return `${value}${suffix}`;
+}
+
+function handleStartRaceClick() {
+  if (selectedGameMode !== "quick-race") {
+    startGame();
+    return;
+  }
+  quickRacePaintStep = menuStep;
+  updateAiOpponentSelection();
+  setMenuStep("ai-opponents");
 }
 
 function updateMenuPreviewCar() {
@@ -6489,7 +6603,7 @@ function addEditorDouglasPines(group, x, z, rotation = 0, obstacles = []) {
   cluster.rotation.y = worldRotation;
   registerSceneryCullable(cluster, 500);
   group.add(cluster);
-  addTreeObstacleSpots(obstacles, spots, x, z, worldRotation, 0.82);
+  addTreeObstacleSpots(obstacles, spots, x, z, worldRotation, 0.41);
 }
 
 function addEditorMapleTree(group, x, z, rotation = 0, obstacles = []) {
@@ -6787,6 +6901,8 @@ function startGame() {
   startEngineAudio();
   forceAudioProbe();
   resetCar();
+  setupQuickRaceOpponents();
+  startRaceCountdown();
   updateTimeTrialHud();
 }
 
@@ -6953,18 +7069,21 @@ function startEngineAudio() {
 
 function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking = false) {
   if (audioState.element) {
-    const rpmRatio = profile.kind === "stock" || profile.kind === "lmp" || profile.kind === "corvette"
+    const isCorvette = profile.kind === "corvette";
+    const rpmRatio = profile.kind === "stock" || profile.kind === "lmp"
       ? THREE.MathUtils.clamp((carState.rpm - 1200) / 6000, 0, 1)
-      : THREE.MathUtils.clamp((carState.rpm - 2200) / 9800, 0, 1);
-    audioState.element.playbackRate = profile.kind === "stock" || profile.kind === "lmp" || profile.kind === "corvette"
+      : THREE.MathUtils.clamp((carState.rpm - (isCorvette ? 1800 : 2200)) / (isCorvette ? 8500 : 9800), 0, 1);
+    audioState.element.playbackRate = isCorvette
+      ? THREE.MathUtils.lerp(0.62, 1.55, rpmRatio)
+      : profile.kind === "stock" || profile.kind === "lmp"
       ? THREE.MathUtils.lerp(0.58, 1.25, rpmRatio)
       : THREE.MathUtils.lerp(0.72, 1.85, rpmRatio);
-    audioState.element.volume = THREE.MathUtils.lerp(0.08, profile.kind === "formula" ? 0.72 : profile.kind === "corvette" ? 0.8 : 0.62, throttle ? 1 : 0.2);
+    audioState.element.volume = THREE.MathUtils.lerp(0.08, profile.kind === "formula" ? 0.72 : isCorvette ? 0.74 : 0.62, throttle ? 1 : 0.2);
     if (audioState.ersElement) {
-      const ersTargetVolume = boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.07 : 0.082) : 0;
-      const boostFade = profile.kind === "corvette" ? (boostActive ? 3.2 : 1.8) : (boostActive ? 8 : 3.2);
+      const ersTargetVolume = boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.12 : 0.082) : 0;
+      const boostFade = profile.kind === "corvette" ? (boostActive ? 2.5 : 1.5) : (boostActive ? 8 : 3.2);
       audioState.ersElement.volume = THREE.MathUtils.damp(audioState.ersElement.volume, ersTargetVolume, boostFade, dt);
-      audioState.ersElement.playbackRate = THREE.MathUtils.lerp(profile.kind === "corvette" ? 0.42 : 0.72, profile.kind === "corvette" ? 0.68 : 1.18, rpmRatio);
+      audioState.ersElement.playbackRate = THREE.MathUtils.lerp(profile.kind === "corvette" ? 0.48 : 0.72, profile.kind === "corvette" ? 0.82 : 1.18, rpmRatio);
     }
     if (audioState.brakeElement) {
       audioState.brakeElement.volume = THREE.MathUtils.damp(audioState.brakeElement.volume, hardBraking ? 0.24 : 0, hardBraking ? 10 : 4, dt);
@@ -6975,11 +7094,12 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
   if (!audioState.context) return;
 
   const now = audioState.context.currentTime;
+  const isCorvette = profile.kind === "corvette";
   const rpmRatio = profile.kind === "jeep"
     ? THREE.MathUtils.clamp((carState.rpm - 900) / 5200, 0, 1)
-    : profile.kind === "stock" || profile.kind === "lmp" || profile.kind === "corvette"
+    : profile.kind === "stock" || profile.kind === "lmp"
       ? THREE.MathUtils.clamp((carState.rpm - 1200) / 6000, 0, 1)
-      : THREE.MathUtils.clamp((carState.rpm - 2200) / 9800, 0, 1);
+      : THREE.MathUtils.clamp((carState.rpm - (isCorvette ? 1800 : 2200)) / (isCorvette ? 8500 : 9800), 0, 1);
   const jeepShiftCue = profile.kind === "jeep" && rpmRatio > 0.86;
   const throttleLift = throttle ? 1 : 0.48;
   const baseFrequency =
@@ -6987,17 +7107,17 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
       ? THREE.MathUtils.lerp(34, 170, rpmRatio)
       : profile.kind === "stock"
       ? THREE.MathUtils.lerp(44, 205, rpmRatio)
-      : profile.kind === "corvette"
-        ? THREE.MathUtils.lerp(42, 205, rpmRatio)
       : profile.kind === "lmp"
         ? THREE.MathUtils.lerp(58, 270, rpmRatio)
+      : isCorvette
+        ? THREE.MathUtils.lerp(56, 300, rpmRatio)
         : THREE.MathUtils.lerp(68, 360, rpmRatio);
-  const v8Pulse = profile.kind === "formula" ? baseFrequency * 0.5 : profile.kind === "jeep" ? baseFrequency * 0.48 : profile.kind === "corvette" ? baseFrequency * 0.42 : baseFrequency * 0.62;
+  const v8Pulse = profile.kind === "formula" || isCorvette ? baseFrequency * 0.5 : profile.kind === "jeep" ? baseFrequency * 0.48 : baseFrequency * 0.62;
 
   audioState.engine.frequency.setTargetAtTime(baseFrequency, now, 0.035);
   audioState.sub.frequency.setTargetAtTime(v8Pulse, now, 0.045);
   audioState.grumble.frequency.setTargetAtTime(Math.max(profile.kind === "formula" ? 34 : 28, v8Pulse * 0.55), now, 0.055);
-  audioState.ers.frequency.setTargetAtTime(THREE.MathUtils.lerp(profile.kind === "corvette" ? 165 : 245, profile.kind === "corvette" ? 360 : 520, rpmRatio), now, 0.08);
+  audioState.ers.frequency.setTargetAtTime(THREE.MathUtils.lerp(profile.kind === "corvette" ? 185 : 245, profile.kind === "corvette" ? 335 : 520, rpmRatio), now, 0.08);
   audioState.brake.frequency.setTargetAtTime(
     hardBraking ? THREE.MathUtils.lerp(1400, 2600, rpmRatio) : THREE.MathUtils.lerp(92, 128, rpmRatio),
     now,
@@ -7008,52 +7128,46 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
       ? THREE.MathUtils.lerp(300, 980, rpmRatio)
       : profile.kind === "stock"
       ? THREE.MathUtils.lerp(420, 1450, rpmRatio)
-      : profile.kind === "corvette"
-        ? THREE.MathUtils.lerp(380, 1380, rpmRatio)
       : profile.kind === "lmp"
         ? THREE.MathUtils.lerp(520, 1900, rpmRatio)
+      : isCorvette
+        ? THREE.MathUtils.lerp(560, 2200, rpmRatio)
         : THREE.MathUtils.lerp(650, 2600, rpmRatio),
     now,
     0.035,
   );
-  audioState.lowShelf.gain.setTargetAtTime(profile.kind === "jeep" ? 15 : profile.kind === "corvette" ? 13 : profile.kind === "formula" ? THREE.MathUtils.lerp(10, 4, rpmRatio) : 10, now, 0.08);
+  audioState.lowShelf.gain.setTargetAtTime(profile.kind === "jeep" ? 15 : isCorvette ? THREE.MathUtils.lerp(12, 5, rpmRatio) : profile.kind === "formula" ? THREE.MathUtils.lerp(10, 4, rpmRatio) : 10, now, 0.08);
   audioState.engineGain.gain.setTargetAtTime(
-    profile.kind === "formula"
+    profile.kind === "formula" || isCorvette
       ? 0.05 + rpmRatio * 0.15 * throttleLift
       : profile.kind === "jeep"
         ? 0.096 + rpmRatio * 0.18 * throttleLift
-        : profile.kind === "corvette"
-          ? 0.06 + rpmRatio * 0.15 * throttleLift + (boostActive ? 0.04 : 0)
         : 0.045 + rpmRatio * 0.12 * throttleLift,
     now,
     0.04,
   );
   audioState.subGain.gain.setTargetAtTime(
-    profile.kind === "formula"
+    profile.kind === "formula" || isCorvette
       ? 0.055 + (1 - rpmRatio) * 0.04 + throttle * 0.085
       : profile.kind === "jeep"
         ? 0.192 + throttle * 0.192
-        : profile.kind === "corvette"
-          ? 0.1 + throttle * 0.14 + (boostActive ? 0.06 : 0)
         : 0.08 + throttle * 0.11,
     now,
     0.06,
   );
   audioState.grumbleGain.gain.setTargetAtTime(
-    profile.kind === "formula"
+    profile.kind === "formula" || isCorvette
       ? 0.018 + throttle * 0.11 + (1 - rpmRatio) * 0.012
       : profile.kind === "jeep"
         ? 0.108 + throttle * 0.24 + (1 - rpmRatio) * 0.06
-        : profile.kind === "corvette"
-          ? 0.075 + throttle * 0.16 + (1 - rpmRatio) * 0.035
         : 0.055 + throttle * 0.14 + (1 - rpmRatio) * 0.025,
     now,
     0.08,
   );
   audioState.ersGain.gain.setTargetAtTime(
-    boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.018 : 0.025) : 0.0001,
+    boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.04 : 0.025) : 0.0001,
     now,
-    profile.kind === "corvette" ? (boostActive ? 0.34 : 0.42) : (boostActive ? 0.16 : 0.18),
+    profile.kind === "corvette" ? (boostActive ? 0.55 : 0.65) : (boostActive ? 0.16 : 0.18),
   );
   audioState.brakeGain.gain.setTargetAtTime(
     hardBraking ? 0.08 : jeepShiftCue ? 0.028 : 0.0001,
@@ -7159,12 +7273,15 @@ function bassSample(t) {
 }
 
 function engineSample(t) {
-  const pulse = 92;
+  const gearCycle = Math.floor(t / 0.18) % 4;
+  const rev = (t % 0.18) / 0.18;
+  const pulse = 58 + gearCycle * 5 + rev * 42;
   const main = Math.sin(Math.PI * 2 * pulse * t);
-  const sub = Math.sin(Math.PI * 2 * pulse * 0.5 * t);
-  const harmonic = Math.sin(Math.PI * 2 * pulse * 2 * t) * 0.18;
-  const burble = Math.sin(Math.PI * 2 * 36 * t) * Math.sin(Math.PI * 2 * 5.5 * t);
-  return main * 0.34 + sub * 0.42 + harmonic + burble * 0.08;
+  const sub = Math.sin(Math.PI * 2 * pulse * 0.42 * t);
+  const harmonic = Math.sin(Math.PI * 2 * pulse * 1.85 * t) * 0.16;
+  const burble = Math.sin(Math.PI * 2 * 31 * t) * Math.sin(Math.PI * 2 * 7.5 * t);
+  const shiftDip = rev > 0.84 ? 0.58 : 1;
+  return (main * 0.26 + sub * 0.55 + harmonic + burble * 0.13) * shiftDip;
 }
 
 function ersSample(t) {
@@ -7176,9 +7293,9 @@ function ersSample(t) {
 }
 
 function nitrousSample(t) {
-  const breath = Math.sin(Math.PI * 2 * 190 * t + Math.sin(Math.PI * 2 * 11 * t) * 1.1) * 0.26;
-  const valve = Math.sin(Math.PI * 2 * 360 * t + Math.sin(Math.PI * 2 * 17 * t) * 1.4) * 0.13;
-  const flutter = 0.74 + Math.sin(Math.PI * 2 * 18 * t) * 0.12 + Math.sin(Math.PI * 2 * 41 * t) * 0.06;
+  const breath = Math.sin(Math.PI * 2 * 185 * t + Math.sin(Math.PI * 2 * 9 * t) * 1.1) * 0.28;
+  const valve = Math.sin(Math.PI * 2 * 335 * t + Math.sin(Math.PI * 2 * 14 * t) * 1.4) * 0.12;
+  const flutter = 0.72 + Math.sin(Math.PI * 2 * 14 * t) * 0.12 + Math.sin(Math.PI * 2 * 33 * t) * 0.06;
   return (breath + valve) * flutter;
 }
 
@@ -7220,8 +7337,666 @@ function moveToward(value, target, amount) {
   return target;
 }
 
+function startRaceCountdown() {
+  raceCountdownState.active = selectedGameMode === "quick-race";
+  raceCountdownState.elapsed = 0;
+  raceCountdownState.hideTime = 0;
+  raceCountdownState.lastCue = "";
+  if (!raceCountdownEl) return;
+  if (!raceCountdownState.active) {
+    raceCountdownEl.hidden = true;
+    return;
+  }
+  showRaceCountdownCue("3");
+}
+
+function updateRaceCountdown(dt) {
+  if (selectedGameMode !== "quick-race" || !gameStarted || isMenuOpen()) {
+    if (raceCountdownEl) raceCountdownEl.hidden = true;
+    raceCountdownState.active = false;
+    raceCountdownState.hideTime = 0;
+    return false;
+  }
+  if (isPaused) return raceCountdownState.active;
+
+  if (raceCountdownState.active) {
+    raceCountdownState.elapsed += dt;
+    if (raceCountdownState.elapsed < 3) {
+      showRaceCountdownCue(String(3 - Math.floor(raceCountdownState.elapsed)));
+      return true;
+    }
+    showRaceCountdownCue("Go!");
+    raceCountdownState.active = false;
+    raceCountdownState.hideTime = 0.9;
+    return false;
+  }
+
+  if (raceCountdownState.hideTime > 0) {
+    raceCountdownState.hideTime = Math.max(0, raceCountdownState.hideTime - dt);
+    if (raceCountdownState.hideTime === 0 && raceCountdownEl) raceCountdownEl.hidden = true;
+  }
+  return false;
+}
+
+function showRaceCountdownCue(label) {
+  if (!raceCountdownEl || raceCountdownState.lastCue === label) return;
+  raceCountdownState.lastCue = label;
+  raceCountdownEl.textContent = label;
+  raceCountdownEl.hidden = false;
+  raceCountdownEl.classList.toggle("is-go", label === "Go!");
+  raceCountdownEl.classList.remove("is-pulse");
+  void raceCountdownEl.offsetWidth;
+  raceCountdownEl.classList.add("is-pulse");
+  playRaceCountdownBeep(label === "Go!");
+}
+
+function playRaceCountdownBeep(isGo = false) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const context = audioState.context || (AudioContext ? new AudioContext() : null);
+  if (!context) return;
+  if (context.state === "suspended") context.resume().catch(() => {});
+  const now = context.currentTime;
+  const osc = context.createOscillator();
+  const gain = context.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(isGo ? 660 : 520, now);
+  if (isGo) osc.frequency.exponentialRampToValueAtTime(440, now + 0.52);
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(isGo ? 0.16 : 0.1, now + 0.018);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.62 : 0.16));
+  osc.connect(gain);
+  gain.connect(context.destination);
+  osc.start(now);
+  osc.stop(now + (isGo ? 0.68 : 0.2));
+}
+
+function angleDifference(target, current) {
+  return Math.atan2(Math.sin(target - current), Math.cos(target - current));
+}
+
+function getTrackForwardAtSample(index = 0) {
+  const samples = track.samples ?? [];
+  if (!samples.length) return new THREE.Vector3(Math.sin(track.start.heading), 0, Math.cos(track.start.heading));
+  const safeIndex = ((index % samples.length) + samples.length) % samples.length;
+  const previous = samples[(safeIndex - 1 + samples.length) % samples.length];
+  const next = samples[(safeIndex + 1) % samples.length];
+  return next.clone().sub(previous).setY(0).normalize();
+}
+
+function getQuickRaceGridPose(gridPosition = 1) {
+  const startIndex = track.startSampleIndex ?? 0;
+  const startPoint = track.startLine?.start ?? new THREE.Vector3(track.start.x, 0, track.start.z);
+  const forward = getTrackForwardAtSample(startIndex);
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const rowSpacing = 13.8;
+  const laneOffset = 2.9;
+  const gridStartBehindLine = 4;
+  const rightLaneAdvance = 2.2;
+  const safePosition = Math.max(1, Math.round(gridPosition));
+  const row = Math.floor((safePosition - 1) / 2);
+  const isRightLane = safePosition % 2 === 1;
+  const side = isRightLane ? 1 : -1;
+  const forwardOffset = -gridStartBehindLine - row * rowSpacing - (isRightLane ? 0 : rightLaneAdvance);
+  const position = startPoint
+    .clone()
+    .addScaledVector(forward, forwardOffset)
+    .addScaledVector(right, side * laneOffset);
+  return {
+    position,
+    heading: Math.atan2(forward.x, forward.z),
+    sampleIndex: ((startIndex - Math.round((Math.abs(forwardOffset)) / 1.3)) % (track.samples?.length ?? 1) + (track.samples?.length ?? 1)) % (track.samples?.length ?? 1),
+    laneOffset: side * laneOffset,
+  };
+}
+
+function clearAiOpponents() {
+  for (const opponent of aiOpponents) {
+    scene.remove(opponent.car.root);
+  }
+  aiOpponents.length = 0;
+  clearAiRacingLineDebug();
+}
+
+function setupQuickRaceOpponents() {
+  clearAiOpponents();
+  if (selectedGameMode !== "quick-race" || !gameStarted) return;
+  const count = THREE.MathUtils.clamp(selectedAiOpponentCount, 1, 5);
+  const carIds = getQuickRaceAiCarIds();
+  const gridPositions = getAiGridPositions(count);
+  for (let i = 0; i < count; i += 1) {
+    const carId = carIds[i % carIds.length] ?? "mersedeez";
+    const aiCar = createSelectedCar(carId);
+    tuneAiCarLights(aiCar);
+    const pose = getQuickRaceGridPose(gridPositions[i]);
+    aiCar.root.position.set(pose.position.x, track.groundY, pose.position.z);
+    aiCar.root.rotation.set(0, pose.heading, 0);
+    scene.add(aiCar.root);
+    aiOpponents.push({
+      car: aiCar,
+      carId,
+      profile: getCarProfileById(carId),
+      position: new THREE.Vector3(pose.position.x, track.groundY, pose.position.z),
+      velocity: new THREE.Vector3(),
+      heading: pose.heading,
+      yawRate: 0,
+      speed: 0,
+      steer: 0,
+      throttle: 0,
+      brake: 0,
+      stuckTimer: 0,
+      recoveryTimer: 0,
+      wheelSpin: 0,
+      sampleIndex: pose.sampleIndex,
+      sampleProgress: pose.sampleIndex,
+      gridOffset: pose.laneOffset,
+      racingLineOffset: 0,
+      lineAggression: 0.56 + (i % 3) * 0.06,
+      lineBias: (i % 2 === 0 ? -0.22 : 0.22) + (i - count * 0.5) * 0.03,
+      pace: 1.06 + i * 0.018,
+      gridPosition: gridPositions[i],
+    });
+  }
+  renderAiRacingLineDebug();
+}
+
+function getQuickRaceAiCarIds() {
+  const playerKind = getCarProfile().kind;
+  const pool = quickRaceAiCarPools[playerKind] ?? quickRaceAiCarPools.formula;
+  const withoutPlayer = pool.filter((carId) => carId !== selectedCar);
+  return withoutPlayer.length ? withoutPlayer : pool;
+}
+
+function getAiGridPositions(count) {
+  const positions = [];
+  const totalGridCars = count + 1;
+  for (let position = 1; position <= totalGridCars; position += 1) {
+    if (position !== selectedGridPosition) positions.push(position);
+  }
+  return positions;
+}
+
+function clearAiRacingLineDebug() {
+  if (!aiRacingLineDebug) return;
+  scene.remove(aiRacingLineDebug);
+  aiRacingLineDebug.geometry?.dispose();
+  aiRacingLineDebug.material?.dispose();
+  aiRacingLineDebug = null;
+}
+
+function renderAiRacingLineDebug() {
+  clearAiRacingLineDebug();
+  if (selectedGameMode !== "quick-race" || !aiOpponents.length || !track.samples?.length) return;
+
+  const positions = [];
+  const colors = [];
+  const samples = track.samples;
+  const sampleStep = 4;
+  const color = new THREE.Color();
+  const maxLines = Math.min(aiOpponents.length, 5);
+  for (let opponentIndex = 0; opponentIndex < maxLines; opponentIndex += 1) {
+    const opponent = aiOpponents[opponentIndex];
+    const profile = opponent.profile ?? getCarProfileById(opponent.carId);
+    const lineYOffset = 0.42 + opponentIndex * 0.025;
+    const virtualOpponent = {
+      ...opponent,
+      position: null,
+      speed: profile.maxForwardSpeed * (opponent.pace ?? 1) * 0.72,
+    };
+    for (let i = 0; i < samples.length; i += sampleStep) {
+      const nextIndex = (i + sampleStep) % samples.length;
+      const currentOffset = getAiRacingLineOffset(i, samples, virtualOpponent, null);
+      const nextOffset = getAiRacingLineOffset(nextIndex, samples, virtualOpponent, null);
+      const currentPose = getAiPathPose(i, samples, currentOffset);
+      const nextPose = getAiPathPose(nextIndex, samples, nextOffset);
+      currentPose.position.y = lineYOffset;
+      nextPose.position.y = lineYOffset;
+      const intent = getAiRacingIntent(virtualOpponent, i, samples, profile);
+      const intentColor = getAiDebugIntentColor(intent, color);
+      positions.push(
+        currentPose.position.x, currentPose.position.y, currentPose.position.z,
+        nextPose.position.x, nextPose.position.y, nextPose.position.z,
+      );
+      colors.push(
+        intentColor.r, intentColor.g, intentColor.b,
+        intentColor.r, intentColor.g, intentColor.b,
+      );
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  const material = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+  aiRacingLineDebug = new THREE.LineSegments(geometry, material);
+  aiRacingLineDebug.renderOrder = 30;
+  scene.add(aiRacingLineDebug);
+}
+
+function getAiDebugIntentColor(intent, target = new THREE.Color()) {
+  if (intent.brake > 0.72 && intent.throttle < 0.08) return target.setHex(0xff2d2d);
+  if (intent.throttle > 0.92 && intent.brake < 0.08) return target.setHex(0x2cff66);
+  if (intent.brake > intent.throttle) return target.setHex(0xff8a26);
+  return target.setHex(0xffd34a);
+}
+
+function tuneAiCarLights(aiCar) {
+  for (const light of aiCar.lights?.headlights ?? []) {
+    light.visible = false;
+    light.intensity = 0;
+  }
+  for (const mesh of aiCar.lights?.headlightMeshes ?? []) {
+    if (mesh.material?.emissiveIntensity !== undefined) {
+      mesh.material.emissiveIntensity = shouldDefaultHeadlightsOn() ? 0.9 : 0.12;
+    }
+  }
+}
+
+function resetAiOpponentsToGrid() {
+  if (selectedGameMode !== "quick-race") {
+    clearAiOpponents();
+    return;
+  }
+  for (let i = 0; i < aiOpponents.length; i += 1) {
+    const opponent = aiOpponents[i];
+    const pose = getQuickRaceGridPose(opponent.gridPosition ?? i + 1);
+    opponent.position.set(pose.position.x, track.groundY, pose.position.z);
+    opponent.velocity ??= new THREE.Vector3();
+    opponent.velocity.set(0, 0, 0);
+    opponent.heading = pose.heading;
+    opponent.yawRate = 0;
+    opponent.speed = 0;
+    opponent.steer = 0;
+    opponent.throttle = 0;
+    opponent.brake = 0;
+    opponent.stuckTimer = 0;
+    opponent.recoveryTimer = 0;
+    opponent.wheelSpin = 0;
+    opponent.sampleIndex = pose.sampleIndex;
+    opponent.sampleProgress = pose.sampleIndex;
+    opponent.gridOffset = pose.laneOffset;
+    opponent.racingLineOffset = 0;
+    opponent.car.root.position.copy(opponent.position);
+    opponent.car.root.rotation.set(0, opponent.heading, 0);
+  }
+}
+
+function updateAiOpponents(dt) {
+  if (selectedGameMode !== "quick-race" || !aiOpponents.length || !track.samples?.length) return;
+  const samples = track.samples;
+  for (const opponent of aiOpponents) {
+    let nearestIndex = getNearestAiSampleIndex(opponent.position, samples, opponent.sampleIndex ?? 0);
+    opponent.sampleIndex = nearestIndex;
+    opponent.sampleProgress = nearestIndex;
+
+    const profile = opponent.profile ?? getCarProfileById(opponent.carId);
+    const racing = getAiRacingIntent(opponent, nearestIndex, samples, profile);
+    opponent.throttle = THREE.MathUtils.damp(opponent.throttle, racing.throttle, 4.2, dt);
+    opponent.brake = THREE.MathUtils.damp(opponent.brake, racing.brake, 6.2, dt);
+
+    const cornerAccelPenalty = 1 - racing.cornerSeverity * 0.14;
+    const acceleration = profile.engineForce * 1.42 * opponent.throttle * cornerAccelPenalty;
+    const braking = profile.brakeForce * 0.9 * opponent.brake;
+    const drag = opponent.speed * opponent.speed * 0.0048 + 0.34;
+    opponent.speed += (acceleration - braking - drag) * dt;
+    opponent.speed = THREE.MathUtils.clamp(opponent.speed, 0, racing.maxSpeed);
+    opponent.speed = THREE.MathUtils.damp(opponent.speed, Math.min(opponent.speed, racing.targetSpeed), racing.brake > 0.6 ? 3.4 : 0.08, dt);
+
+    const targetProgress = (nearestIndex + racing.lookahead) % samples.length;
+    const currentSurface = track.sample(opponent.position.x, opponent.position.z);
+    const offTrackRecovery = currentSurface.kind === "grass";
+    if (offTrackRecovery) opponent.recoveryTimer = Math.max(opponent.recoveryTimer ?? 0, 1.35);
+    opponent.recoveryTimer = Math.max(0, (opponent.recoveryTimer ?? 0) - dt);
+
+    const racingLineOffset = opponent.recoveryTimer > 0 ? 0 : getAiRacingLineOffset(targetProgress, samples, opponent, nearestIndex);
+    opponent.racingLineOffset = THREE.MathUtils.damp(opponent.racingLineOffset ?? 0, racingLineOffset, 4.1, dt);
+    const pathPose = getAiPathPose(
+      targetProgress,
+      samples,
+      opponent.recoveryTimer > 0 ? 0 : (opponent.gridOffset ?? 0) + (opponent.racingLineOffset ?? 0),
+    );
+    opponent.gridOffset = THREE.MathUtils.damp(opponent.gridOffset ?? 0, 0, 1.15, dt);
+    keepAiTargetOnTrack(opponent, pathPose, samples, targetProgress, racing);
+    applyAiRecoveryAndAvoidance(opponent, pathPose, racing, currentSurface);
+    updateAiDrivenCar(opponent, pathPose, racing, profile, dt);
+    opponent.car.root.position.copy(opponent.position);
+    opponent.car.root.rotation.set(0, opponent.heading, 0);
+    opponent.car.body.rotation.z = -opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.18;
+    opponent.car.body.rotation.x = opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.035;
+    opponent.wheelSpin -= opponent.speed * dt * 1.25;
+    for (const wheel of Object.values(opponent.car.wheels)) {
+      if (!wheel) continue;
+      wheel.rotation.x = opponent.wheelSpin;
+    }
+    if (opponent.car.wheels.frontLeft) opponent.car.wheels.frontLeft.rotation.y = opponent.steer;
+    if (opponent.car.wheels.frontRight) opponent.car.wheels.frontRight.rotation.y = opponent.steer;
+    for (const mesh of opponent.car.lights?.brakeLights ?? []) {
+      mesh.material.emissiveIntensity = opponent.brake > 0.2 ? 1.2 : 0.2;
+      mesh.scale.y = opponent.brake > 0.2 ? 1.14 : 1;
+    }
+  }
+}
+
+function getNearestAiSampleIndex(position, samples, startIndex = 0) {
+  let bestIndex = startIndex;
+  let bestDistance = Infinity;
+  const searchRadius = 70;
+  for (let offset = -searchRadius; offset <= searchRadius; offset += 1) {
+    const index = (startIndex + offset + samples.length) % samples.length;
+    const dx = position.x - samples[index].x;
+    const dz = position.z - samples[index].z;
+    const distance = dx * dx + dz * dz;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+
+function applyAiRecoveryAndAvoidance(opponent, targetPose, racing, surface) {
+  const desiredHeading = Math.atan2(targetPose.position.x - opponent.position.x, targetPose.position.z - opponent.position.z);
+  const headingError = Math.abs(angleDifference(desiredHeading, opponent.heading));
+  if (headingError > 1.65 && opponent.speed > 20) {
+    const panic = THREE.MathUtils.smoothstep(headingError, 1.65, 2.75);
+    racing.brake = Math.max(racing.brake, panic * 0.35);
+    racing.throttle = Math.min(racing.throttle, headingError > 2.45 ? 0.45 : 0.72);
+    racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(18, 11, panic));
+  }
+
+  const recovering = opponent.recoveryTimer > 0 || surface.kind === "grass";
+  if (recovering) {
+    racing.brake = Math.max(racing.brake, opponent.speed > 13 ? 0.55 : 0.15);
+    racing.throttle = opponent.speed < 18 ? Math.max(racing.throttle, 0.68) : Math.min(racing.throttle, 0.35);
+    racing.targetSpeed = Math.min(racing.targetSpeed, 18);
+  }
+
+  const wallAvoidance = getAiWallAvoidance(opponent);
+  if (!wallAvoidance) return;
+  targetPose.position.addScaledVector(wallAvoidance.normal, wallAvoidance.intensity * 11);
+  racing.brake = Math.max(racing.brake, wallAvoidance.intensity * 0.85);
+  racing.throttle *= 1 - wallAvoidance.intensity * 0.65;
+  racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(18, 7, wallAvoidance.intensity));
+}
+
+function getAiWallAvoidance(opponent) {
+  if (!track.obstacles?.length) return null;
+  const forward = new THREE.Vector3(Math.sin(opponent.heading), 0, Math.cos(opponent.heading));
+  const probeDistance = THREE.MathUtils.clamp(opponent.speed * 0.72 + 8, 9, 30);
+  const probe = opponent.position.clone().addScaledVector(forward, probeDistance);
+  let best = null;
+  for (const obstacle of track.obstacles) {
+    if (obstacle.kind !== "wall") continue;
+    const closest = closestPointOnSegmentVector(probe, obstacle.a, obstacle.b);
+    const away = probe.clone().sub(closest);
+    const distance = away.length();
+    const dangerDistance = 4.6 + (obstacle.halfWidth ?? 0.45);
+    if (distance > dangerDistance) continue;
+    if (distance < 0.001) {
+      const wallDirection = obstacle.b.clone().sub(obstacle.a).normalize();
+      away.set(wallDirection.z, 0, -wallDirection.x);
+    } else {
+      away.multiplyScalar(1 / distance);
+    }
+    const intensity = THREE.MathUtils.clamp(1 - distance / dangerDistance, 0, 1);
+    if (!best || intensity > best.intensity) best = { normal: away, intensity };
+  }
+  return best;
+}
+
+function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
+  opponent.velocity ??= new THREE.Vector3();
+  const toTarget = targetPose.position.clone().sub(opponent.position);
+  const desiredHeading = Math.atan2(toTarget.x, toTarget.z);
+  const turnError = angleDifference(desiredHeading, opponent.heading);
+  const speed = opponent.velocity.length();
+  const aiLowSpeedSteer = profile.maxSteerLowSpeed * 1.22;
+  const aiHighSpeedSteer = profile.maxSteerHighSpeed * 1.38;
+  const maxSteer = THREE.MathUtils.lerp(
+    aiLowSpeedSteer,
+    aiHighSpeedSteer,
+    THREE.MathUtils.smoothstep(speed, 8, 52),
+  ) * THREE.MathUtils.lerp(1, 0.9, THREE.MathUtils.smoothstep(speed, 34, 70));
+  opponent.steer = THREE.MathUtils.damp(opponent.steer, THREE.MathUtils.clamp(turnError * 1.12, -maxSteer, maxSteer), 9.5, dt);
+
+  const forward = new THREE.Vector3(Math.sin(opponent.heading), 0, Math.cos(opponent.heading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  let forwardSpeed = opponent.velocity.dot(forward);
+  let lateralSpeed = opponent.velocity.dot(right);
+  const surface = track.sample(opponent.position.x, opponent.position.z);
+  const offTrackScale = surface.kind === "grass" ? 0.46 : surface.kind === "kerb" || surface.kind === "sausage" ? 0.74 : 1;
+  const steeringLoad = Math.abs(opponent.steer) / Math.max(maxSteer, 0.001);
+  const cornerAccelPenalty = 1 - racing.cornerSeverity * 0.35 - steeringLoad * 0.16;
+
+  if (opponent.throttle > 0) {
+    const powerFade = 1 - THREE.MathUtils.clamp(forwardSpeed / racing.maxSpeed, 0, 1);
+    forwardSpeed += profile.engineForce * 1.45 * offTrackScale * opponent.throttle * Math.max(0.5, cornerAccelPenalty) * (0.45 + powerFade * 0.55) * dt;
+  }
+  if (opponent.brake > 0) {
+    forwardSpeed = moveToward(forwardSpeed, 0, profile.brakeForce * 0.92 * opponent.brake * dt);
+  }
+
+  const grip = (surface.kind === "grass" ? profile.grassGrip : profile.baseGrip) * (1 + speed * speed * profile.downforce);
+  lateralSpeed = THREE.MathUtils.damp(lateralSpeed, 0, grip, dt);
+  forwardSpeed -= forwardSpeed * Math.abs(forwardSpeed) * 0.0034 * dt;
+  forwardSpeed = moveToward(forwardSpeed, 0, 0.55 * dt);
+  forwardSpeed = THREE.MathUtils.clamp(forwardSpeed, 0, racing.maxSpeed);
+
+  const yawTarget = forwardSpeed * Math.tan(opponent.steer) / Math.max(2.5, profile.wheelbase);
+  opponent.yawRate = THREE.MathUtils.damp(opponent.yawRate ?? 0, yawTarget, profile.yawResponse * 1.75, dt);
+  opponent.yawRate = THREE.MathUtils.damp(opponent.yawRate, 0, profile.yawDamping * 0.11, dt);
+  opponent.heading += opponent.yawRate * dt;
+
+  forward.set(Math.sin(opponent.heading), 0, Math.cos(opponent.heading));
+  right.set(forward.z, 0, -forward.x);
+  opponent.velocity.copy(forward).multiplyScalar(forwardSpeed).addScaledVector(right, lateralSpeed);
+  opponent.position.addScaledVector(opponent.velocity, dt);
+  opponent.position.y = track.groundY;
+  opponent.speed = Math.max(0, forwardSpeed);
+
+  const movingPoorly = opponent.speed < 1.4 && opponent.throttle > 0.45;
+  opponent.stuckTimer = movingPoorly ? (opponent.stuckTimer ?? 0) + dt : Math.max(0, (opponent.stuckTimer ?? 0) - dt * 2);
+  if (opponent.stuckTimer > 1.4) {
+    opponent.heading = desiredHeading;
+    opponent.yawRate = 0;
+    opponent.velocity.copy(new THREE.Vector3(Math.sin(opponent.heading), 0, Math.cos(opponent.heading))).multiplyScalar(3.2);
+    opponent.speed = 3.2;
+    opponent.stuckTimer = 0.35;
+  }
+}
+
+function getAiRacingLineOffset(progress, samples, opponent = null, currentIndex = null) {
+  const length = samples.length;
+  const index = Math.floor(((progress % length) + length) % length);
+  const width = track.widthProfile?.[index] ?? 7.2;
+  const usableWidth = Math.max(0, width - 3.25);
+  const currentHeading = getSampleHeading(samples, index);
+  const entryHeading = getSampleHeading(samples, index + 16);
+  const apexHeading = getSampleHeading(samples, index + 46);
+  const exitHeading = getSampleHeading(samples, index + 84);
+  const entryBend = angleDifference(entryHeading, currentHeading);
+  const apexBend = angleDifference(apexHeading, entryHeading);
+  const exitBend = angleDifference(exitHeading, apexHeading);
+  const bendTotal = Math.abs(entryBend) + Math.abs(apexBend) + Math.abs(exitBend);
+  const bendStrength = THREE.MathUtils.smoothstep(bendTotal, 0.12, 0.95);
+  if (bendStrength < 0.025) return (opponent?.lineBias ?? 0) * usableWidth * 0.18;
+
+  const bendDirection = Math.sign(entryBend + apexBend * 1.25 + exitBend * 0.55) || 1;
+  const phase = THREE.MathUtils.clamp(Math.abs(entryBend) / (bendTotal + 0.001), 0, 1);
+  const aggression = (opponent?.lineAggression ?? 1) * 0.48;
+  const bias = opponent?.lineBias ?? 0;
+  const entryOffset = -bendDirection * usableWidth * 0.46;
+  const apexOffset = bendDirection * usableWidth * 0.08;
+  const exitOffset = -bendDirection * usableWidth * 0.28;
+  const apexBlend = THREE.MathUtils.smoothstep(phase, 0.34, 0.94);
+  const exitBlend = THREE.MathUtils.smoothstep(Math.abs(exitBend), 0.02, 0.24);
+  const cornerOffset = THREE.MathUtils.lerp(entryOffset, apexOffset, apexBlend);
+  let lineOffset = THREE.MathUtils.lerp(cornerOffset, exitOffset, exitBlend * 0.52) * bendStrength * aggression;
+
+  if (currentIndex !== null && opponent?.position) {
+    const edgeState = getAiTrackEdgeState(opponent.position, samples, currentIndex);
+    const movingInside = Math.sign(lineOffset || bendDirection) === bendDirection;
+    if (edgeState && movingInside && Math.abs(edgeState.offset) > edgeState.halfWidth * 0.34 && Math.sign(edgeState.offset) === bendDirection) {
+      const edgePressure = THREE.MathUtils.smoothstep(Math.abs(edgeState.offset) / edgeState.halfWidth, 0.34, 0.72);
+      lineOffset = THREE.MathUtils.lerp(lineOffset, -bendDirection * usableWidth * 0.42, edgePressure);
+    }
+  }
+
+  return lineOffset + bias * usableWidth * 0.1;
+}
+
+function getAiTrackEdgeState(position, samples, index) {
+  const safeIndex = ((index % samples.length) + samples.length) % samples.length;
+  const previous = samples[(safeIndex - 1 + samples.length) % samples.length];
+  const next = samples[(safeIndex + 1) % samples.length];
+  const tangent = next.clone().sub(previous).setY(0).normalize();
+  const normal = new THREE.Vector3(tangent.z, 0, -tangent.x);
+  const center = samples[safeIndex];
+  return {
+    offset: position.clone().sub(center).dot(normal),
+    halfWidth: track.widthProfile?.[safeIndex] ?? 7.2,
+  };
+}
+
+function getAiPathPose(progress, samples, laneOffset = 0) {
+  const length = samples.length;
+  const wrapped = ((progress % length) + length) % length;
+  const lowerIndex = Math.floor(wrapped);
+  const upperIndex = (lowerIndex + 1) % length;
+  const blend = wrapped - lowerIndex;
+  const position = samples[lowerIndex].clone().lerp(samples[upperIndex], blend);
+  const width = THREE.MathUtils.lerp(
+    track.widthProfile?.[lowerIndex] ?? 7.2,
+    track.widthProfile?.[upperIndex] ?? track.widthProfile?.[lowerIndex] ?? 7.2,
+    blend,
+  );
+  const previous = samples[(lowerIndex - 1 + length) % length];
+  const next = samples[(lowerIndex + 2) % length];
+  const tangent = next.clone().sub(previous).setY(0).normalize();
+  const normal = new THREE.Vector3(tangent.z, 0, -tangent.x);
+  position.addScaledVector(normal, THREE.MathUtils.clamp(laneOffset, -width + 3.05, width - 3.05));
+  position.y = track.groundY;
+  return {
+    position,
+    heading: Math.atan2(tangent.x, tangent.z),
+    center: samples[lowerIndex].clone().lerp(samples[upperIndex], blend),
+    normal,
+    width,
+  };
+}
+
+function getAiRacingIntent(opponent, nearestIndex, samples, profile) {
+  const speed = opponent.speed;
+  const pace = opponent.pace ?? 0.72;
+  const maxSpeed = profile.maxForwardSpeed * pace;
+  const closeLookahead = Math.round(THREE.MathUtils.clamp(speed * 0.42 + 8, 14, 38));
+  const farLookahead = Math.round(THREE.MathUtils.clamp(speed * 1.35 + 30, 44, 116));
+  const middleLookahead = Math.round((closeLookahead + farLookahead) * 0.5);
+  const cornerSeverity = getAiUpcomingCornerSeverity(nearestIndex, samples, [closeLookahead, middleLookahead, farLookahead]);
+  const cornerSpeed = THREE.MathUtils.lerp(maxSpeed, Math.max(16, maxSpeed * 0.5), cornerSeverity);
+  const desiredSpeed = cornerSeverity < 0.42 ? maxSpeed : Math.min(maxSpeed, cornerSpeed);
+  const overspeed = speed - desiredSpeed;
+  const brakeWindow = THREE.MathUtils.smoothstep(cornerSeverity, 0.36, 0.78);
+  const brakingNeed = overspeed > 1.2
+    ? THREE.MathUtils.clamp((overspeed / Math.max(4.6, profile.brakeForce * 0.24)) * brakeWindow, 0, 1)
+    : 0;
+  const brake = brakingNeed > 0.12 ? THREE.MathUtils.smoothstep(brakingNeed, 0.1, 0.62) : 0;
+  const throttle = brake > 0.08
+    ? 0
+    : cornerSeverity < 0.5
+      ? 1
+      : THREE.MathUtils.clamp((desiredSpeed - speed) / 4.8, 0.55, 1);
+  const speedLookahead = THREE.MathUtils.lerp(closeLookahead, farLookahead, THREE.MathUtils.clamp(speed / Math.max(maxSpeed, 1), 0, 1));
+  const cornerLookaheadScale = THREE.MathUtils.lerp(1, 0.46, THREE.MathUtils.smoothstep(cornerSeverity, 0.24, 0.82));
+  return {
+    lookahead: Math.round(THREE.MathUtils.clamp(speedLookahead * cornerLookaheadScale, 10, farLookahead)),
+    targetSpeed: desiredSpeed,
+    maxSpeed,
+    cornerSeverity,
+    throttle,
+    brake,
+  };
+}
+
+function getAiUpcomingCornerSeverity(startIndex, samples, lookaheads) {
+  let severity = 0;
+  const baseHeading = getSampleHeading(samples, startIndex);
+  for (const lookahead of lookaheads) {
+    const targetHeading = getSampleHeading(samples, startIndex + lookahead);
+    const bend = Math.abs(angleDifference(targetHeading, baseHeading));
+    const bendRate = bend / Math.max(lookahead, 1);
+    const localSharpness = getAiLocalCornerSharpness(startIndex, samples, lookahead);
+    const rateSeverity = THREE.MathUtils.smoothstep(Math.max(bendRate, localSharpness), 0.006, 0.034);
+    const bendSeverity = THREE.MathUtils.smoothstep(bend, 0.16, 0.9);
+    severity = Math.max(severity, Math.max(rateSeverity * 0.9, Math.min(rateSeverity, bendSeverity)));
+  }
+  return severity;
+}
+
+function getAiLocalCornerSharpness(startIndex, samples, lookahead) {
+  const window = Math.max(8, Math.min(24, Math.round(lookahead * 0.28)));
+  const step = Math.max(4, Math.round(window * 0.5));
+  let sharpness = 0;
+  for (let offset = step; offset <= lookahead; offset += step) {
+    const before = getSampleHeading(samples, startIndex + offset - step);
+    const after = getSampleHeading(samples, startIndex + offset + step);
+    sharpness = Math.max(sharpness, Math.abs(angleDifference(after, before)) / Math.max(step * 2, 1));
+  }
+  return sharpness;
+}
+
+function keepAiTargetOnTrack(opponent, pathPose, samples, targetProgress, racing) {
+  if (!pathPose?.center || !pathPose?.normal) return;
+  const unsafe = getAiTargetUnsafeAmount(opponent.position, pathPose.position);
+  if (unsafe <= 0) return;
+
+  const targetIndex = Math.floor(((targetProgress % samples.length) + samples.length) % samples.length);
+  const currentHeading = getSampleHeading(samples, targetIndex);
+  const futureHeading = getSampleHeading(samples, targetIndex + Math.max(10, Math.round((racing?.lookahead ?? 20) * 0.45)));
+  const bendDirection = Math.sign(angleDifference(futureHeading, currentHeading)) || Math.sign(pathPose.position.clone().sub(pathPose.center).dot(pathPose.normal)) || 1;
+  const currentOffset = pathPose.position.clone().sub(pathPose.center).dot(pathPose.normal);
+  const saferOffset = -bendDirection * Math.max(0, pathPose.width - 3.8) * 0.38;
+  const centeredOffset = THREE.MathUtils.lerp(currentOffset, saferOffset, THREE.MathUtils.clamp(unsafe * 0.82, 0, 1));
+  pathPose.position.copy(pathPose.center).addScaledVector(pathPose.normal, centeredOffset);
+  pathPose.position.y = track.groundY;
+  if (racing) {
+    racing.throttle = Math.min(racing.throttle, THREE.MathUtils.lerp(0.82, 0.45, unsafe));
+    racing.brake = Math.max(racing.brake, THREE.MathUtils.lerp(0.05, 0.28, unsafe));
+    racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(racing.maxSpeed * 0.78, 16, unsafe));
+  }
+}
+
+function getAiTargetUnsafeAmount(from, to) {
+  const checks = 6;
+  let unsafe = 0;
+  for (let i = 1; i <= checks; i += 1) {
+    const blend = i / checks;
+    const x = THREE.MathUtils.lerp(from.x, to.x, blend);
+    const z = THREE.MathUtils.lerp(from.z, to.z, blend);
+    const surface = track.sample(x, z);
+    if (surface.kind === "grass") unsafe += blend;
+  }
+  return THREE.MathUtils.clamp(unsafe / 2.4, 0, 1);
+}
+
+function getSampleHeading(samples, index) {
+  const safeIndex = ((index % samples.length) + samples.length) % samples.length;
+  const previous = samples[(safeIndex - 1 + samples.length) % samples.length];
+  const next = samples[(safeIndex + 1) % samples.length];
+  return Math.atan2(next.x - previous.x, next.z - previous.z);
+}
+
 function resetCar({ keepTimeTrialLaps = false } = {}) {
-  const spawn = selectedGameMode === "time-trial" && track.timeTrialStart ? track.timeTrialStart : track.start;
+  const gridPose = selectedGameMode === "quick-race" ? getQuickRaceGridPose(selectedGridPosition) : null;
+  const spawn = gridPose
+    ? { x: gridPose.position.x, z: gridPose.position.z, heading: gridPose.heading }
+    : selectedGameMode === "time-trial" && track.timeTrialStart
+      ? track.timeTrialStart
+      : track.start;
   carState.position.set(spawn.x, track.groundY, spawn.z);
   carState.velocity.set(0, 0, 0);
   carState.heading = spawn.heading;
@@ -7240,7 +8015,17 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
   carState.kerbKickPitch = 0;
   carState.kerbKickRollTarget = 0;
   carState.kerbKickPitchTarget = 0;
+  carState.boostActive = false;
+  carState.nitrousFlameScale = 0;
   carState.headlightsOn = shouldDefaultHeadlightsOn();
+  car.root.position.copy(carState.position);
+  car.root.rotation.set(0, carState.heading, 0);
+  car.body.rotation.set(0, 0, 0);
+  for (const wheel of Object.values(car.wheels)) {
+    if (wheel) wheel.rotation.x = carState.wheelSpin;
+  }
+  if (car.wheels.frontLeft) car.wheels.frontLeft.rotation.y = carState.steer;
+  if (car.wheels.frontRight) car.wheels.frontRight.rotation.y = carState.steer;
   updateErsHud();
   updateRevMeter();
   cameraPosition
@@ -7248,6 +8033,7 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
     .add(new THREE.Vector3(-8 * Math.sin(carState.heading), 5.2, -8 * Math.cos(carState.heading)));
   cameraTarget.copy(carState.position);
   updateCarLights(false, false);
+  resetAiOpponentsToGrid();
   if (selectedGameMode === "time-trial") resetTimeTrialState({ clearLaps: !keepTimeTrialLaps });
   else updateTimeTrialHud();
 }
