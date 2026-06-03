@@ -191,6 +191,21 @@
             <button class="start-button" type="button" data-start-race>Start</button>
           </div>
 
+          <div class="menu-step is-hidden" data-menu-step="time-trial-setup">
+            <button class="back-button" type="button" data-menu-back="stock">Back</button>
+            <div class="selection-grid">
+              <button id="time-trial-standard" class="selection-card is-selected" type="button">
+                <span>Time Trial</span>
+                <strong>Normal Run</strong>
+              </button>
+              <button id="time-trial-record-line" class="selection-card" type="button">
+                <span>AI Training</span>
+                <strong>Record Driving Line</strong>
+              </button>
+            </div>
+            <button id="time-trial-setup-start" class="start-button" type="button">Start Time Trial</button>
+          </div>
+
           <div class="menu-step is-hidden" data-menu-step="jeep">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
@@ -464,6 +479,11 @@
       <h2>Lap Times</h2>
       <ol id="time-trial-laps"></ol>
     </section>
+    <section id="driving-line-recorder" class="driving-line-recorder" hidden aria-label="Driving line recorder">
+      <h2>Driving Line Recorder</h2>
+      <p id="driving-line-status">Cross the start line to begin recording.</p>
+      <button id="driving-line-export" type="button">Export JSON</button>
+    </section>
     <div id="rev-meter" class="rev-meter" hidden>
       <strong id="manual-gear">1</strong>
       <span>Revs</span>
@@ -473,6 +493,11 @@
     </div>
     <button id="back-to-editor" class="back-to-editor" type="button" hidden>Back to Track Editor</button>
     <div id="pause-badge" class="pause-badge" hidden>Paused</div>
+    <section id="ai-debug-panel" class="ai-debug-panel" hidden aria-label="AI tuning status">
+      <strong>AI Tuning</strong>
+      <span id="ai-debug-status">Waiting for lap data</span>
+      <small id="ai-debug-detail">Clean laps: 0 | Avg mph: --</small>
+    </section>
     <div class="controls">
       <span>W / Up: throttle</span>
       <span>S / Down: brake</span>

@@ -1278,7 +1278,8 @@ h1 {
 .time-trial-timer[hidden],
 .time-trial-message[hidden],
 .race-countdown[hidden],
-.time-trial-results[hidden] {
+.time-trial-results[hidden],
+.driving-line-recorder[hidden] {
   display: none;
 }
 
@@ -1490,6 +1491,62 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.driving-line-recorder {
+  position: fixed;
+  right: 18px;
+  top: 104px;
+  z-index: 3;
+  width: 260px;
+  padding: 12px;
+  border: 1px solid rgba(92, 179, 255, 0.38);
+  border-radius: 7px;
+  background: rgba(8, 12, 16, 0.68);
+  color: rgba(246, 242, 232, 0.92);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.driving-line-recorder h2 {
+  margin: 0 0 8px;
+  color: #7fc7ff;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.driving-line-recorder p {
+  margin: 0 0 10px;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.driving-line-recorder button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid rgba(127, 199, 255, 0.64);
+  border-radius: 6px;
+  background: rgba(27, 101, 162, 0.76);
+  color: #f6f2e8;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.driving-line-recorder button:hover {
+  background: rgba(43, 128, 198, 0.86);
+}
+
+.driving-line-recorder button:disabled {
+  border-color: rgba(246, 242, 232, 0.16);
+  background: rgba(246, 242, 232, 0.12);
+  color: rgba(246, 242, 232, 0.42);
+  cursor: not-allowed;
+}
+
 .readouts span,
 .controls span {
   min-width: 62px;
@@ -1520,6 +1577,64 @@ h1 {
   text-transform: uppercase;
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+
+.ai-debug-panel[hidden] {
+  display: none;
+}
+
+.ai-debug-panel {
+  position: fixed;
+  top: 86px;
+  right: 18px;
+  z-index: 3;
+  display: grid;
+  gap: 5px;
+  width: 250px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(8, 10, 8, 0.58);
+  color: #f6f2e8;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.ai-debug-panel strong {
+  color: #ffcf4a;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.ai-debug-panel span {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.ai-debug-panel small {
+  color: rgba(246, 242, 232, 0.76);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-debug-panel.is-ready {
+  border-color: rgba(94, 255, 160, 0.5);
+}
+
+.ai-debug-panel.is-ready strong,
+.ai-debug-panel.is-ready span {
+  color: #5effa0;
+}
+
+.ai-debug-panel.is-warning {
+  border-color: rgba(255, 207, 74, 0.52);
+}
+
+.ai-debug-panel.is-warning span {
+  color: #ffcf4a;
 }
 
 .controls {
