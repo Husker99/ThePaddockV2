@@ -7780,6 +7780,8 @@ function createCyborgOpponentState(gridPose, opponentIndex = 0) {
     targetProgress: startProgress,
     laneOffset: laneOffsets[opponentIndex % laneOffsets.length] ?? 0,
     smoothedLaneOffset: 0,
+    mergeTimer: 4.5,
+    headingBias: 0,
     lapTime: 0,
     lapDistance: 0,
     lastWrapped: false,
@@ -7860,7 +7862,7 @@ function getWrappedDistanceDelta(progress, reference, totalDistance) {
   return delta;
 }
 
-function getCyborgTrackTarget(targetPosition, carPosition, startIndex = 0) {
+function getCyborgTrackTarget(targetPosition, carPosition, startIndex = 0, learnedHeading = null) {
   const targetIndex = getNearestAiSampleIndex(targetPosition, track.samples, startIndex);
   const targetTrack = getAiTrackEdgeState(targetPosition, track.samples, targetIndex);
   const laneOffset = targetPosition.clone().sub(targetTrack.center).dot(targetTrack.normal);
@@ -7868,11 +7870,13 @@ function getCyborgTrackTarget(targetPosition, carPosition, startIndex = 0) {
   return {
     position: targetPosition.clone(),
     heading: targetTrack.heading,
+    learnedHeading,
     currentTrack: getAiTrackEdgeState(carPosition, track.samples, currentIndex),
     laneOffset,
-    pointBlendOverride: 0.46,
-    steerGainOverride: 0.78,
-    steerDampOverride: 5.6,
+    learnedHeadingBlend: 0.985,
+    pointBlendOverride: 0.005,
+    steerGainOverride: 0.52,
+    steerDampOverride: 3,
   };
 }
 
@@ -8160,22 +8164,24 @@ function updateCyborgAiOpponent(opponent, dt) {
   const learnedTrack = getAiTrackEdgeState(learnedPose.position, track.samples, opponent.sampleIndex ?? 0);
   const learnedLaneOffset = learnedPose.position.clone().sub(learnedTrack.center).dot(learnedTrack.normal);
   const laneError = learnedLaneOffset - currentTrack.offset;
-  const laneDeadzone = 0.9;
-  const correctionLaneOffset = Math.abs(laneError) <= laneDeadzone
-    ? currentTrack.offset
-    : currentTrack.offset + Math.sign(laneError) * (Math.abs(laneError) - laneDeadzone) * 0.42;
-  const maxLaneShift = THREE.MathUtils.lerp(1.8, 3.8, THREE.MathUtils.smoothstep(opponent.speed, 12, 46)) * dt;
-  cyborg.smoothedLaneOffset = THREE.MathUtils.clamp(
-    THREE.MathUtils.damp(cyborg.smoothedLaneOffset ?? currentTrack.offset, correctionLaneOffset, 2.2, dt),
-    (cyborg.smoothedLaneOffset ?? currentTrack.offset) - maxLaneShift,
-    (cyborg.smoothedLaneOffset ?? currentTrack.offset) + maxLaneShift,
-  );
-  const lookaheadDistance = THREE.MathUtils.clamp(opponent.speed * 0.72 + 11, 16, 42);
-  cyborg.targetProgress = cyborg.progress + lookaheadDistance;
+  const laneDeadzone = 0.1;
+  const laneCorrection = Math.abs(laneError) <= laneDeadzone
+    ? 0
+    : Math.sign(laneError) * Math.min(Math.abs(laneError) - laneDeadzone, 7);
+  const maxHeadingBias = 0.16;
+  const laneHeadingBias = THREE.MathUtils.clamp(laneCorrection * 0.024, -maxHeadingBias, maxHeadingBias);
+  cyborg.headingBias = THREE.MathUtils.damp(cyborg.headingBias ?? 0, laneHeadingBias, 2.2, dt);
+  const speedLookaheadDistance = THREE.MathUtils.clamp(opponent.speed * 0.82 + 18, 24, 56);
+  cyborg.targetProgress = cyborg.progress + speedLookaheadDistance;
   const lookPose = getCyborgLinePose(line, cyborg.targetProgress, cyborg.laneOffset);
-  const targetTrack = getAiTrackEdgeState(lookPose.position, track.samples, opponent.sampleIndex ?? 0);
-  const targetPosition = targetTrack.center.clone().addScaledVector(targetTrack.normal, cyborg.smoothedLaneOffset);
-  const trackTarget = getCyborgTrackTarget(targetPosition, opponent.position, opponent.sampleIndex ?? 0);
+  const headingLookaheadDistance = speedLookaheadDistance * 0.125;
+  const headingPose = getCyborgLinePose(line, cyborg.progress + headingLookaheadDistance, cyborg.laneOffset);
+  const learnedTargetHeading = headingPose.heading + (cyborg.headingBias ?? 0);
+  const steeringReferenceDistance = THREE.MathUtils.clamp(opponent.speed * 0.08 + 4, 4, 8);
+  const forwardTarget = opponent.position
+    .clone()
+    .add(new THREE.Vector3(Math.sin(learnedTargetHeading), 0, Math.cos(learnedTargetHeading)).multiplyScalar(steeringReferenceDistance));
+  const trackTarget = getCyborgTrackTarget(forwardTarget, opponent.position, opponent.sampleIndex ?? 0, learnedTargetHeading);
   const targetSpeed = Math.max(9, lookPose.speed * (opponent.pace ?? 1));
   const speedError = opponent.speed - targetSpeed;
   const learnedBrake = Math.max(lookPose.brake, learnedPose.brake);
@@ -8188,17 +8194,20 @@ function updateCyborgAiOpponent(opponent, dt) {
     ? 0
     : THREE.MathUtils.clamp(Math.max(lookPose.throttle, (targetSpeed - opponent.speed) / 7), 0.22, 1);
   const racing = {
-    lookahead: metersToAiSamples(lookaheadDistance),
+    lookahead: metersToAiSamples(speedLookaheadDistance),
     targetSpeed,
     maxSpeed: profile.maxForwardSpeed * Math.max(0.9, opponent.pace ?? 1),
-    cornerSeverity: THREE.MathUtils.clamp(Math.abs(angleDifference(lookPose.heading, learnedPose.heading)) / 0.55, 0, 1),
+    cornerSeverity: THREE.MathUtils.clamp(Math.abs(angleDifference(headingPose.heading, learnedPose.heading)) / 0.55, 0, 1),
     throttle,
     brake,
+    allowOffTrack: true,
+    ignoreWalls: true,
+    ignoreEdgePressure: true,
   };
   opponent.throttle = THREE.MathUtils.damp(opponent.throttle, racing.throttle, 6.4, dt);
   opponent.brake = THREE.MathUtils.damp(opponent.brake, racing.brake, 8.2, dt);
   const currentSurface = track.sample(opponent.position.x, opponent.position.z);
-  applyAiRecoveryAndAvoidance(opponent, trackTarget, racing, currentSurface);
+  if (!racing.ignoreWalls) applyAiRecoveryAndAvoidance(opponent, trackTarget, racing, currentSurface);
   updateAiDrivenCar(opponent, trackTarget, racing, profile, dt);
   const nearestIndex = getNearestAiSampleIndex(opponent.position, track.samples, opponent.sampleIndex ?? 0);
   opponent.sampleIndex = nearestIndex;
@@ -8338,7 +8347,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   const lateralError = currentTrack
     ? currentTrack.offset - (targetPose.laneOffset ?? 0)
     : 0;
-  const edgePressure = currentTrack
+  const edgePressure = currentTrack && !racing.ignoreEdgePressure
     ? THREE.MathUtils.smoothstep(Math.abs(currentTrack.offset), currentTrack.halfWidth - AI_HALF_WIDTH - 1.35, currentTrack.halfWidth - AI_HALF_WIDTH - 0.1)
     : 0;
   if (currentTrack) {
@@ -8352,7 +8361,10 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
       ? THREE.MathUtils.lerp(0.2, 0.08, edgePressure)
       : 0.72
   );
-  const desiredHeading = angleLerp(correctionHeading, pointHeading, pointBlend);
+  const pointGuidedHeading = angleLerp(correctionHeading, pointHeading, pointBlend);
+  const desiredHeading = Number.isFinite(targetPose.learnedHeading)
+    ? angleLerp(pointGuidedHeading, targetPose.learnedHeading, targetPose.learnedHeadingBlend ?? 0.65)
+    : pointGuidedHeading;
   const turnError = angleDifference(desiredHeading, opponent.heading);
   const speed = opponent.velocity.length();
   const aiLowSpeedSteer = profile.maxSteerLowSpeed * 1.22;
@@ -8409,7 +8421,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   opponent.velocity.copy(forward).multiplyScalar(forwardSpeed).addScaledVector(right, lateralSpeed);
   const predictedPosition = opponent.position.clone().addScaledVector(opponent.velocity, dt);
   const predictedWheelGrassCount = getAiWheelGrassCountAt(opponent, predictedPosition, opponent.heading);
-  if (predictedWheelGrassCount > 0) {
+  if (!racing.allowOffTrack && predictedWheelGrassCount > 0) {
     const predictedRisk = predictedWheelGrassCount / 4;
     opponent.velocity.multiplyScalar(THREE.MathUtils.lerp(0.78, 0.42, predictedRisk));
     opponent.yawRate *= THREE.MathUtils.lerp(0.82, 0.45, predictedRisk);
@@ -8418,9 +8430,11 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
     opponent.debug.predictiveAvoidanceFrames += 1;
   }
   opponent.position.addScaledVector(opponent.velocity, dt);
-  keepAiCarInsideTrack(opponent, track.samples);
-  keepAiWheelsInsideTrack(opponent);
-  resolveAiWallSafety(opponent);
+  if (!racing.allowOffTrack) {
+    keepAiCarInsideTrack(opponent, track.samples);
+    keepAiWheelsInsideTrack(opponent);
+  }
+  if (!racing.ignoreWalls) resolveAiWallSafety(opponent);
   const wheelGrassCount = getAiWheelGrassCount(opponent);
   if (wheelGrassCount > 0) {
     opponent.debug.grassFrames += 1;
