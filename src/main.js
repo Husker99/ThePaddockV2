@@ -7,6 +7,7 @@ import yueRingTrack from "./tracks/yue-ring.json";
 import kataraStockCyborgTraining from "./ai-training/katara-speedway-stock-cyborg-training.json";
 import kataraFormulaCyborgTraining from "./ai-training/katara-speedway-formula-cyborg-training.json";
 import kyoshiStockCyborgTraining from "./ai-training/kyoshi-circuit-stock-cyborg-training.json";
+import kyoshiLmpCyborgTraining from "./ai-training/kyoshi-circuit-lmp-cyborg-training.json";
 import makoStockCyborgTraining from "./ai-training/mako-city-stock-cyborg-training.json";
 import yueStockCyborgTraining from "./ai-training/yue-ring-stock-cyborg-training.json";
 
@@ -92,6 +93,7 @@ const timeTrialTimerEl = document.querySelector("#time-trial-timer");
 const timeTrialTimerValueEl = document.querySelector("#time-trial-timer-value");
 const timeTrialSegmentEls = [...document.querySelectorAll("#time-trial-segments span")];
 const timeTrialMessageEl = document.querySelector("#time-trial-message");
+const timeTrialLocalBestEl = document.querySelector("#time-trial-local-best");
 const raceCountdownEl = document.querySelector("#race-countdown");
 const quickRaceHudEl = document.querySelector("#quick-race-hud");
 const quickRacePositionEl = document.querySelector("#quick-race-position");
@@ -463,6 +465,9 @@ const timeTrialState = {
   currentTime: 0,
   laps: [],
   latestLapId: 0,
+  localBest: null,
+  currentGhostSamples: [],
+  ghostSampleTimer: 0,
   lastLineSide: null,
   lastSegmentSides: [null, null],
   currentSegmentIndex: 0,
@@ -487,6 +492,11 @@ const drivingLineRecorder = {
   lapStartTime: 0,
   currentLapClean: true,
   lastExportName: "",
+};
+const timeTrialGhost = {
+  car: null,
+  run: null,
+  active: false,
 };
 const raceCountdownState = {
   active: false,
@@ -1271,6 +1281,8 @@ const kataraFormulaCyborgLines = createCyborgRacingLines(kataraFormulaCyborgTrai
 const kataraFormulaCyborgLine = kataraFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kyoshiStockCyborgLines = createCyborgRacingLines(kyoshiStockCyborgTraining);
 const kyoshiStockCyborgLine = kyoshiStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const kyoshiLmpCyborgLines = createCyborgRacingLines(kyoshiLmpCyborgTraining);
+const kyoshiLmpCyborgLine = kyoshiLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const makoStockCyborgLines = createCyborgRacingLines(makoStockCyborgTraining);
 const makoStockCyborgLine = makoStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const yueStockCyborgLines = createCyborgRacingLines(yueStockCyborgTraining);
@@ -1284,6 +1296,9 @@ const cyborgLineBanksByClass = {
   },
   formula: {
     [KATARA_TRACK_ID]: { lines: kataraFormulaCyborgLines, fallback: kataraFormulaCyborgLine },
+  },
+  lmp: {
+    [KYOSHI_TRACK_ID]: { lines: kyoshiLmpCyborgLines, fallback: kyoshiLmpCyborgLine },
   },
 };
 let aiRacingLineDebug = null;
@@ -1309,6 +1324,7 @@ function update() {
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateCar(dt);
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateAiOpponents(dt);
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) resolveRaceCarCollisions(dt);
+  updateTimeTrialGhost(dt);
   updateSlipstreamDebugCones();
   updateQuickRaceState(dt, raceStartBlocked);
   if (!gameStarted || isPaused || isMenuOpen()) updateRevMeter();
@@ -1771,6 +1787,12 @@ function updateCar(dt) {
     lateralSpeed = carState.velocity.dot(scratchRight);
   }
   updateTimeTrial(dt, wheelSurface);
+  recordTimeTrialGhostSample(dt, {
+    throttle,
+    brake,
+    steerInput,
+    boostActive,
+  });
   recordDrivingLineSample(dt, {
     throttle,
     brake,
@@ -2144,6 +2166,7 @@ function updateTimeTrial(dt, wheelSurface) {
     timeTrialState.running = true;
     timeTrialState.currentTime = 0;
     resetTimeTrialSegments();
+    startTimeTrialGhostLap();
     timeTrialState.invalidated = false;
     startDrivingLineRecordingLap();
     carState.ers = 100;
@@ -2151,6 +2174,31 @@ function updateTimeTrial(dt, wheelSurface) {
   }
 
   timeTrialState.lastLineSide = currentSide;
+}
+
+function startTimeTrialGhostLap() {
+  timeTrialState.currentGhostSamples = [];
+  timeTrialState.ghostSampleTimer = 0;
+}
+
+function recordTimeTrialGhostSample(dt, input) {
+  if (selectedGameMode !== "time-trial" || !timeTrialState.running || !track.samples?.length) return;
+  timeTrialState.ghostSampleTimer += dt;
+  if (timeTrialState.ghostSampleTimer < 0.05 && timeTrialState.currentGhostSamples.length > 0) return;
+  timeTrialState.ghostSampleTimer = 0;
+  timeTrialState.currentGhostSamples.push({
+    t: roundDrivingLineNumber(timeTrialState.currentTime),
+    x: roundDrivingLineNumber(carState.position.x),
+    y: roundDrivingLineNumber(carState.position.y),
+    z: roundDrivingLineNumber(carState.position.z),
+    heading: roundDrivingLineNumber(carState.heading),
+    speed: roundDrivingLineNumber(carState.velocity.length()),
+    throttle: input.throttle,
+    brake: input.brake,
+    steer: input.steerInput,
+    boost: input.boostActive ? 1 : 0,
+    ers: roundDrivingLineNumber(carState.ers),
+  });
 }
 
 function updateTimeTrialSegments() {
@@ -2224,6 +2272,8 @@ function getTimeTrialLineSide(line, position) {
 function resetTimeTrialState({ clearLaps = true } = {}) {
   timeTrialState.running = false;
   timeTrialState.currentTime = 0;
+  timeTrialState.currentGhostSamples = [];
+  timeTrialState.ghostSampleTimer = 0;
   timeTrialState.invalidated = false;
   timeTrialState.wallPenaltyCooldown = 0;
   timeTrialState.wallPenaltyMessageTime = 0;
@@ -2232,8 +2282,8 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
-    timeTrialState.bestLapSegments = null;
-    timeTrialState.fastestSegments = null;
+    loadLocalTimeTrialBest();
+    refreshTimeTrialBestReferences();
   }
   timeTrialState.heldSegmentStatuses = [null, null, null];
   timeTrialState.segmentStatusHoldTime = 0;
@@ -2249,16 +2299,195 @@ function recordTimeTrialLap() {
   if (lapTime <= 0) return;
   recordDrivingLineLap(lapTime);
   timeTrialState.latestLapId += 1;
-  timeTrialState.laps.push({ id: timeTrialState.latestLapId, time: lapTime, segments: [...timeTrialState.currentSegments] });
+  const ghostSamples = timeTrialState.currentGhostSamples.map((sample) => ({ ...sample }));
+  timeTrialState.laps.push({ id: timeTrialState.latestLapId, time: lapTime, segments: [...timeTrialState.currentSegments], ghostSamples });
   timeTrialState.laps.sort((a, b) => a.time - b.time);
-  timeTrialState.bestLapSegments = timeTrialState.laps[0]?.segments ? [...timeTrialState.laps[0].segments] : null;
-  for (let i = 0; i < 3; i += 1) {
-    const segment = timeTrialState.currentSegments[i];
-    if (segment <= 0) continue;
-    if (!timeTrialState.fastestSegments) timeTrialState.fastestSegments = [Infinity, Infinity, Infinity];
-    timeTrialState.fastestSegments[i] = Math.min(timeTrialState.fastestSegments[i] || segment, segment);
-  }
+  maybeSaveLocalTimeTrialBest(lapTime, timeTrialState.currentSegments, ghostSamples);
+  refreshTimeTrialBestReferences();
   updateTimeTrialHud();
+}
+
+function refreshTimeTrialBestReferences() {
+  const candidates = [
+    ...(timeTrialState.localBest ? [{ time: timeTrialState.localBest.lapTime, segments: timeTrialState.localBest.segments }] : []),
+    ...timeTrialState.laps,
+  ].filter((lap) => Number.isFinite(lap.time ?? lap.lapTime) && Array.isArray(lap.segments));
+  candidates.sort((a, b) => (a.time ?? a.lapTime) - (b.time ?? b.lapTime));
+  timeTrialState.bestLapSegments = candidates[0]?.segments ? [...candidates[0].segments] : null;
+  const fastest = [Infinity, Infinity, Infinity];
+  for (const lap of candidates) {
+    for (let i = 0; i < 3; i += 1) {
+      const segment = lap.segments[i];
+      if (Number.isFinite(segment) && segment > 0) fastest[i] = Math.min(fastest[i], segment);
+    }
+  }
+  timeTrialState.fastestSegments = fastest.some(Number.isFinite) ? fastest : null;
+}
+
+function getTimeTrialStorageKey() {
+  const profile = getCarProfile();
+  const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
+  return [
+    "the-paddock",
+    "time-trial-best",
+    selectedTrack,
+    trackVersion,
+    profile.kind,
+    selectedCar,
+    track.environment ?? "grass",
+    track.timeOfDay ?? "day",
+  ].join(":");
+}
+
+function loadLocalTimeTrialBest() {
+  timeTrialState.localBest = null;
+  clearTimeTrialGhost();
+  try {
+    const raw = window.localStorage?.getItem(getTimeTrialStorageKey());
+    if (!raw) return;
+    const best = JSON.parse(raw);
+    if (!best || !Number.isFinite(best.lapTime) || !Array.isArray(best.segments)) return;
+    timeTrialState.localBest = best;
+    setTimeTrialGhostRun(best);
+  } catch {
+    timeTrialState.localBest = null;
+  }
+}
+
+function maybeSaveLocalTimeTrialBest(lapTime, segments, ghostSamples) {
+  if (!Number.isFinite(lapTime) || lapTime <= 0 || !Array.isArray(ghostSamples) || ghostSamples.length < 20) return;
+  const currentBest = timeTrialState.localBest;
+  if (currentBest?.lapTime && lapTime >= currentBest.lapTime) return;
+  const best = {
+    type: "the-paddock-local-time-trial-best",
+    version: 1,
+    createdAt: new Date().toISOString(),
+    track: {
+      id: selectedTrack,
+      name: getSelectedTrackLabel(),
+      version: trackDefinitions[selectedTrack]?.version ?? "local-v1",
+      environment: track.environment ?? "grass",
+      timeOfDay: track.timeOfDay ?? "day",
+    },
+    car: {
+      id: selectedCar,
+      name: getSelectedCarLabel(),
+      class: getCarProfile().kind,
+    },
+    lapTime: roundDrivingLineNumber(lapTime),
+    formattedLapTime: formatLapTime(lapTime),
+    segments: segments.map((segment) => roundDrivingLineNumber(segment)),
+    ghost: {
+      sampleRateHz: 20,
+      samples: ghostSamples.map((sample) => ({ ...sample })),
+    },
+  };
+  try {
+    window.localStorage?.setItem(getTimeTrialStorageKey(), JSON.stringify(best));
+  } catch {
+    return;
+  }
+  timeTrialState.localBest = best;
+  setTimeTrialGhostRun(best);
+}
+
+function clearTimeTrialGhost() {
+  if (timeTrialGhost.car?.root) scene.remove(timeTrialGhost.car.root);
+  timeTrialGhost.car = null;
+  timeTrialGhost.run = null;
+  timeTrialGhost.active = false;
+}
+
+function setTimeTrialGhostRun(best) {
+  clearTimeTrialGhost();
+  const samples = best?.ghost?.samples;
+  if (!Array.isArray(samples) || samples.length < 2) return;
+  const ghostCar = createSelectedCar(best.car?.id ?? selectedCar);
+  styleTimeTrialGhostCar(ghostCar);
+  ghostCar.root.visible = false;
+  scene.add(ghostCar.root);
+  timeTrialGhost.car = ghostCar;
+  timeTrialGhost.run = best;
+  timeTrialGhost.active = true;
+}
+
+function styleTimeTrialGhostCar(ghostCar) {
+  ghostCar.root.traverse((object) => {
+    if (object.isLight) {
+      object.visible = false;
+      object.intensity = 0;
+    }
+    if (!object.isMesh || !object.material) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const ghostMaterials = materials.map((material) => {
+      const clone = material.clone();
+      clone.transparent = true;
+      clone.opacity = 0.34;
+      clone.depthWrite = false;
+      if (clone.color) clone.color.lerp(new THREE.Color(0x7fc7ff), 0.52);
+      if (clone.emissive) {
+        clone.emissive.setHex(0x2c8fd8);
+        clone.emissiveIntensity = Math.max(clone.emissiveIntensity ?? 0, 0.16);
+      }
+      return clone;
+    });
+    object.material = Array.isArray(object.material) ? ghostMaterials : ghostMaterials[0];
+    object.castShadow = false;
+    object.receiveShadow = false;
+    object.renderOrder = 8;
+  });
+}
+
+function updateTimeTrialGhost(dt) {
+  if (!timeTrialGhost.active || !timeTrialGhost.car?.root || selectedGameMode !== "time-trial" || !gameStarted || isMenuOpen()) {
+    if (timeTrialGhost.car?.root) timeTrialGhost.car.root.visible = false;
+    return;
+  }
+  const samples = timeTrialGhost.run?.ghost?.samples ?? [];
+  if (!timeTrialState.running || samples.length < 2 || timeTrialState.currentTime <= 0.12) {
+    timeTrialGhost.car.root.visible = false;
+    return;
+  }
+  const pose = getTimeTrialGhostPose(samples, timeTrialState.currentTime);
+  if (!pose) {
+    timeTrialGhost.car.root.visible = false;
+    return;
+  }
+  timeTrialGhost.car.root.visible = true;
+  timeTrialGhost.car.root.position.set(pose.x, track.groundY + 0.08, pose.z);
+  timeTrialGhost.car.root.rotation.set(0, pose.heading, 0);
+  if (timeTrialGhost.car.wheels?.frontLeft) timeTrialGhost.car.wheels.frontLeft.rotation.y = pose.steer ?? 0;
+  if (timeTrialGhost.car.wheels?.frontRight) timeTrialGhost.car.wheels.frontRight.rotation.y = pose.steer ?? 0;
+  const spin = -(pose.distance ?? 0) * 1.35;
+  for (const wheel of timeTrialGhost.car.wheelMeshes ?? []) {
+    if (wheel) wheel.rotation.x = spin;
+  }
+  updateRearWing(dt, Boolean(pose.boost), timeTrialGhost.car);
+}
+
+function getTimeTrialGhostPose(samples, currentTime) {
+  if (currentTime > (samples[samples.length - 1]?.t ?? 0) + 0.18) return null;
+  let lowerIndex = 0;
+  for (let i = 0; i < samples.length - 1; i += 1) {
+    if (currentTime >= samples[i].t && currentTime <= samples[i + 1].t) {
+      lowerIndex = i;
+      break;
+    }
+  }
+  const lower = samples[lowerIndex];
+  const upper = samples[Math.min(samples.length - 1, lowerIndex + 1)];
+  const span = Math.max(0.001, upper.t - lower.t);
+  const blend = THREE.MathUtils.clamp((currentTime - lower.t) / span, 0, 1);
+  const x = THREE.MathUtils.lerp(lower.x, upper.x, blend);
+  const z = THREE.MathUtils.lerp(lower.z, upper.z, blend);
+  return {
+    x,
+    z,
+    heading: angleLerp(lower.heading, upper.heading, blend),
+    steer: THREE.MathUtils.lerp(lower.steer ?? 0, upper.steer ?? 0, blend),
+    boost: THREE.MathUtils.lerp(lower.boost ?? 0, upper.boost ?? 0, blend) > 0.45,
+    distance: (currentTime / Math.max(0.001, samples[samples.length - 1].t)) * (timeTrialGhost.run?.lapTime ?? 0) * 38,
+  };
 }
 
 function isDrivingLineRecordingAvailable() {
@@ -2429,6 +2658,12 @@ function updateTimeTrialHud() {
 
   if (timeTrialTimerValueEl) timeTrialTimerValueEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
   else timeTrialTimerEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
+  if (timeTrialLocalBestEl) {
+    const best = timeTrialState.localBest;
+    timeTrialLocalBestEl.innerHTML = best
+      ? `<span>My Best</span><strong>${formatLapTime(best.lapTime)}</strong><small>${formatSegmentSummary(best.segments)}</small>`
+      : `<span>My Best</span><strong>--</strong><small>Valid laps save here</small>`;
+  }
   const activeSegmentStatuses = timeTrialState.segmentStatuses.some(Boolean) || timeTrialState.segmentStatusHoldTime <= 0
     ? timeTrialState.segmentStatuses
     : timeTrialState.heldSegmentStatuses;
@@ -2452,10 +2687,20 @@ function updateTimeTrialHud() {
   for (const [index, lap] of timeTrialState.laps.entries()) {
     const row = document.createElement("li");
     row.className = lap.id === timeTrialState.latestLapId ? "is-latest" : "";
-    row.innerHTML = `<span>${index + 1}</span><strong>${formatLapTime(lap.time)}</strong>`;
+    row.innerHTML = `<span>${index + 1}</span><strong>${formatLapTime(lap.time)}</strong><small>${formatSegmentSummary(lap.segments)}</small>`;
     timeTrialLapsEl.appendChild(row);
   }
   updateDrivingLineRecorderHud();
+}
+
+function formatSegmentSummary(segments = []) {
+  if (!Array.isArray(segments) || segments.length < 3) return "S1 -- / S2 -- / S3 --";
+  return segments.map((segment, index) => `S${index + 1} ${formatSegmentTime(segment)}`).join(" / ");
+}
+
+function formatSegmentTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "--";
+  return `${seconds.toFixed(1)}s`;
 }
 
 function formatLapTime(seconds) {

@@ -1546,6 +1546,40 @@ h1 {
   text-transform: uppercase;
 }
 
+.time-trial-local-best {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 10px;
+  padding: 8px 9px;
+  border: 1px solid rgba(127, 199, 255, 0.3);
+  border-radius: 5px;
+  background: rgba(127, 199, 255, 0.1);
+  color: rgba(246, 242, 232, 0.86);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-trial-local-best span {
+  color: #7fc7ff;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.time-trial-local-best strong {
+  color: #f6f2e8;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.time-trial-local-best small,
+.time-trial-results li small {
+  color: rgba(246, 242, 232, 0.58);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
 .time-trial-results ol {
   display: grid;
   gap: 6px;
@@ -1555,10 +1589,9 @@ h1 {
 }
 
 .time-trial-results li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 3px 10px;
   padding: 7px 9px;
   border-radius: 5px;
   background: rgba(246, 242, 232, 0.08);
@@ -1575,13 +1608,20 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(255, 207, 74, 0.4);
 }
 
-.time-trial-results span {
+.time-trial-results li > span {
   color: rgba(246, 242, 232, 0.58);
+  grid-row: span 2;
 }
 
-.time-trial-results strong {
+.time-trial-results li > strong {
+  justify-self: end;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
+}
+
+.time-trial-results li small {
+  grid-column: 2;
+  justify-self: end;
 }
 
 .driving-line-recorder {
