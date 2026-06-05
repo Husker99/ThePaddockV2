@@ -9,6 +9,7 @@
   <body>
     <canvas id="game"></canvas>
     <main id="start-menu" class="start-menu">
+      <button id="driver-profile-button" class="driver-profile-button" type="button">Driver Profile</button>
       <section class="menu-shell">
         <div class="menu-panel">
           <div class="menu-header">
@@ -23,6 +24,24 @@
               <button id="quick-race-game" class="start-button" type="button">Quick Race</button>
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
             </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="driver-profile">
+            <button class="profile-main-menu-button" type="button" data-menu-back="intro">Main Menu</button>
+            <section class="driver-profile-card" aria-label="Driver profile">
+              <label>
+                <span>Driver</span>
+                <input id="driver-profile-name" type="text" value="Driver Name" maxlength="28" />
+              </label>
+              <label>
+                <span>Team</span>
+                <input id="driver-profile-team" type="text" value="Team Name" maxlength="32" />
+              </label>
+            </section>
+            <section class="driver-profile-records" aria-label="Saved time trial records">
+              <h2>My Best Time Trials</h2>
+              <ol id="driver-profile-records"></ol>
+            </section>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="editor-choice">
@@ -113,7 +132,11 @@
           <div class="menu-step is-hidden" data-menu-step="formula">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-car="ferraro">
+              <button class="selection-card is-selected" type="button" data-car="profile-team-formula">
+                <span>Formula</span>
+                <strong>My Team</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="ferraro">
                 <span>Formula</span>
                 <strong>Ferraro</strong>
               </button>
@@ -148,7 +171,11 @@
           <div class="menu-step is-hidden" data-menu-step="lmp">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-car="lmp">
+              <button class="selection-card is-selected" type="button" data-car="profile-team-lmp">
+                <span>Le Mans Prototype</span>
+                <strong>My Team</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="lmp">
                 <span>Le Mans Prototype</span>
                 <strong>Apex Tricolore</strong>
               </button>
@@ -171,7 +198,11 @@
           <div class="menu-step is-hidden" data-menu-step="stock">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-car="orange-stock">
+              <button class="selection-card is-selected" type="button" data-car="profile-team-stock">
+                <span>Stock Car</span>
+                <strong>My Team</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="orange-stock">
                 <span>Stock Car</span>
                 <strong>Sunset Motors</strong>
               </button>
@@ -209,7 +240,11 @@
           <div class="menu-step is-hidden" data-menu-step="jeep">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-car="dune-jeep">
+              <button class="selection-card is-selected" type="button" data-car="profile-team-jeep">
+                <span>Jeep</span>
+                <strong>My Team</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="dune-jeep">
                 <span>Jeep</span>
                 <strong>Dune Patrol</strong>
               </button>
@@ -232,7 +267,11 @@
           <div class="menu-step is-hidden" data-menu-step="corvette">
             <button class="back-button" type="button" data-menu-back="car-category">Back</button>
             <div class="selection-grid">
-              <button class="selection-card is-selected" type="button" data-car="vette-yellow">
+              <button class="selection-card is-selected" type="button" data-car="profile-team-corvette">
+                <span>Corvette</span>
+                <strong>My Team</strong>
+              </button>
+              <button class="selection-card" type="button" data-car="vette-yellow">
                 <span>Corvette</span>
                 <strong>Racing Yellow</strong>
               </button>
@@ -290,6 +329,17 @@
             <span>Selected Machine</span>
             <strong id="preview-title">Ferraro</strong>
           </div>
+          <section id="driver-profile-customizer" class="driver-profile-customizer is-hidden" aria-label="Team color scheme">
+            <h2>Team Colors</h2>
+            <label>
+              <span>Primary</span>
+              <input id="team-primary-color" type="color" value="#242833" />
+            </label>
+            <label>
+              <span>Accent</span>
+              <input id="team-accent-color" type="color" value="#f6f2e8" />
+            </label>
+          </section>
           <div class="showroom-visual intro-visual" data-showroom-visual="intro" aria-hidden="true">
             <div class="flag-pole"></div>
             <div class="checkered-flag">

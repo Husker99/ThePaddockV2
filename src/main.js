@@ -24,6 +24,13 @@ const playGameButton = document.querySelector("#play-game");
 const timeTrialGameButton = document.querySelector("#time-trial-game");
 const quickRaceGameButton = document.querySelector("#quick-race-game");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
+const driverProfileButton = document.querySelector("#driver-profile-button");
+const driverProfileNameInput = document.querySelector("#driver-profile-name");
+const driverProfileTeamInput = document.querySelector("#driver-profile-team");
+const driverProfileRecordsEl = document.querySelector("#driver-profile-records");
+const driverProfileCustomizerEl = document.querySelector("#driver-profile-customizer");
+const teamPrimaryColorInput = document.querySelector("#team-primary-color");
+const teamAccentColorInput = document.querySelector("#team-accent-color");
 const trackEditor = document.querySelector("#track-editor");
 const editorCanvas = document.querySelector("#track-editor-canvas");
 const editorStartButtons = [...document.querySelectorAll("[data-editor-start]")];
@@ -443,6 +450,7 @@ let timeTrialPaintStep = "stock";
 let selectedTimeTrialMode = "standard";
 let selectedCar = "ferraro";
 let selectedTrack = "katara-speedway";
+let driverProfile = loadDriverProfile();
 let cameraMode = "chase";
 let editorTool = "select";
 let selectedEditorNode = 0;
@@ -654,6 +662,11 @@ playGameButton.addEventListener("click", () => startGameModeSelection("drive"));
 timeTrialGameButton.addEventListener("click", () => startGameModeSelection("time-trial"));
 quickRaceGameButton?.addEventListener("click", () => startGameModeSelection("quick-race"));
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
+driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
+driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
+driverProfileTeamInput?.addEventListener("input", updateDriverProfileFromInputs);
+teamPrimaryColorInput?.addEventListener("input", updateDriverProfileFromInputs);
+teamAccentColorInput?.addEventListener("input", updateDriverProfileFromInputs);
 editorBackButton.addEventListener("click", closeTrackEditor);
 editorTestDriveButton.addEventListener("click", startEditorTestDrive);
 backToEditorButton.addEventListener("click", returnToTrackEditor);
@@ -822,6 +835,15 @@ const stockPaintSchemes = {
     glass: 0xb4d6ff,
   },
 };
+const PROFILE_TEAM_CAR_IDS = {
+  formula: "profile-team-formula",
+  lmp: "profile-team-lmp",
+  stock: "profile-team-stock",
+  jeep: "profile-team-jeep",
+  corvette: "profile-team-corvette",
+};
+carPaintSchemes[PROFILE_TEAM_CAR_IDS.formula] = getDriverProfileFormulaScheme(driverProfile);
+stockPaintSchemes[PROFILE_TEAM_CAR_IDS.stock] = getDriverProfileStockScheme(driverProfile);
 
 const lmpPaintSchemes = {
   lmp: {
@@ -849,6 +871,7 @@ const lmpPaintSchemes = {
     glass: 0xa3f2ff,
   },
 };
+lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp] = getDriverProfileLmpScheme(driverProfile);
 
 const jeepPaintSchemes = {
   "dune-jeep": {
@@ -884,6 +907,7 @@ const jeepPaintSchemes = {
     camo: false,
   },
 };
+jeepPaintSchemes[PROFILE_TEAM_CAR_IDS.jeep] = getDriverProfileJeepScheme(driverProfile);
 
 const corvettePaintSchemes = {
   "vette-yellow": {
@@ -919,6 +943,8 @@ const corvettePaintSchemes = {
     stripes: true,
   },
 };
+corvettePaintSchemes[PROFILE_TEAM_CAR_IDS.corvette] = getDriverProfileCorvetteScheme(driverProfile);
+updateProfileTeamLabels();
 
 const carProfiles = {
   ferraro: {
@@ -1050,18 +1076,23 @@ carProfiles.mersedeez = carProfiles.ferraro;
 carProfiles.alpeen = carProfiles.ferraro;
 carProfiles.red = carProfiles.ferraro;
 carProfiles.blue = carProfiles.ferraro;
+carProfiles[PROFILE_TEAM_CAR_IDS.formula] = carProfiles.ferraro;
 for (const stockId of ["thunder-stock", "jade-stock", "grape-stock"]) {
   carProfiles[stockId] = carProfiles["orange-stock"];
 }
+carProfiles[PROFILE_TEAM_CAR_IDS.stock] = carProfiles["orange-stock"];
 for (const lmpId of ["scarlet-lmp", "ocean-lmp", "volt-lmp"]) {
   carProfiles[lmpId] = carProfiles.lmp;
 }
+carProfiles[PROFILE_TEAM_CAR_IDS.lmp] = carProfiles.lmp;
 for (const corvetteId of ["vette-white", "vette-red", "vette-striped"]) {
   carProfiles[corvetteId] = carProfiles["vette-yellow"];
 }
+carProfiles[PROFILE_TEAM_CAR_IDS.corvette] = carProfiles["vette-yellow"];
 for (const jeepId of ["forest-jeep", "rescue-jeep", "storm-jeep"]) {
   carProfiles[jeepId] = carProfiles["dune-jeep"];
 }
+carProfiles[PROFILE_TEAM_CAR_IDS.jeep] = carProfiles["dune-jeep"];
 
 const trackDefinitions = {
   practice: {
@@ -2333,7 +2364,21 @@ function getTimeTrialStorageKey() {
     selectedTrack,
     trackVersion,
     profile.kind,
-    selectedCar,
+    track.environment ?? "grass",
+    track.timeOfDay ?? "day",
+  ].join(":");
+}
+
+function getLegacyTimeTrialStorageKey(carId = selectedCar) {
+  const profile = getCarProfileById(carId);
+  const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
+  return [
+    "the-paddock",
+    "time-trial-best",
+    selectedTrack,
+    trackVersion,
+    profile.kind,
+    carId,
     track.environment ?? "grass",
     track.timeOfDay ?? "day",
   ].join(":");
@@ -2343,7 +2388,11 @@ function loadLocalTimeTrialBest() {
   timeTrialState.localBest = null;
   clearTimeTrialGhost();
   try {
-    const raw = window.localStorage?.getItem(getTimeTrialStorageKey());
+    let raw = window.localStorage?.getItem(getTimeTrialStorageKey());
+    if (!raw) {
+      raw = getLegacyTimeTrialBestForClass();
+      if (raw) window.localStorage?.setItem(getTimeTrialStorageKey(), raw);
+    }
     if (!raw) return;
     const best = JSON.parse(raw);
     if (!best || !Number.isFinite(best.lapTime) || !Array.isArray(best.segments)) return;
@@ -2352,6 +2401,29 @@ function loadLocalTimeTrialBest() {
   } catch {
     timeTrialState.localBest = null;
   }
+}
+
+function getLegacyTimeTrialBestForClass() {
+  const profile = getCarProfile();
+  const carIds = Object.entries(carProfiles)
+    .filter(([, candidate]) => candidate?.kind === profile.kind)
+    .map(([carId]) => carId);
+  let bestRaw = "";
+  let bestTime = Infinity;
+  for (const carId of carIds) {
+    try {
+      const raw = window.localStorage?.getItem(getLegacyTimeTrialStorageKey(carId));
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Number.isFinite(parsed?.lapTime) && parsed.lapTime < bestTime) {
+        bestTime = parsed.lapTime;
+        bestRaw = raw;
+      }
+    } catch {
+      // Ignore old malformed local entries.
+    }
+  }
+  return bestRaw;
 }
 
 function maybeSaveLocalTimeTrialBest(lapTime, segments, ghostSamples) {
@@ -6671,13 +6743,20 @@ function selectCar(carId) {
 
 function selectCarCategory(category) {
   const defaultCars = {
-    formula: "ferraro",
-    lmp: "lmp",
-    stock: "orange-stock",
-    jeep: "dune-jeep",
-    corvette: "vette-yellow",
+    formula: PROFILE_TEAM_CAR_IDS.formula,
+    lmp: PROFILE_TEAM_CAR_IDS.lmp,
+    stock: PROFILE_TEAM_CAR_IDS.stock,
+    jeep: PROFILE_TEAM_CAR_IDS.jeep,
+    corvette: PROFILE_TEAM_CAR_IDS.corvette,
   };
   selectCar(defaultCars[category] ?? "red");
+  if (selectedGameMode === "time-trial") {
+    const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
+    if (backButton) backButton.dataset.menuBack = "car-category";
+    updateTimeTrialModeSelection();
+    setMenuStep("time-trial-setup");
+    return;
+  }
   setMenuStep(category);
 }
 
@@ -6711,6 +6790,7 @@ function setMenuStep(step) {
   startMenu.dataset.menuStep = menuStep;
   const titles = {
     intro: "The Paddock",
+    "driver-profile": "Driver Profile",
     "editor-choice": "Track Editor",
     "editor-default-track": "Default Tracks",
     track: "Choose Track",
@@ -6728,7 +6808,236 @@ function setMenuStep(step) {
   for (const stepEl of menuSteps) {
     stepEl.classList.toggle("is-hidden", stepEl.dataset.menuStep !== menuStep);
   }
+  if (menuStep === "driver-profile") updateDriverProfilePage();
   updateMenuVisual();
+}
+
+function updateDriverProfilePage() {
+  applyDriverProfileToInputs();
+  const records = getLocalTimeTrialBestRecords();
+  if (!driverProfileRecordsEl) return;
+  driverProfileRecordsEl.replaceChildren();
+  if (!records.length) {
+    const empty = document.createElement("li");
+    empty.className = "is-empty";
+    empty.textContent = "No saved time trial bests yet.";
+    driverProfileRecordsEl.appendChild(empty);
+    return;
+  }
+  for (const record of records) {
+    const row = document.createElement("li");
+    row.innerHTML = `
+      <div>
+        <strong>${record.trackName}</strong>
+        <span>${record.carClassLabel} / ${record.environmentLabel} / ${record.timeOfDayLabel}</span>
+      </div>
+      <div>
+        <strong>${formatLapTime(record.lapTime)}</strong>
+        <span>${formatSegmentSummary(record.segments)}</span>
+      </div>
+    `;
+    driverProfileRecordsEl.appendChild(row);
+  }
+}
+
+function getDefaultDriverProfile() {
+  return {
+    driverName: "Driver Name",
+    teamName: "Team Name",
+    primaryColor: "#242833",
+    accentColor: "#f6f2e8",
+  };
+}
+
+function loadDriverProfile() {
+  try {
+    const saved = JSON.parse(window.localStorage?.getItem("the-paddock:driver-profile") ?? "null");
+    return { ...getDefaultDriverProfile(), ...(saved ?? {}) };
+  } catch {
+    return getDefaultDriverProfile();
+  }
+}
+
+function saveDriverProfile() {
+  try {
+    window.localStorage?.setItem("the-paddock:driver-profile", JSON.stringify(driverProfile));
+  } catch {
+    // Profile edits still apply during this session if local storage is unavailable.
+  }
+}
+
+function applyDriverProfileToInputs() {
+  if (driverProfileNameInput) driverProfileNameInput.value = driverProfile.driverName || "Driver Name";
+  if (driverProfileTeamInput) driverProfileTeamInput.value = driverProfile.teamName || "Team Name";
+  if (teamPrimaryColorInput) teamPrimaryColorInput.value = normalizeHexColor(driverProfile.primaryColor, "#242833");
+  if (teamAccentColorInput) teamAccentColorInput.value = normalizeHexColor(driverProfile.accentColor, "#f6f2e8");
+  updateProfileTeamLabels();
+  updateDriverProfilePreviewScheme();
+}
+
+function updateDriverProfileFromInputs() {
+  const previousPrimary = driverProfile.primaryColor;
+  const previousAccent = driverProfile.accentColor;
+  driverProfile = {
+    driverName: driverProfileNameInput?.value || "Driver Name",
+    teamName: driverProfileTeamInput?.value || "Team Name",
+    primaryColor: normalizeHexColor(teamPrimaryColorInput?.value, "#242833"),
+    accentColor: normalizeHexColor(teamAccentColorInput?.value, "#f6f2e8"),
+  };
+  saveDriverProfile();
+  updateDriverProfilePreviewScheme();
+  updateProfileTeamLabels();
+  const colorsChanged = previousPrimary !== driverProfile.primaryColor || previousAccent !== driverProfile.accentColor;
+  if (menuStep === "driver-profile") {
+    if (previewTitle) previewTitle.textContent = driverProfile.teamName || "Team Name";
+    if (colorsChanged) updateMenuPreviewCar(true);
+  }
+  if (colorsChanged && Object.values(PROFILE_TEAM_CAR_IDS).includes(selectedCar)) refreshSelectedProfileTeamCar();
+}
+
+function updateProfileTeamLabels() {
+  const label = driverProfile.teamName || "Team Name";
+  for (const carId of Object.values(PROFILE_TEAM_CAR_IDS)) {
+    const textEl = document.querySelector(`[data-car="${carId}"] strong`);
+    if (textEl) textEl.textContent = label;
+  }
+}
+
+function refreshSelectedProfileTeamCar() {
+  if (!car?.root) return;
+  scene.remove(car.root);
+  car = createSelectedCar(selectedCar);
+  scene.add(car.root);
+  resetCar({ keepTimeTrialLaps: true });
+}
+
+function updateDriverProfilePreviewScheme() {
+  carPaintSchemes[PROFILE_TEAM_CAR_IDS.formula] = getDriverProfileFormulaScheme(driverProfile);
+  lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp] = getDriverProfileLmpScheme(driverProfile);
+  stockPaintSchemes[PROFILE_TEAM_CAR_IDS.stock] = getDriverProfileStockScheme(driverProfile);
+  jeepPaintSchemes[PROFILE_TEAM_CAR_IDS.jeep] = getDriverProfileJeepScheme(driverProfile);
+  corvettePaintSchemes[PROFILE_TEAM_CAR_IDS.corvette] = getDriverProfileCorvetteScheme(driverProfile);
+}
+
+function getDriverProfileFormulaScheme(profile = getDefaultDriverProfile()) {
+  const primary = hexColorToNumber(profile.primaryColor, 0x242833);
+  const accent = hexColorToNumber(profile.accentColor, 0xf6f2e8);
+  return {
+    primary,
+    secondary: darkenHexColor(profile.primaryColor, 0.5, 0x12151d),
+    stripe: accent,
+    accent,
+    rearWing: accent,
+    rearWingStripe: primary,
+    sideStripeXs: [-0.34, 0.34],
+    rim: accent,
+  };
+}
+
+function getDriverProfileLmpScheme(profile = getDefaultDriverProfile()) {
+  return {
+    primary: hexColorToNumber(profile.primaryColor, 0x242833),
+    secondary: darkenHexColor(profile.primaryColor, 0.52, 0x12151d),
+    stripe: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    glass: 0x9fd7ff,
+  };
+}
+
+function getDriverProfileStockScheme(profile = getDefaultDriverProfile()) {
+  return {
+    primary: hexColorToNumber(profile.primaryColor, 0x242833),
+    secondary: darkenHexColor(profile.primaryColor, 0.52, 0x12151d),
+    stripe: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    glass: 0x9fd7ff,
+  };
+}
+
+function getDriverProfileJeepScheme(profile = getDefaultDriverProfile()) {
+  return {
+    primary: hexColorToNumber(profile.primaryColor, 0x242833),
+    secondary: darkenHexColor(profile.primaryColor, 0.48, 0x12151d),
+    stripe: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    accent: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    glass: 0x9fd7ff,
+    camo: false,
+  };
+}
+
+function getDriverProfileCorvetteScheme(profile = getDefaultDriverProfile()) {
+  return {
+    primary: hexColorToNumber(profile.primaryColor, 0x242833),
+    secondary: darkenHexColor(profile.primaryColor, 0.48, 0x12151d),
+    stripe: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    glass: 0x9fd7ff,
+    rim: hexColorToNumber(profile.accentColor, 0xf6f2e8),
+    stripes: false,
+  };
+}
+
+function normalizeHexColor(value, fallback) {
+  const text = String(value ?? "").trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
+}
+
+function hexColorToNumber(value, fallback) {
+  const normalized = normalizeHexColor(value, "");
+  return normalized ? Number.parseInt(normalized.slice(1), 16) : fallback;
+}
+
+function darkenHexColor(value, amount = 0.52, fallback = 0x12151d) {
+  const colorNumber = hexColorToNumber(value, null);
+  if (colorNumber === null) return fallback;
+  const color = new THREE.Color(colorNumber);
+  color.multiplyScalar(amount);
+  return color.getHex();
+}
+
+function getLocalTimeTrialBestRecords() {
+  const prefix = "the-paddock:time-trial-best:";
+  const records = [];
+  try {
+    for (let i = 0; i < (window.localStorage?.length ?? 0); i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const best = JSON.parse(raw);
+      if (!Number.isFinite(best?.lapTime)) continue;
+      records.push({
+        lapTime: best.lapTime,
+        segments: best.segments ?? [],
+        trackId: best.track?.id ?? "unknown-track",
+        trackName: best.track?.name ?? "Unknown Track",
+        carClassLabel: getCarClassLabel(best.car?.class),
+        environmentLabel: capitalizeLabel(best.track?.environment ?? "grass"),
+        timeOfDayLabel: capitalizeLabel(best.track?.timeOfDay ?? "day"),
+      });
+    }
+  } catch {
+    return records;
+  }
+  const bestByTrack = new Map();
+  for (const record of records) {
+    const existing = bestByTrack.get(record.trackId);
+    if (!existing || record.lapTime < existing.lapTime) bestByTrack.set(record.trackId, record);
+  }
+  return [...bestByTrack.values()].sort((a, b) => a.trackName.localeCompare(b.trackName));
+}
+
+function getCarClassLabel(kind = "") {
+  return {
+    formula: "Formula",
+    lmp: "Le Mans Prototype",
+    stock: "Stock Car",
+    jeep: "Jeep",
+    corvette: "Corvette",
+  }[kind] ?? capitalizeLabel(kind || "Car");
+}
+
+function capitalizeLabel(value = "") {
+  return String(value)
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function getSelectedCarLabel() {
@@ -6744,7 +7053,7 @@ function isPaintMenuStep() {
 }
 
 function updateMenuVisual() {
-  const visual = menuStep === "intro" ? "intro" : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track") ? "track" : menuStep === "car-category" ? "driver" : "car";
+  const visual = menuStep === "intro" ? "intro" : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track") ? "track" : menuStep === "car-category" ? "driver" : menuStep === "driver-profile" ? "profile" : "car";
   for (const visualEl of showroomVisuals) {
     visualEl.classList.toggle("is-hidden", visualEl.dataset.showroomVisual !== visual);
   }
@@ -6752,10 +7061,12 @@ function updateMenuVisual() {
     map.classList.toggle("is-hidden", map.dataset.trackMap !== selectedTrack);
     map.classList.toggle("is-selected", map.dataset.trackMap === selectedTrack);
   }
-  menuPreviewCanvas.classList.toggle("is-hidden", visual !== "car");
+  menuPreviewCanvas.classList.toggle("is-hidden", !isMenuPreviewCarStep());
+  driverProfileCustomizerEl?.classList.toggle("is-hidden", menuStep !== "driver-profile");
 
   const labels = {
     intro: ["Ready to Roll", "Just Drive"],
+    "driver-profile": ["Driver Profile", "My Garage"],
     "editor-choice": ["Track Editor", "Choose Starting Point"],
     "editor-default-track": ["Default Track", "Choose Layout"],
     track: ["Selected Track", getSelectedTrackLabel()],
@@ -6768,13 +7079,17 @@ function updateMenuVisual() {
   if (labelEl) labelEl.textContent = label;
   if (previewTitle) previewTitle.textContent = title;
 
-  if (isPaintMenuStep()) {
+  if (isMenuPreviewCarStep()) {
     updateMenuPreviewCar();
   } else if (previewCar) {
     previewScene.remove(previewCar.root);
     previewCar = null;
     previewCarId = "";
   }
+}
+
+function isMenuPreviewCarStep() {
+  return isPaintMenuStep() || menuStep === "driver-profile";
 }
 
 function updateAiOpponentSelection() {
@@ -6865,25 +7180,33 @@ function handleStartRaceClick() {
   setMenuStep("ai-opponents");
 }
 
-function updateMenuPreviewCar() {
-  if (!menuPreviewReady || !menuPreviewCanvas || !isPaintMenuStep()) return;
-  if (previewCarId === selectedCar) {
-    if (previewTitle) previewTitle.textContent = getSelectedCarLabel();
+function updateMenuPreviewCar(force = false) {
+  if (!menuPreviewReady || !menuPreviewCanvas || !isMenuPreviewCarStep()) return;
+  const profilePreview = menuStep === "driver-profile";
+  const carId = profilePreview ? PROFILE_TEAM_CAR_IDS.stock : selectedCar;
+  const previewId = profilePreview
+    ? `${carId}:${driverProfile.primaryColor}:${driverProfile.accentColor}`
+    : carId;
+  if (!force && previewCarId === previewId) {
+    if (previewTitle) previewTitle.textContent = profilePreview ? driverProfile.teamName || "Team Name" : getSelectedCarLabel();
     return;
   }
-  previewCarId = selectedCar;
+  const previousRotationY = previewCar?.root?.rotation?.y ?? Math.PI * 0.18;
+  previewCarId = previewId;
   if (previewCar) previewScene.remove(previewCar.root);
-  previewCar = createSelectedCar(selectedCar);
+  if (profilePreview) updateDriverProfilePreviewScheme();
+  previewCar = createSelectedCar(carId);
   previewCar.root.position.set(0, 0, 0);
-  previewCar.root.rotation.set(0, Math.PI * 0.18, 0);
-  const scale = getCarProfile().kind === "jeep" ? 0.72 : getCarProfile().kind === "formula" ? 0.66 : 0.68;
+  previewCar.root.rotation.set(0, force ? previousRotationY : Math.PI * 0.18, 0);
+  const profile = profilePreview ? carProfiles["orange-stock"] : getCarProfile();
+  const scale = profile.kind === "jeep" ? 0.72 : profile.kind === "formula" ? 0.66 : 0.68;
   previewCar.root.scale.setScalar(scale);
   previewScene.add(previewCar.root);
-  if (previewTitle) previewTitle.textContent = getSelectedCarLabel();
+  if (previewTitle) previewTitle.textContent = profilePreview ? driverProfile.teamName || "Team Name" : getSelectedCarLabel();
 }
 
 function updateMenuPreview(dt) {
-  if (!isPaintMenuStep()) return;
+  if (!isMenuPreviewCarStep()) return;
   if (!previewCar) updateMenuPreviewCar();
   const width = Math.max(1, menuPreviewCanvas.clientWidth);
   const height = Math.max(1, menuPreviewCanvas.clientHeight);
