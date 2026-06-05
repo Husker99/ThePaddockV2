@@ -29,10 +29,67 @@
           <div class="menu-step is-hidden" data-menu-step="driver-profile">
             <button class="profile-main-menu-button" type="button" data-menu-back="intro">Main Menu</button>
             <section class="driver-profile-card" aria-label="Driver profile">
-              <label>
-                <span>Driver</span>
-                <input id="driver-profile-name" type="text" value="Driver Name" maxlength="28" />
-              </label>
+              <div class="driver-profile-driver-row">
+                <label>
+                  <span>Driver</span>
+                  <input id="driver-profile-name" type="text" value="Driver Name" maxlength="28" />
+                </label>
+                <label>
+                  <span>State</span>
+                  <select id="driver-profile-state">
+                    <option value="AL">AL</option>
+                    <option value="AK">AK</option>
+                    <option value="AZ">AZ</option>
+                    <option value="AR">AR</option>
+                    <option value="CA" selected>CA</option>
+                    <option value="CO">CO</option>
+                    <option value="CT">CT</option>
+                    <option value="DE">DE</option>
+                    <option value="FL">FL</option>
+                    <option value="GA">GA</option>
+                    <option value="HI">HI</option>
+                    <option value="ID">ID</option>
+                    <option value="IL">IL</option>
+                    <option value="IN">IN</option>
+                    <option value="IA">IA</option>
+                    <option value="KS">KS</option>
+                    <option value="KY">KY</option>
+                    <option value="LA">LA</option>
+                    <option value="ME">ME</option>
+                    <option value="MD">MD</option>
+                    <option value="MA">MA</option>
+                    <option value="MI">MI</option>
+                    <option value="MN">MN</option>
+                    <option value="MS">MS</option>
+                    <option value="MO">MO</option>
+                    <option value="MT">MT</option>
+                    <option value="NE">NE</option>
+                    <option value="NV">NV</option>
+                    <option value="NH">NH</option>
+                    <option value="NJ">NJ</option>
+                    <option value="NM">NM</option>
+                    <option value="NY">NY</option>
+                    <option value="NC">NC</option>
+                    <option value="ND">ND</option>
+                    <option value="OH">OH</option>
+                    <option value="OK">OK</option>
+                    <option value="OR">OR</option>
+                    <option value="PA">PA</option>
+                    <option value="RI">RI</option>
+                    <option value="SC">SC</option>
+                    <option value="SD">SD</option>
+                    <option value="TN">TN</option>
+                    <option value="TX">TX</option>
+                    <option value="UT">UT</option>
+                    <option value="VT">VT</option>
+                    <option value="VA">VA</option>
+                    <option value="WA">WA</option>
+                    <option value="WV">WV</option>
+                    <option value="WI">WI</option>
+                    <option value="WY">WY</option>
+                  </select>
+                </label>
+              </div>
               <label>
                 <span>Team</span>
                 <input id="driver-profile-team" type="text" value="Team Name" maxlength="32" />
@@ -41,6 +98,20 @@
             <section class="driver-profile-records" aria-label="Saved time trial records">
               <h2>My Best Time Trials</h2>
               <ol id="driver-profile-records"></ol>
+            </section>
+            <section class="driver-profile-history" aria-label="Local time trial history">
+              <div class="driver-profile-history-header">
+                <h2>Local Time Trial History</h2>
+                <div>
+                  <button id="time-trial-export-records" class="profile-action-button" type="button">Export</button>
+                  <label class="profile-action-button">
+                    Import
+                    <input id="time-trial-import-records" type="file" accept="application/json" />
+                  </label>
+                </div>
+              </div>
+              <p id="time-trial-records-status" class="profile-records-status"></p>
+              <ol id="time-trial-history-records"></ol>
             </section>
           </div>
 
@@ -234,6 +305,24 @@
                 <strong>Record Driving Line</strong>
               </button>
             </div>
+            <label class="race-select time-trial-ghost-select">
+              <span>Ghost</span>
+              <select id="time-trial-ghost-select">
+                <option value="my-best" selected>My Best</option>
+                <option value="session-best">Session Best</option>
+                <option value="online">Online Ghost</option>
+                <option value="off">Ghost Off</option>
+              </select>
+            </label>
+            <section id="time-trial-online-browser" class="time-trial-online-browser" hidden aria-label="Online ghost browser">
+              <div class="time-trial-online-toolbar">
+                <button class="ghost-button is-selected" type="button" data-online-ghost-filter="top">Top 20</button>
+                <button class="ghost-button" type="button" data-online-ghost-filter="week">This Week</button>
+                <button id="time-trial-download-ghosts" class="ghost-button" type="button">Refresh</button>
+              </div>
+              <p id="time-trial-online-status" class="time-trial-online-status"></p>
+              <ol id="time-trial-online-list" class="time-trial-online-list"></ol>
+            </section>
             <button id="time-trial-setup-start" class="start-button" type="button">Start Time Trial</button>
           </div>
 

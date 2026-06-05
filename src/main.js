@@ -6,9 +6,11 @@ import makoCityTrack from "./tracks/mako-city.json";
 import yueRingTrack from "./tracks/yue-ring.json";
 import kataraStockCyborgTraining from "./ai-training/katara-speedway-stock-cyborg-training.json";
 import kataraFormulaCyborgTraining from "./ai-training/katara-speedway-formula-cyborg-training.json";
+import kataraLmpCyborgTraining from "./ai-training/katara-speedway-lmp-cyborg-training.json";
 import kyoshiStockCyborgTraining from "./ai-training/kyoshi-circuit-stock-cyborg-training.json";
 import kyoshiLmpCyborgTraining from "./ai-training/kyoshi-circuit-lmp-cyborg-training.json";
 import makoStockCyborgTraining from "./ai-training/mako-city-stock-cyborg-training.json";
+import makoFormulaCyborgTraining from "./ai-training/mako-city-formula-cyborg-training.json";
 import yueStockCyborgTraining from "./ai-training/yue-ring-stock-cyborg-training.json";
 
 const canvas = document.querySelector("#game");
@@ -27,7 +29,12 @@ const openTrackEditorButton = document.querySelector("#open-track-editor");
 const driverProfileButton = document.querySelector("#driver-profile-button");
 const driverProfileNameInput = document.querySelector("#driver-profile-name");
 const driverProfileTeamInput = document.querySelector("#driver-profile-team");
+const driverProfileStateSelect = document.querySelector("#driver-profile-state");
 const driverProfileRecordsEl = document.querySelector("#driver-profile-records");
+const timeTrialHistoryRecordsEl = document.querySelector("#time-trial-history-records");
+const timeTrialExportRecordsButton = document.querySelector("#time-trial-export-records");
+const timeTrialImportRecordsInput = document.querySelector("#time-trial-import-records");
+const timeTrialRecordsStatusEl = document.querySelector("#time-trial-records-status");
 const driverProfileCustomizerEl = document.querySelector("#driver-profile-customizer");
 const teamPrimaryColorInput = document.querySelector("#team-primary-color");
 const teamAccentColorInput = document.querySelector("#team-accent-color");
@@ -72,6 +79,12 @@ const quickRaceStartButton = document.querySelector("#quick-race-start");
 const timeTrialStandardButton = document.querySelector("#time-trial-standard");
 const timeTrialRecordLineButton = document.querySelector("#time-trial-record-line");
 const timeTrialSetupStartButton = document.querySelector("#time-trial-setup-start");
+const timeTrialGhostSelect = document.querySelector("#time-trial-ghost-select");
+const timeTrialOnlineBrowserEl = document.querySelector("#time-trial-online-browser");
+const timeTrialDownloadGhostsButton = document.querySelector("#time-trial-download-ghosts");
+const timeTrialOnlineStatusEl = document.querySelector("#time-trial-online-status");
+const timeTrialOnlineListEl = document.querySelector("#time-trial-online-list");
+const timeTrialOnlineFilterButtons = [...document.querySelectorAll("[data-online-ghost-filter]")];
 const aiOpponentsBackButton = document.querySelector("#ai-opponents-back");
 const aiOpponentSlider = document.querySelector("#ai-opponent-slider");
 const aiOpponentReadout = document.querySelector("#ai-opponent-readout");
@@ -118,6 +131,10 @@ const aiDebugDetailEl = document.querySelector("#ai-debug-detail");
 const audioBasePath = `${import.meta.env.BASE_URL}audio/`;
 const MENU_THEME_SRC = `${audioBasePath}the-paddock-theme.mp3`;
 const EDITOR_MUSIC_SRCS = [`${audioBasePath}track-editor-1.mp3`, `${audioBasePath}track-editor-2.mp3`];
+const TIME_TRIAL_RECORDS_KEY = "the-paddock:time-trial-records:v1";
+const SUPABASE_URL = "https://dvckkaqlbyphlxyogbif.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gADFEoFX4NeCNuUqPKtX3w_3r-JpBEH";
+const SUPABASE_TIME_TRIAL_RECORDS_URL = `${SUPABASE_URL}/rest/v1/time_trial_records`;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -448,6 +465,9 @@ let selectedAiDifficulty = "standard";
 let quickRacePaintStep = "formula";
 let timeTrialPaintStep = "stock";
 let selectedTimeTrialMode = "standard";
+let selectedTimeTrialGhostMode = "my-best";
+let selectedOnlineGhostFilter = "top";
+let selectedOnlineGhostRecordId = "";
 let selectedCar = "ferraro";
 let selectedTrack = "katara-speedway";
 let driverProfile = loadDriverProfile();
@@ -467,6 +487,18 @@ const AI_DIFFICULTY_SETTINGS = {
   amateur: { label: "Amateur", cyborgBrakingLookaheadScale: 0.8 },
   professional: { label: "Professional", cyborgBrakingLookaheadScale: 0.05 },
 };
+const US_STATE_NAMES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+};
 const editorUndoStack = [];
 const timeTrialState = {
   running: false,
@@ -474,6 +506,8 @@ const timeTrialState = {
   laps: [],
   latestLapId: 0,
   localBest: null,
+  sessionBest: null,
+  sessionId: makeTimeTrialSessionId(),
   currentGhostSamples: [],
   ghostSampleTimer: 0,
   lastLineSide: null,
@@ -491,6 +525,7 @@ const timeTrialState = {
   wallPenaltyMessageTime: 0,
   trackLimitsPenaltyCooldown: 0,
   trackLimitsPenaltyMessageTime: 0,
+  saveMessageTime: 0,
 };
 const drivingLineRecorder = {
   active: false,
@@ -581,6 +616,12 @@ const KATARA_TRACK_ID = "katara-speedway";
 const KYOSHI_TRACK_ID = "kyoshi-circuit";
 const MAKO_TRACK_ID = "mako-city";
 const YUE_TRACK_ID = "yue-ring";
+const TRACK_VERSION_BY_ID = {
+  [KATARA_TRACK_ID]: "katara-speedway-v1",
+  [KYOSHI_TRACK_ID]: "kyoshi-circuit-v1",
+  [MAKO_TRACK_ID]: "mako-city-v1",
+  [YUE_TRACK_ID]: "yue-ring-v1",
+};
 const sceneryLights = [];
 const sceneryCullables = [];
 const chaseCamera = {
@@ -665,8 +706,12 @@ openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice
 driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
 driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
 driverProfileTeamInput?.addEventListener("input", updateDriverProfileFromInputs);
+driverProfileStateSelect?.addEventListener("change", updateDriverProfileFromInputs);
 teamPrimaryColorInput?.addEventListener("input", updateDriverProfileFromInputs);
 teamAccentColorInput?.addEventListener("input", updateDriverProfileFromInputs);
+timeTrialExportRecordsButton?.addEventListener("click", exportLocalTimeTrialRecords);
+timeTrialImportRecordsInput?.addEventListener("change", importLocalTimeTrialRecords);
+timeTrialHistoryRecordsEl?.addEventListener("click", handleTimeTrialHistoryClick);
 editorBackButton.addEventListener("click", closeTrackEditor);
 editorTestDriveButton.addEventListener("click", startEditorTestDrive);
 backToEditorButton.addEventListener("click", returnToTrackEditor);
@@ -728,6 +773,12 @@ quickRaceStartButton?.addEventListener("pointerenter", startMenuMusic);
 quickRaceStartButton?.addEventListener("click", startGame);
 timeTrialStandardButton?.addEventListener("click", () => selectTimeTrialMode("standard"));
 timeTrialRecordLineButton?.addEventListener("click", () => selectTimeTrialMode("record-line"));
+timeTrialGhostSelect?.addEventListener("change", updateTimeTrialGhostSelection);
+timeTrialDownloadGhostsButton?.addEventListener("click", downloadOnlineTimeTrialGhostsForSelection);
+timeTrialOnlineListEl?.addEventListener("click", handleOnlineGhostListClick);
+for (const button of timeTrialOnlineFilterButtons) {
+  button.addEventListener("click", () => selectOnlineGhostFilter(button.dataset.onlineGhostFilter));
+}
 timeTrialSetupStartButton?.addEventListener("pointerenter", startMenuMusic);
 timeTrialSetupStartButton?.addEventListener("click", startGame);
 drivingLineExportButton?.addEventListener("click", exportDrivingLineRecording);
@@ -1310,12 +1361,16 @@ const kataraStockCyborgLines = createCyborgRacingLines(kataraStockCyborgTraining
 const kataraStockCyborgLine = kataraStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kataraFormulaCyborgLines = createCyborgRacingLines(kataraFormulaCyborgTraining);
 const kataraFormulaCyborgLine = kataraFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const kataraLmpCyborgLines = createCyborgRacingLines(kataraLmpCyborgTraining);
+const kataraLmpCyborgLine = kataraLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kyoshiStockCyborgLines = createCyborgRacingLines(kyoshiStockCyborgTraining);
 const kyoshiStockCyborgLine = kyoshiStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kyoshiLmpCyborgLines = createCyborgRacingLines(kyoshiLmpCyborgTraining);
 const kyoshiLmpCyborgLine = kyoshiLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const makoStockCyborgLines = createCyborgRacingLines(makoStockCyborgTraining);
 const makoStockCyborgLine = makoStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const makoFormulaCyborgLines = createCyborgRacingLines(makoFormulaCyborgTraining);
+const makoFormulaCyborgLine = makoFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const yueStockCyborgLines = createCyborgRacingLines(yueStockCyborgTraining);
 const yueStockCyborgLine = yueStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const cyborgLineBanksByClass = {
@@ -1327,8 +1382,10 @@ const cyborgLineBanksByClass = {
   },
   formula: {
     [KATARA_TRACK_ID]: { lines: kataraFormulaCyborgLines, fallback: kataraFormulaCyborgLine },
+    [MAKO_TRACK_ID]: { lines: makoFormulaCyborgLines, fallback: makoFormulaCyborgLine },
   },
   lmp: {
+    [KATARA_TRACK_ID]: { lines: kataraLmpCyborgLines, fallback: kataraLmpCyborgLine },
     [KYOSHI_TRACK_ID]: { lines: kyoshiLmpCyborgLines, fallback: kyoshiLmpCyborgLine },
   },
 };
@@ -2161,6 +2218,7 @@ function updateTimeTrial(dt, wheelSurface) {
   timeTrialState.wallPenaltyMessageTime = Math.max(0, timeTrialState.wallPenaltyMessageTime - dt);
   timeTrialState.trackLimitsPenaltyCooldown = Math.max(0, timeTrialState.trackLimitsPenaltyCooldown - dt);
   timeTrialState.trackLimitsPenaltyMessageTime = Math.max(0, timeTrialState.trackLimitsPenaltyMessageTime - dt);
+  timeTrialState.saveMessageTime = Math.max(0, timeTrialState.saveMessageTime - dt);
   timeTrialState.segmentStatusHoldTime = Math.max(0, timeTrialState.segmentStatusHoldTime - dt);
   if (timeTrialState.running && wheelSurface?.grassCount === 4) {
     timeTrialState.invalidated = true;
@@ -2310,10 +2368,14 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   timeTrialState.wallPenaltyMessageTime = 0;
   timeTrialState.trackLimitsPenaltyCooldown = 0;
   timeTrialState.trackLimitsPenaltyMessageTime = 0;
+  timeTrialState.saveMessageTime = 0;
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
+    timeTrialState.sessionBest = null;
+    timeTrialState.sessionId = makeTimeTrialSessionId();
     loadLocalTimeTrialBest();
+    refreshSelectedTimeTrialGhost();
     refreshTimeTrialBestReferences();
   }
   timeTrialState.heldSegmentStatuses = [null, null, null];
@@ -2333,7 +2395,10 @@ function recordTimeTrialLap() {
   const ghostSamples = timeTrialState.currentGhostSamples.map((sample) => ({ ...sample }));
   timeTrialState.laps.push({ id: timeTrialState.latestLapId, time: lapTime, segments: [...timeTrialState.currentSegments], ghostSamples });
   timeTrialState.laps.sort((a, b) => a.time - b.time);
-  maybeSaveLocalTimeTrialBest(lapTime, timeTrialState.currentSegments, ghostSamples);
+  const record = createLocalTimeTrialRecord(lapTime, timeTrialState.currentSegments, ghostSamples);
+  maybeSaveSessionTimeTrialBest(record);
+  maybeSaveLocalTimeTrialBest(record);
+  refreshSelectedTimeTrialGhost();
   refreshTimeTrialBestReferences();
   updateTimeTrialHud();
 }
@@ -2355,23 +2420,21 @@ function refreshTimeTrialBestReferences() {
   timeTrialState.fastestSegments = fastest.some(Number.isFinite) ? fastest : null;
 }
 
-function getTimeTrialStorageKey() {
+function getTimeTrialStorageKey(versionOverride = null) {
   const profile = getCarProfile();
-  const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
+  const trackVersion = versionOverride ?? trackDefinitions[selectedTrack]?.version ?? "local-v1";
   return [
     "the-paddock",
     "time-trial-best",
     selectedTrack,
     trackVersion,
     profile.kind,
-    track.environment ?? "grass",
-    track.timeOfDay ?? "day",
   ].join(":");
 }
 
-function getLegacyTimeTrialStorageKey(carId = selectedCar) {
+function getLegacyTimeTrialStorageKey(carId = selectedCar, versionOverride = null) {
   const profile = getCarProfileById(carId);
-  const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
+  const trackVersion = versionOverride ?? trackDefinitions[selectedTrack]?.version ?? "local-v1";
   return [
     "the-paddock",
     "time-trial-best",
@@ -2390,14 +2453,21 @@ function loadLocalTimeTrialBest() {
   try {
     let raw = window.localStorage?.getItem(getTimeTrialStorageKey());
     if (!raw) {
+      raw = window.localStorage?.getItem(getTimeTrialStorageKey("local-v1"));
+      if (raw) window.localStorage?.setItem(getTimeTrialStorageKey(), raw);
+    }
+    if (!raw) {
       raw = getLegacyTimeTrialBestForClass();
+      if (raw) window.localStorage?.setItem(getTimeTrialStorageKey(), raw);
+    }
+    if (!raw) {
+      raw = getEnvironmentTimeTrialBestForClass();
       if (raw) window.localStorage?.setItem(getTimeTrialStorageKey(), raw);
     }
     if (!raw) return;
     const best = JSON.parse(raw);
     if (!best || !Number.isFinite(best.lapTime) || !Array.isArray(best.segments)) return;
     timeTrialState.localBest = best;
-    setTimeTrialGhostRun(best);
   } catch {
     timeTrialState.localBest = null;
   }
@@ -2412,7 +2482,8 @@ function getLegacyTimeTrialBestForClass() {
   let bestTime = Infinity;
   for (const carId of carIds) {
     try {
-      const raw = window.localStorage?.getItem(getLegacyTimeTrialStorageKey(carId));
+      const raw = window.localStorage?.getItem(getLegacyTimeTrialStorageKey(carId)) ??
+        window.localStorage?.getItem(getLegacyTimeTrialStorageKey(carId, "local-v1"));
       if (!raw) continue;
       const parsed = JSON.parse(raw);
       if (Number.isFinite(parsed?.lapTime) && parsed.lapTime < bestTime) {
@@ -2426,41 +2497,663 @@ function getLegacyTimeTrialBestForClass() {
   return bestRaw;
 }
 
-function maybeSaveLocalTimeTrialBest(lapTime, segments, ghostSamples) {
-  if (!Number.isFinite(lapTime) || lapTime <= 0 || !Array.isArray(ghostSamples) || ghostSamples.length < 20) return;
-  const currentBest = timeTrialState.localBest;
-  if (currentBest?.lapTime && lapTime >= currentBest.lapTime) return;
-  const best = {
-    type: "the-paddock-local-time-trial-best",
+function getEnvironmentTimeTrialBestForClass() {
+  const profile = getCarProfile();
+  const prefix = [
+    "the-paddock",
+    "time-trial-best",
+    selectedTrack,
+    trackDefinitions[selectedTrack]?.version ?? "local-v1",
+    profile.kind,
+  ].join(":");
+  let bestRaw = "";
+  let bestTime = Infinity;
+  try {
+    for (let i = 0; i < (window.localStorage?.length ?? 0); i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(`${prefix}:`)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Number.isFinite(parsed?.lapTime) && parsed.lapTime < bestTime) {
+        bestTime = parsed.lapTime;
+        bestRaw = raw;
+      }
+    }
+  } catch {
+    return bestRaw;
+  }
+  return bestRaw;
+}
+
+function makeTimeTrialSessionId() {
+  return `tts-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createLocalTimeTrialRecord(lapTime, segments, ghostSamples = []) {
+  const profile = getCarProfile();
+  const hasGhost = Array.isArray(ghostSamples) && ghostSamples.length >= 20;
+  const record = {
+    type: "the-paddock-time-trial-record",
     version: 1,
+    source: "local",
+    id: makeTimeTrialRecordId(lapTime, segments),
+    sessionId: timeTrialState.sessionId,
+    sessionBest: false,
+    uploadedAt: null,
     createdAt: new Date().toISOString(),
+    game: {
+      version: "local-v1",
+      mode: "time-trial",
+    },
+    driver: {
+      name: driverProfile.driverName || "Driver Name",
+      team: driverProfile.teamName || "Team Name",
+      stateCode: getValidStateCode(driverProfile.stateCode),
+      stateName: getStateName(driverProfile.stateCode),
+      primaryColor: normalizeHexColor(driverProfile.primaryColor, "#242833"),
+      accentColor: normalizeHexColor(driverProfile.accentColor, "#f6f2e8"),
+    },
     track: {
       id: selectedTrack,
       name: getSelectedTrackLabel(),
       version: trackDefinitions[selectedTrack]?.version ?? "local-v1",
-      environment: track.environment ?? "grass",
-      timeOfDay: track.timeOfDay ?? "day",
     },
     car: {
       id: selectedCar,
       name: getSelectedCarLabel(),
-      class: getCarProfile().kind,
+      class: profile.kind,
     },
-    lapTime: roundDrivingLineNumber(lapTime),
-    formattedLapTime: formatLapTime(lapTime),
-    segments: segments.map((segment) => roundDrivingLineNumber(segment)),
-    ghost: {
-      sampleRateHz: 20,
-      samples: ghostSamples.map((sample) => ({ ...sample })),
+    lap: {
+      clean: true,
+      penaltySeconds: 0,
+      invalidated: false,
+      lapTime: roundDrivingLineNumber(lapTime),
+      formattedLapTime: formatLapTime(lapTime),
+      segments: segments.map((segment) => roundDrivingLineNumber(segment)),
+      formattedSegments: segments.map((segment) => formatLapTime(segment)),
     },
   };
+  if (hasGhost) {
+    record.ghost = {
+      sampleRateHz: 20,
+      samples: ghostSamples.map((sample) => ({ ...sample })),
+    };
+  }
+  return record;
+}
+
+function makeTimeTrialRecordId(lapTime, segments) {
+  const base = [
+    selectedTrack,
+    trackDefinitions[selectedTrack]?.version ?? "local-v1",
+    getCarProfile().kind,
+    roundDrivingLineNumber(lapTime),
+    ...segments.map((segment) => roundDrivingLineNumber(segment)),
+    Date.now(),
+  ].join(":");
+  let hash = 0;
+  for (let i = 0; i < base.length; i += 1) {
+    hash = ((hash << 5) - hash + base.charCodeAt(i)) | 0;
+  }
+  return `tt-${Math.abs(hash).toString(36)}-${Date.now().toString(36)}`;
+}
+
+function maybeSaveLocalTimeTrialBest(record) {
+  const lapTime = record?.lap?.lapTime;
+  const segments = record?.lap?.segments;
+  if (!Number.isFinite(lapTime) || lapTime <= 0 || !Array.isArray(segments) || segments.length < 3) return;
+  const currentBest = timeTrialState.localBest;
+  if (currentBest?.lapTime && lapTime >= currentBest.lapTime) return;
+  const bestBase = {
+    type: "the-paddock-local-time-trial-best",
+    version: 2,
+    recordId: record.id,
+    createdAt: record.createdAt,
+    driver: record.driver,
+    track: record.track,
+    car: record.car,
+    lapTime,
+    formattedLapTime: record.lap.formattedLapTime,
+    segments,
+    sourceRecord: {
+      type: record.type,
+      version: record.version,
+    },
+  };
+  const bestWithGhost = record.ghost?.samples?.length ? {
+    ...bestBase,
+    ghost: {
+      sampleRateHz: 20,
+      samples: record.ghost.samples.map((sample) => ({ ...sample })),
+    },
+  } : bestBase;
+  let savedBest = bestWithGhost;
   try {
-    window.localStorage?.setItem(getTimeTrialStorageKey(), JSON.stringify(best));
+    window.localStorage?.setItem(getTimeTrialStorageKey(), JSON.stringify(savedBest));
   } catch {
+    savedBest = bestBase;
+    try {
+      window.localStorage?.setItem(getTimeTrialStorageKey(), JSON.stringify(savedBest));
+    } catch {
+      return;
+    }
+  }
+  timeTrialState.localBest = savedBest;
+  timeTrialState.saveMessageTime = 3;
+}
+
+function maybeSaveSessionTimeTrialBest(record) {
+  const lapTime = record?.lap?.lapTime;
+  if (!Number.isFinite(lapTime) || !record?.ghost?.samples?.length) return;
+  if (timeTrialState.sessionBest?.lapTime && lapTime >= timeTrialState.sessionBest.lapTime) return;
+  record.sessionBest = true;
+  saveSessionBestTimeTrialRecord(record);
+  timeTrialState.sessionBest = createBestFromTimeTrialRecord(record);
+}
+
+function saveSessionBestTimeTrialRecord(record) {
+  if (!isValidTimeTrialRecord(record) || !record.ghost?.samples?.length) return false;
+  try {
+    const records = loadLocalTimeTrialRecords()
+      .filter((candidate) => candidate.sessionId !== record.sessionId);
+    records.push(record);
+    saveLocalTimeTrialRecords(records);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadLocalTimeTrialRecords() {
+  try {
+    const raw = window.localStorage?.getItem(TIME_TRIAL_RECORDS_KEY);
+    const records = JSON.parse(raw ?? "[]");
+    return Array.isArray(records) ? records.filter(isValidTimeTrialRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTimeTrialRecords(records) {
+  const sorted = [...records]
+    .filter(isValidTimeTrialRecord)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 80);
+  try {
+    window.localStorage?.setItem(TIME_TRIAL_RECORDS_KEY, JSON.stringify(sorted));
+    return sorted;
+  } catch {
+    const compact = sorted.map((record, index) => index < 10 ? record : stripTimeTrialRecordGhost(record));
+    try {
+      window.localStorage?.setItem(TIME_TRIAL_RECORDS_KEY, JSON.stringify(compact));
+      return compact;
+    } catch {
+      const minimal = sorted.map(stripTimeTrialRecordGhost);
+      window.localStorage?.setItem(TIME_TRIAL_RECORDS_KEY, JSON.stringify(minimal));
+      return minimal;
+    }
+  }
+}
+
+function saveLocalTimeTrialRecord(record) {
+  if (!isValidTimeTrialRecord(record)) return false;
+  try {
+    const records = loadLocalTimeTrialRecords();
+    const existingIndex = records.findIndex((candidate) => candidate.id === record.id);
+    if (existingIndex >= 0) records[existingIndex] = record;
+    else records.push(record);
+    saveLocalTimeTrialRecords(records);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function updateLocalTimeTrialRecord(recordId, updater) {
+  try {
+    const records = loadLocalTimeTrialRecords();
+    const index = records.findIndex((record) => record.id === recordId);
+    if (index < 0) return null;
+    const updated = updater({ ...records[index] });
+    if (!isValidTimeTrialRecord(updated)) return null;
+    records[index] = updated;
+    saveLocalTimeTrialRecords(records);
+    return updated;
+  } catch {
+    return null;
+  }
+}
+
+function isValidTimeTrialRecord(record) {
+  return record?.type === "the-paddock-time-trial-record" &&
+    Number.isFinite(record?.lap?.lapTime) &&
+    Array.isArray(record?.lap?.segments) &&
+    record.lap.segments.length >= 3 &&
+    Boolean(record?.track?.id) &&
+    Boolean(record?.car?.class);
+}
+
+function stripTimeTrialRecordGhost(record) {
+  const { ghost, ...rest } = record;
+  return rest;
+}
+
+function exportLocalTimeTrialRecords() {
+  const records = loadLocalTimeTrialRecords();
+  const payload = {
+    type: "the-paddock-time-trial-records-export",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    driver: {
+      name: driverProfile.driverName || "Driver Name",
+      team: driverProfile.teamName || "Team Name",
+    },
+    recordCount: records.length,
+    records,
+  };
+  downloadJsonFile(`the-paddock-time-trial-records-${safeFileName(driverProfile.teamName)}.json`, payload);
+  setTimeTrialRecordsStatus(`Exported ${records.length} local record${records.length === 1 ? "" : "s"}.`);
+}
+
+async function importLocalTimeTrialRecords(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incoming = Array.isArray(parsed) ? parsed : parsed.records;
+    if (!Array.isArray(incoming)) throw new Error("No records found");
+    const current = loadLocalTimeTrialRecords();
+    const byId = new Map(current.map((record) => [record.id, record]));
+    let added = 0;
+    let skipped = 0;
+    for (const record of incoming) {
+      const normalized = normalizeImportedTimeTrialRecord(record);
+      if (!normalized) {
+        skipped += 1;
+        continue;
+      }
+      normalized.source = "imported";
+      normalized.importedAt = new Date().toISOString();
+      if (!byId.has(normalized.id)) added += 1;
+      byId.set(normalized.id, normalized);
+    }
+    const merged = saveLocalTimeTrialRecords([...byId.values()]);
+    syncBestRecordsFromHistory(merged);
+    loadLocalTimeTrialBest();
+    refreshSelectedTimeTrialGhost();
+    updateDriverProfilePage();
+    setTimeTrialRecordsStatus(`Imported ${added} record${added === 1 ? "" : "s"}.${skipped ? ` Skipped ${skipped}.` : ""}`);
+  } catch {
+    setTimeTrialRecordsStatus("Import failed. That file does not look like a Paddock time-trial records export.");
+  } finally {
+    if (event.target) event.target.value = "";
+  }
+}
+
+function normalizeImportedTimeTrialRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  if (record.type === "the-paddock-local-time-trial-best" && Number.isFinite(record.lapTime)) {
+    const imported = {
+      type: "the-paddock-time-trial-record",
+      version: 1,
+      id: record.recordId ?? `imported-${record.track?.id ?? "track"}-${record.car?.class ?? "car"}-${record.lapTime}`,
+      createdAt: record.createdAt ?? new Date().toISOString(),
+      game: { version: "imported-local", mode: "time-trial" },
+      driver: record.driver ?? { name: "Driver Name", team: "Team Name" },
+      track: record.track,
+      car: record.car,
+      lap: {
+        clean: true,
+        penaltySeconds: 0,
+        invalidated: false,
+        lapTime: record.lapTime,
+        formattedLapTime: record.formattedLapTime ?? formatLapTime(record.lapTime),
+        segments: record.segments ?? [],
+        formattedSegments: (record.segments ?? []).map((segment) => formatLapTime(segment)),
+      },
+    };
+    if (record.ghost?.samples?.length) imported.ghost = record.ghost;
+    return isValidTimeTrialRecord(imported) ? imported : null;
+  }
+  return isValidTimeTrialRecord(record) ? record : null;
+}
+
+function syncBestRecordsFromHistory(records = loadLocalTimeTrialRecords()) {
+  const bestByKey = new Map();
+  for (const record of records.filter((candidate) => candidate.source === "local")) {
+    const key = getTimeTrialRecordBestKey(record);
+    const existing = bestByKey.get(key);
+    if (!existing || record.lap.lapTime < existing.lap.lapTime) bestByKey.set(key, record);
+  }
+  for (const record of bestByKey.values()) {
+    try {
+      const best = createBestFromTimeTrialRecord(record);
+      window.localStorage?.setItem(getTimeTrialStorageKeyForRecord(record), JSON.stringify(best));
+    } catch {
+      // Keep imported history even if best sync cannot be written.
+    }
+  }
+}
+
+function getTimeTrialRecordBestKey(record) {
+  return [
+    record.track.id,
+    record.track.version ?? "local-v1",
+    record.car.class,
+  ].join(":");
+}
+
+function createBestFromTimeTrialRecord(record) {
+  const best = {
+    type: "the-paddock-local-time-trial-best",
+    version: 2,
+    recordId: record.id,
+    createdAt: record.createdAt,
+    driver: record.driver,
+    track: record.track,
+    car: record.car,
+    lapTime: record.lap.lapTime,
+    formattedLapTime: record.lap.formattedLapTime,
+    segments: record.lap.segments,
+    sourceRecord: {
+      type: record.type,
+      version: record.version,
+    },
+  };
+  if (record.ghost?.samples?.length) best.ghost = record.ghost;
+  return best;
+}
+
+function getTimeTrialStorageKeyForRecord(record) {
+  return [
+    "the-paddock",
+    "time-trial-best",
+    record.track.id,
+    record.track.version ?? "local-v1",
+    record.car.class,
+  ].join(":");
+}
+
+function setTimeTrialRecordsStatus(message) {
+  if (!timeTrialRecordsStatusEl) return;
+  timeTrialRecordsStatusEl.textContent = message;
+}
+
+async function handleTimeTrialHistoryClick(event) {
+  const button = event.target?.closest?.("[data-upload-time-trial-record]");
+  if (!button) return;
+  const recordId = button.dataset.uploadTimeTrialRecord;
+  const record = loadLocalTimeTrialRecords().find((candidate) => candidate.id === recordId);
+  if (!record) {
+    setTimeTrialRecordsStatus("Could not find that ghost locally.");
     return;
   }
-  timeTrialState.localBest = best;
-  setTimeTrialGhostRun(best);
+  button.disabled = true;
+  button.textContent = "Uploading";
+  const uploaded = await uploadTimeTrialRecordToSupabase(record);
+  if (uploaded) {
+    updateLocalTimeTrialRecord(record.id, (current) => ({
+      ...current,
+      uploadedAt: new Date().toISOString(),
+    }));
+    setTimeTrialRecordsStatus("Ghost uploaded properly.");
+  } else {
+    setTimeTrialRecordsStatus("Ghost upload failed. Local ghost is still saved.");
+  }
+  updateTimeTrialHistoryRecords();
+}
+
+function setTimeTrialOnlineStatus(message) {
+  if (!timeTrialOnlineStatusEl) return;
+  timeTrialOnlineStatusEl.textContent = message;
+  updateTimeTrialOnlineGhostControls();
+}
+
+function getSupabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+    ...extra,
+  };
+}
+
+function createSupabaseTimeTrialRow(record) {
+  const segments = record?.lap?.segments ?? [];
+  return {
+    record_id: record.id,
+    driver_name: record.driver?.name ?? "Driver Name",
+    team_name: record.driver?.team ?? "Team Name",
+    track_id: record.track?.id,
+    track_version: record.track?.version ?? "local-v1",
+    car_class: record.car?.class,
+    car_id: record.car?.id ?? null,
+    car_name: record.car?.name ?? null,
+    lap_time: record.lap?.lapTime,
+    segment_1: segments[0],
+    segment_2: segments[1],
+    segment_3: segments[2],
+    ghost: record.ghost ?? null,
+    record,
+  };
+}
+
+function canUploadTimeTrialRecord(record) {
+  return isValidTimeTrialRecord(record) &&
+    Array.isArray(record.ghost?.samples) &&
+    record.ghost.samples.length >= 20 &&
+    record.lap.clean &&
+    !record.lap.invalidated;
+}
+
+async function uploadTimeTrialRecordToSupabase(record) {
+  if (!canUploadTimeTrialRecord(record)) return false;
+  try {
+    const response = await fetch(`${SUPABASE_TIME_TRIAL_RECORDS_URL}?on_conflict=record_id`, {
+      method: "POST",
+      headers: getSupabaseHeaders({
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      body: JSON.stringify(createSupabaseTimeTrialRow(record)),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    setTimeTrialOnlineStatus("Uploaded clean lap online.");
+    return true;
+  } catch {
+    setTimeTrialOnlineStatus("Online upload failed.");
+    return false;
+  }
+}
+
+async function downloadOnlineTimeTrialGhostsForSelection() {
+  const carClass = getCarProfile().kind;
+  const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
+  setTimeTrialOnlineStatus("Loading online ghosts...");
+  try {
+    const query = {
+      select: "record",
+      track_id: `eq.${selectedTrack}`,
+      track_version: `eq.${trackVersion}`,
+      car_class: `eq.${carClass}`,
+      order: "lap_time.asc",
+      limit: "20",
+    };
+    if (selectedOnlineGhostFilter === "week") {
+      query.created_at = `gte.${getMostRecentSundayFivePacificIso()}`;
+    }
+    const params = new URLSearchParams(query);
+    const response = await fetch(`${SUPABASE_TIME_TRIAL_RECORDS_URL}?${params.toString()}`, {
+      method: "GET",
+      headers: getSupabaseHeaders({ Accept: "application/json" }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    const onlineRecords = rows
+      .map((row) => normalizeImportedTimeTrialRecord(row.record))
+      .filter(Boolean)
+      .map((record) => ({
+        ...record,
+        source: "online",
+        downloadedAt: new Date().toISOString(),
+      }));
+    if (!onlineRecords.length) {
+      selectedOnlineGhostRecordId = "";
+      renderOnlineGhostList([]);
+      setTimeTrialOnlineStatus(selectedOnlineGhostFilter === "week"
+        ? "No ghosts found since Sunday 5pm Pacific."
+        : "No online ghosts found for this track and car class yet.");
+      return;
+    }
+    const current = loadLocalTimeTrialRecords();
+    const byId = new Map(current.map((record) => [record.id, record]));
+    for (const record of onlineRecords) byId.set(record.id, record);
+    saveLocalTimeTrialRecords([...byId.values()]);
+    selectedOnlineGhostRecordId = onlineRecords[0].id;
+    renderOnlineGhostList(onlineRecords);
+    if (selectedTimeTrialGhostMode === "online") refreshSelectedTimeTrialGhost();
+    updateDriverProfilePage();
+    setTimeTrialOnlineStatus(`Loaded ${onlineRecords.length} online ghost${onlineRecords.length === 1 ? "" : "s"}.`);
+  } catch {
+    renderOnlineGhostList([]);
+    setTimeTrialOnlineStatus("Online download failed. Check Supabase table setup.");
+  }
+}
+
+function selectOnlineGhostFilter(filter) {
+  selectedOnlineGhostFilter = filter === "week" ? "week" : "top";
+  selectedOnlineGhostRecordId = "";
+  for (const button of timeTrialOnlineFilterButtons) {
+    button.classList.toggle("is-selected", button.dataset.onlineGhostFilter === selectedOnlineGhostFilter);
+  }
+  downloadOnlineTimeTrialGhostsForSelection();
+}
+
+function handleOnlineGhostListClick(event) {
+  const button = event.target?.closest?.("[data-select-online-ghost]");
+  if (!button) return;
+  selectedOnlineGhostRecordId = button.dataset.selectOnlineGhost;
+  refreshSelectedTimeTrialGhost();
+  renderOnlineGhostList(getMatchingOnlineTimeTrialGhostRecords());
+}
+
+function renderOnlineGhostList(records = getMatchingOnlineTimeTrialGhostRecords()) {
+  if (!timeTrialOnlineListEl) return;
+  timeTrialOnlineListEl.replaceChildren();
+  if (!records.length) {
+    const empty = document.createElement("li");
+    empty.className = "is-empty";
+    empty.textContent = "No ghosts loaded.";
+    timeTrialOnlineListEl.appendChild(empty);
+    return;
+  }
+  for (const record of records.slice(0, 20)) {
+    const row = document.createElement("li");
+    row.className = record.id === selectedOnlineGhostRecordId ? "is-selected" : "";
+    const driver = record.driver?.name ?? "Driver Name";
+    const team = record.driver?.team ?? "Team Name";
+    const stateCode = getValidStateCode(record.driver?.stateCode);
+    row.innerHTML = `
+      <div>
+        <strong class="online-driver-name"><span class="state-flag-badge" title="${getStateName(stateCode)}"><img src="${getStateFlagUrl(stateCode)}" alt="${getStateName(stateCode)} flag" loading="lazy" onerror="this.remove()" />${stateCode}</span>${driver}</strong>
+        <span>${team}</span>
+        <small>${formatOnlineGhostSegmentSummary(record.lap.segments)}</small>
+      </div>
+      <div>
+        <strong>${formatLapTime(record.lap.lapTime)}</strong>
+        <small>${formatHistoryDate(record.createdAt)}</small>
+        <button class="profile-action-button" type="button" data-select-online-ghost="${record.id}">${record.id === selectedOnlineGhostRecordId ? "Selected" : "Race This Ghost"}</button>
+      </div>
+    `;
+    timeTrialOnlineListEl.appendChild(row);
+  }
+}
+
+function getMostRecentSundayFivePacificIso(now = new Date()) {
+  const parts = getPacificDateParts(now);
+  const dayOffset = parts.weekday % 7;
+  let cutoffUtc = Date.UTC(parts.year, parts.month - 1, parts.day - dayOffset, 17 + 8, 0, 0, 0);
+  let cutoff = new Date(cutoffUtc);
+  const actualHour = getPacificDateParts(cutoff).hour;
+  cutoff = new Date(cutoff.getTime() + (17 - actualHour) * 60 * 60 * 1000);
+  if (now < cutoff) cutoff = new Date(cutoff.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return cutoff.toISOString();
+}
+
+function formatOnlineGhostSegmentSummary(segments = []) {
+  if (!Array.isArray(segments) || segments.length < 3) return "-- / -- / --";
+  return segments.map(formatSegmentTime).join(" / ");
+}
+
+function getPacificDateParts(date) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    hourCycle: "h23",
+    weekday: "short",
+  });
+  const values = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  const weekdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    weekday: weekdays[values.weekday] ?? 0,
+  };
+}
+
+function refreshSelectedTimeTrialGhost() {
+  clearTimeTrialGhost();
+  if (selectedTimeTrialGhostMode === "off") return;
+  const selectedRun = getSelectedTimeTrialGhostRun();
+  if (selectedRun) setTimeTrialGhostRun(selectedRun);
+}
+
+function getSelectedTimeTrialGhostRun() {
+  if (selectedTimeTrialGhostMode === "session-best") return timeTrialState.sessionBest;
+  if (selectedTimeTrialGhostMode === "imported") return getBestImportedTimeTrialGhostRun();
+  if (selectedTimeTrialGhostMode === "online") return getBestOnlineTimeTrialGhostRun();
+  return timeTrialState.localBest;
+}
+
+function getBestImportedTimeTrialGhostRun() {
+  return getBestExternalTimeTrialGhostRun((record) => record.source === "imported" || record.importedAt || record.game?.version === "imported-local");
+}
+
+function getBestOnlineTimeTrialGhostRun() {
+  const records = getMatchingOnlineTimeTrialGhostRecords();
+  const selected = selectedOnlineGhostRecordId
+    ? records.find((record) => record.id === selectedOnlineGhostRecordId)
+    : null;
+  const record = selected ?? records[0];
+  return record ? createBestFromTimeTrialRecord(record) : null;
+}
+
+function getBestExternalTimeTrialGhostRun(sourceFilter) {
+  const matching = loadLocalTimeTrialRecords()
+    .filter(sourceFilter)
+    .filter((record) => record.ghost?.samples?.length >= 2)
+    .filter((record) => record.track?.id === selectedTrack)
+    .filter((record) => (record.track?.version ?? "local-v1") === (trackDefinitions[selectedTrack]?.version ?? "local-v1"))
+    .filter((record) => record.car?.class === getCarProfile().kind)
+    .sort((a, b) => a.lap.lapTime - b.lap.lapTime);
+  return matching[0] ? createBestFromTimeTrialRecord(matching[0]) : null;
+}
+
+function getMatchingOnlineTimeTrialGhostRecords() {
+  return loadLocalTimeTrialRecords()
+    .filter((record) => record.source === "online" || record.downloadedAt)
+    .filter((record) => record.ghost?.samples?.length >= 2)
+    .filter((record) => record.track?.id === selectedTrack)
+    .filter((record) => (record.track?.version ?? "local-v1") === (trackDefinitions[selectedTrack]?.version ?? "local-v1"))
+    .filter((record) => record.car?.class === getCarProfile().kind)
+    .filter((record) => selectedOnlineGhostFilter !== "week" || new Date(record.createdAt) >= new Date(getMostRecentSundayFivePacificIso()))
+    .sort((a, b) => a.lap.lapTime - b.lap.lapTime);
 }
 
 function clearTimeTrialGhost() {
@@ -2511,7 +3204,7 @@ function styleTimeTrialGhostCar(ghostCar) {
 }
 
 function updateTimeTrialGhost(dt) {
-  if (!timeTrialGhost.active || !timeTrialGhost.car?.root || selectedGameMode !== "time-trial" || !gameStarted || isMenuOpen()) {
+  if (selectedTimeTrialGhostMode === "off" || !timeTrialGhost.active || !timeTrialGhost.car?.root || selectedGameMode !== "time-trial" || !gameStarted || isMenuOpen()) {
     if (timeTrialGhost.car?.root) timeTrialGhost.car.root.visible = false;
     return;
   }
@@ -2654,8 +3347,6 @@ function exportDrivingLineRecording() {
     track: {
       id: selectedTrack,
       name: getSelectedTrackLabel(),
-      environment: track.environment ?? "grass",
-      timeOfDay: track.timeOfDay ?? "day",
     },
     car: {
       id: selectedCar,
@@ -2723,7 +3414,7 @@ function updateDrivingLineRecorderHud() {
 function updateTimeTrialHud() {
   const isTimeTrial = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen();
   if (timeTrialTimerEl) timeTrialTimerEl.hidden = !isTimeTrial;
-  if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0 && timeTrialState.trackLimitsPenaltyMessageTime <= 0);
+  if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0 && timeTrialState.trackLimitsPenaltyMessageTime <= 0 && timeTrialState.saveMessageTime <= 0);
   if (timeTrialResultsEl) timeTrialResultsEl.hidden = !isTimeTrial;
   updateDrivingLineRecorderHud();
   if (!isTimeTrial) return;
@@ -2746,12 +3437,15 @@ function updateTimeTrialHud() {
     segmentEl.classList.toggle("is-yellow", status === "yellow");
   }
   if (timeTrialMessageEl && !timeTrialMessageEl.hidden) {
-    timeTrialMessageEl.textContent = timeTrialState.invalidated
+    timeTrialMessageEl.textContent = timeTrialState.saveMessageTime > 0
+      ? "My Best Saved"
+      : timeTrialState.invalidated
       ? "Invalidated Lap - Off Track"
       : timeTrialState.trackLimitsPenaltyMessageTime > 0
         ? "2 Second Penalty - Track Limits"
         : "1 Second Penalty - Wall Contact";
     timeTrialMessageEl.classList.toggle("is-invalidated", timeTrialState.invalidated);
+    timeTrialMessageEl.classList.toggle("is-saved", timeTrialState.saveMessageTime > 0);
   }
   if (!timeTrialLapsEl) return;
 
@@ -4573,6 +5267,8 @@ function createStockCar(paint = "orange-stock") {
   const glass = new THREE.MeshStandardMaterial({ color: scheme.glass, roughness: 0.25, metalness: 0.08, flatShading: true });
   const black = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.85, flatShading: true });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xd6d2c8, roughness: 0.35, metalness: 0.25, flatShading: true });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: 0xc51622, emissive: 0xb00012, emissiveIntensity: 0.22, roughness: 0.28, flatShading: true });
+  const brakeLights = [];
 
   const base = createStockCarBody(orange);
   base.position.y = 0.46;
@@ -4642,6 +5338,13 @@ function createStockCar(paint = "orange-stock") {
   spoiler.castShadow = true;
   body.add(spoiler);
 
+  for (const x of [-0.72, -0.38, 0.38, 0.72]) {
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.08), tailLamp.clone());
+    tail.position.set(x, 0.7, -2.84);
+    body.add(tail);
+    brakeLights.push(tail);
+  }
+
   const wheelMeshes = [];
   const wheels = {};
   const tireGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 14);
@@ -4669,7 +5372,7 @@ function createStockCar(paint = "orange-stock") {
     body.add(pivot);
   }
 
-  return { root, body, wheels, wheelMeshes };
+  return { root, body, wheels, wheelMeshes, lights: { brakeLights } };
 }
 
 function createSelectedCar(carId) {
@@ -4681,9 +5384,10 @@ function createSelectedCar(carId) {
 }
 
 function addUniversalHeadlights(car, kind = "formula") {
-  const headlightIntensity = 6.8;
-  const headlightDistance = 440;
-  const headlightAngle = kind === "jeep" ? 0.36 : 0.31;
+  const headlightColor = 0xffc45c;
+  const headlightIntensity = 24.48;
+  const headlightDistance = 633.6;
+  const headlightAngle = kind === "jeep" ? 0.396 : 0.341;
   car.lights ??= {};
   car.lights.headlights ??= [];
   car.lights.headlightMeshes ??= [];
@@ -4700,7 +5404,7 @@ function addUniversalHeadlights(car, kind = "formula") {
   const layout = layouts[kind] ?? layouts.formula;
   const lampMaterial = new THREE.MeshStandardMaterial({
     color: 0xf6f2dc,
-    emissive: 0xffd782,
+    emissive: headlightColor,
     emissiveIntensity: 2.4,
     roughness: 0.24,
     metalness: 0.08,
@@ -4730,12 +5434,13 @@ function addUniversalHeadlights(car, kind = "formula") {
   }
   let realBeam = car.lights.headlights[0];
   if (!realBeam) {
-    realBeam = new THREE.SpotLight(0xbfe8ff, headlightIntensity, headlightDistance, headlightAngle, 0.62, 1.12);
+    realBeam = new THREE.SpotLight(headlightColor, headlightIntensity, headlightDistance, headlightAngle, 0.62, 1.12);
     car.body.add(realBeam, realBeam.target);
     car.lights.headlights.push(realBeam);
   }
-  realBeam.position.set(0, layout.y + 0.08, layout.z + 0.08);
-  realBeam.target.position.set(0, layout.targetY, layout.targetZ);
+  realBeam.color.setHex(headlightColor);
+  realBeam.position.set(0, layout.y + 0.58, layout.z + 0.28);
+  realBeam.target.position.set(0, layout.targetY - 1.6, layout.targetZ);
   realBeam.intensity = headlightIntensity;
   realBeam.distance = headlightDistance;
   realBeam.angle = headlightAngle;
@@ -5083,6 +5788,8 @@ function createLeMansPrototype(paint = "lmp") {
   const black = new THREE.MeshStandardMaterial({ color: 0x111314, roughness: 0.82, flatShading: true });
   const carbon = new THREE.MeshStandardMaterial({ color: 0x202629, roughness: 0.72, metalness: 0.08, flatShading: true });
   const glass = new THREE.MeshStandardMaterial({ color: scheme.glass, roughness: 0.22, metalness: 0.08, flatShading: true });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: 0xc51622, emissive: 0xb00012, emissiveIntensity: 0.22, roughness: 0.28, flatShading: true });
+  const brakeLights = [];
 
   const floor = createTaperedBox(2.08, 2.2, 0.28, 5.4, carbon);
   floor.position.y = 0.22;
@@ -5145,6 +5852,13 @@ function createLeMansPrototype(paint = "lmp") {
     body.add(upright);
   }
 
+  for (const x of [-0.54, -0.18, 0.18, 0.54]) {
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.07), tailLamp.clone());
+    tail.position.set(x, 0.58, -2.72);
+    body.add(tail);
+    brakeLights.push(tail);
+  }
+
   const wheelMeshes = [];
   const wheels = {};
   const tireGeometry = new THREE.CylinderGeometry(0.42, 0.42, 0.48, 16);
@@ -5173,7 +5887,7 @@ function createLeMansPrototype(paint = "lmp") {
     body.add(pivot);
   }
 
-  return { root, body, wheels, wheelMeshes };
+  return { root, body, wheels, wheelMeshes, lights: { brakeLights } };
 }
 
 function createLmpWedgeNose(material) {
@@ -6822,6 +7536,7 @@ function updateDriverProfilePage() {
     empty.className = "is-empty";
     empty.textContent = "No saved time trial bests yet.";
     driverProfileRecordsEl.appendChild(empty);
+    updateTimeTrialHistoryRecords();
     return;
   }
   for (const record of records) {
@@ -6829,21 +7544,23 @@ function updateDriverProfilePage() {
     row.innerHTML = `
       <div>
         <strong>${record.trackName}</strong>
-        <span>${record.carClassLabel} / ${record.environmentLabel} / ${record.timeOfDayLabel}</span>
+        <span>${record.carClassLabel}</span>
       </div>
       <div>
         <strong>${formatLapTime(record.lapTime)}</strong>
-        <span>${formatSegmentSummary(record.segments)}</span>
+        <span>${formatOnlineGhostSegmentSummary(record.segments)}</span>
       </div>
     `;
     driverProfileRecordsEl.appendChild(row);
   }
+  updateTimeTrialHistoryRecords();
 }
 
 function getDefaultDriverProfile() {
   return {
     driverName: "Driver Name",
     teamName: "Team Name",
+    stateCode: "CA",
     primaryColor: "#242833",
     accentColor: "#f6f2e8",
   };
@@ -6869,6 +7586,7 @@ function saveDriverProfile() {
 function applyDriverProfileToInputs() {
   if (driverProfileNameInput) driverProfileNameInput.value = driverProfile.driverName || "Driver Name";
   if (driverProfileTeamInput) driverProfileTeamInput.value = driverProfile.teamName || "Team Name";
+  if (driverProfileStateSelect) driverProfileStateSelect.value = getValidStateCode(driverProfile.stateCode);
   if (teamPrimaryColorInput) teamPrimaryColorInput.value = normalizeHexColor(driverProfile.primaryColor, "#242833");
   if (teamAccentColorInput) teamAccentColorInput.value = normalizeHexColor(driverProfile.accentColor, "#f6f2e8");
   updateProfileTeamLabels();
@@ -6881,6 +7599,7 @@ function updateDriverProfileFromInputs() {
   driverProfile = {
     driverName: driverProfileNameInput?.value || "Driver Name",
     teamName: driverProfileTeamInput?.value || "Team Name",
+    stateCode: getValidStateCode(driverProfileStateSelect?.value),
     primaryColor: normalizeHexColor(teamPrimaryColorInput?.value, "#242833"),
     accentColor: normalizeHexColor(teamAccentColorInput?.value, "#f6f2e8"),
   };
@@ -6979,6 +7698,19 @@ function normalizeHexColor(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
 }
 
+function getValidStateCode(value) {
+  const code = String(value ?? "").trim().toUpperCase();
+  return US_STATE_NAMES[code] ? code : "CA";
+}
+
+function getStateName(value) {
+  return US_STATE_NAMES[getValidStateCode(value)];
+}
+
+function getStateFlagUrl(value) {
+  return `https://flagscenter.com/api/v1/us-${getValidStateCode(value).toLowerCase()}.svg`;
+}
+
 function hexColorToNumber(value, fallback) {
   const normalized = normalizeHexColor(value, "");
   return normalized ? Number.parseInt(normalized.slice(1), 16) : fallback;
@@ -7009,8 +7741,6 @@ function getLocalTimeTrialBestRecords() {
         trackId: best.track?.id ?? "unknown-track",
         trackName: best.track?.name ?? "Unknown Track",
         carClassLabel: getCarClassLabel(best.car?.class),
-        environmentLabel: capitalizeLabel(best.track?.environment ?? "grass"),
-        timeOfDayLabel: capitalizeLabel(best.track?.timeOfDay ?? "day"),
       });
     }
   } catch {
@@ -7022,6 +7752,83 @@ function getLocalTimeTrialBestRecords() {
     if (!existing || record.lapTime < existing.lapTime) bestByTrack.set(record.trackId, record);
   }
   return [...bestByTrack.values()].sort((a, b) => a.trackName.localeCompare(b.trackName));
+}
+
+function updateTimeTrialHistoryRecords() {
+  if (!timeTrialHistoryRecordsEl) return;
+  seedTimeTrialHistoryFromExistingBests();
+  const records = loadLocalTimeTrialRecords()
+    .filter(isDisplayableSessionBestGhostRecord)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  timeTrialHistoryRecordsEl.replaceChildren();
+  if (!records.length) {
+    const empty = document.createElement("li");
+    empty.className = "is-empty";
+    empty.textContent = "No session-best ghosts saved yet.";
+    timeTrialHistoryRecordsEl.appendChild(empty);
+    setTimeTrialRecordsStatus("Your best ghost from each Time Trial session will save here.");
+    return;
+  }
+  setTimeTrialRecordsStatus(`${records.length} session-best ghost${records.length === 1 ? "" : "s"} saved.`);
+  for (const record of records.slice(0, 20)) {
+    const row = document.createElement("li");
+    const recordLabels = [
+      record.driver?.name ?? "Driver Name",
+      record.driver?.team ?? "Team Name",
+      record.uploadedAt ? "Uploaded" : "Not Uploaded",
+    ].filter(Boolean);
+    const uploadLabel = record.uploadedAt ? "Uploaded" : "Upload Ghost";
+    row.innerHTML = `
+      <div>
+        <strong>${record.track.name ?? "Unknown Track"}</strong>
+        <span>${getCarClassLabel(record.car.class)}</span>
+        <small>${recordLabels.join(" / ")}</small>
+      </div>
+      <div>
+        <strong>${formatLapTime(record.lap.lapTime)}</strong>
+        <span>${formatOnlineGhostSegmentSummary(record.lap.segments)}</span>
+        <small>${formatHistoryDate(record.createdAt)}</small>
+        <button class="profile-action-button profile-upload-button" type="button" data-upload-time-trial-record="${record.id}" ${record.uploadedAt ? "disabled" : ""}>${uploadLabel}</button>
+      </div>
+    `;
+    timeTrialHistoryRecordsEl.appendChild(row);
+  }
+}
+
+function isDisplayableSessionBestGhostRecord(record) {
+  return record?.source === "local" &&
+    record.sessionBest === true &&
+    Array.isArray(record.ghost?.samples) &&
+    record.ghost.samples.length >= 20;
+}
+
+function seedTimeTrialHistoryFromExistingBests() {
+  const existingRecords = loadLocalTimeTrialRecords();
+  if (existingRecords.length) return;
+}
+
+function getAllLocalTimeTrialBests() {
+  const prefix = "the-paddock:time-trial-best:";
+  const bests = [];
+  try {
+    for (let i = 0; i < (window.localStorage?.length ?? 0); i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const best = JSON.parse(raw);
+      if (Number.isFinite(best?.lapTime)) bests.push(best);
+    }
+  } catch {
+    return bests;
+  }
+  return bests;
+}
+
+function formatHistoryDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Saved locally";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function getCarClassLabel(kind = "") {
@@ -7147,6 +7954,33 @@ function selectTimeTrialMode(mode) {
 function updateTimeTrialModeSelection() {
   timeTrialStandardButton?.classList.toggle("is-selected", selectedTimeTrialMode === "standard");
   timeTrialRecordLineButton?.classList.toggle("is-selected", selectedTimeTrialMode === "record-line");
+  if (timeTrialGhostSelect) timeTrialGhostSelect.value = selectedTimeTrialGhostMode;
+  updateTimeTrialOnlineGhostControls();
+}
+
+function updateTimeTrialGhostSelection() {
+  const value = timeTrialGhostSelect?.value ?? "my-best";
+  selectedTimeTrialGhostMode = ["my-best", "session-best", "online", "off"].includes(value) ? value : "my-best";
+  if (timeTrialGhostSelect) timeTrialGhostSelect.value = selectedTimeTrialGhostMode;
+  updateTimeTrialOnlineGhostControls();
+  refreshSelectedTimeTrialGhost();
+  if (selectedTimeTrialGhostMode === "online") {
+    const records = getMatchingOnlineTimeTrialGhostRecords();
+    if (records.length) {
+      if (!selectedOnlineGhostRecordId) selectedOnlineGhostRecordId = records[0].id;
+      renderOnlineGhostList(records);
+      refreshSelectedTimeTrialGhost();
+    } else {
+      downloadOnlineTimeTrialGhostsForSelection();
+    }
+  }
+}
+
+function updateTimeTrialOnlineGhostControls() {
+  const showOnlineControls = selectedTimeTrialGhostMode === "online";
+  if (timeTrialOnlineBrowserEl) timeTrialOnlineBrowserEl.hidden = !showOnlineControls;
+  if (timeTrialOnlineStatusEl) timeTrialOnlineStatusEl.hidden = !showOnlineControls || !timeTrialOnlineStatusEl.textContent;
+  if (showOnlineControls) renderOnlineGhostList();
 }
 
 function formatOrdinal(value) {
@@ -7291,6 +8125,7 @@ function createTrackDefinitionFromEditorData(sourceTrack, definitionId) {
   const points = sampled.points;
 
   return {
+    version: sourceTrack.version ?? TRACK_VERSION_BY_ID[definitionId] ?? `${definitionId}-v1`,
     timeOfDay: sourceTrack.timeOfDay ?? "day",
     environment: sourceTrack.environment ?? "grass",
     points,
@@ -8617,10 +9452,10 @@ function getTrackForwardAtSample(index = 0) {
 function getQuickRaceGridPose(gridPosition = 1) {
   const startIndex = track.startSampleIndex ?? 0;
   const samples = track.samples ?? [];
-  const rowSpacing = 13.8;
+  const rowSpacing = 22.77;
   const laneOffset = 2.9;
   const gridStartBehindLine = 4;
-  const rightLaneAdvance = 2.2;
+  const rightLaneAdvance = 11;
   const safePosition = Math.max(1, Math.round(gridPosition));
   const row = Math.floor((safePosition - 1) / 2);
   const isRightLane = safePosition % 2 === 1;
@@ -9831,7 +10666,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   let lateralSpeed = opponent.velocity.dot(right);
   const surface = track.sample(opponent.position.x, opponent.position.z);
   const currentWheelGrassCount = getAiWheelGrassCount(opponent);
-  const offTrackScale = surface.kind === "grass" ? 0.46 : surface.kind === "kerb" || surface.kind === "sausage" ? 0.74 : 1;
+  const offTrackScale = surface.kind === "grass" ? 0.7 : surface.kind === "kerb" || surface.kind === "sausage" ? 0.74 : 1;
   const slipstreamStrength = getSlipstreamStrength(getAiSlipstreamBody(opponent));
   const slipstreamPowerScale = 1 + slipstreamStrength * 0.08;
   const slipstreamDragScale = 1 - slipstreamStrength * 0.22;
@@ -9899,7 +10734,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
     opponent.debug.grassFrames += 1;
     opponent.recoveryTimer = Math.max(opponent.recoveryTimer ?? 0, wheelGrassCount >= 2 ? 1.1 : 0.45);
     const grassSlowdown = racing.softenGrassEmergencySlowdown
-      ? THREE.MathUtils.lerp(0.992, 0.975, wheelGrassCount / 4)
+      ? THREE.MathUtils.lerp(0.998, 0.982, wheelGrassCount / 4)
       : THREE.MathUtils.lerp(0.92, 0.72, wheelGrassCount / 4);
     opponent.velocity.multiplyScalar(grassSlowdown);
   }

@@ -367,6 +367,137 @@ h1 {
   color: rgba(246, 242, 232, 0.5);
 }
 
+.ghost-button.is-selected {
+  border-color: rgba(255, 207, 74, 0.72);
+  background: rgba(255, 207, 74, 0.14);
+  color: #ffcf4a;
+}
+
+.time-trial-online-browser {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid rgba(127, 199, 255, 0.26);
+  border-radius: 6px;
+  background: rgba(8, 15, 20, 0.48);
+}
+
+.time-trial-online-browser[hidden] {
+  display: none;
+}
+
+.time-trial-online-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.time-trial-online-toolbar .ghost-button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.time-trial-online-status {
+  min-height: 18px;
+  margin: 0 0 10px;
+  color: rgba(191, 230, 255, 0.72);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-trial-online-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.time-trial-online-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(246, 242, 232, 0.06);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.time-trial-online-list li.is-selected {
+  border-color: rgba(255, 207, 74, 0.58);
+  background: rgba(255, 207, 74, 0.12);
+}
+
+.time-trial-online-list li.is-empty {
+  display: block;
+  color: rgba(246, 242, 232, 0.62);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.time-trial-online-list li div {
+  display: grid;
+  gap: 3px;
+}
+
+.time-trial-online-list li div:last-child {
+  justify-items: end;
+  text-align: right;
+}
+
+.time-trial-online-list strong {
+  color: #f6f2e8;
+  font-size: 13px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+}
+
+.online-driver-name {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.state-flag-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 20px;
+  border: 1px solid rgba(246, 242, 232, 0.74);
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(8, 15, 20, 0.72);
+  color: #f6f2e8;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.32), 0 4px 10px rgba(0, 0, 0, 0.24);
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.state-flag-badge img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.time-trial-online-list span,
+.time-trial-online-list small {
+  color: rgba(191, 230, 255, 0.7);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: none;
+}
+
 .driver-profile-card {
   display: grid;
   grid-template-columns: 1fr;
@@ -374,9 +505,16 @@ h1 {
   margin: 22px 0 14px;
 }
 
+.driver-profile-driver-row {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(84px, 3fr);
+  gap: 12px;
+}
+
 .driver-profile-card > div,
 .driver-profile-card > label,
-.driver-profile-records {
+.driver-profile-records,
+.driver-profile-history {
   border: 1px solid rgba(127, 199, 255, 0.28);
   border-radius: 6px;
   background: rgba(8, 15, 20, 0.58);
@@ -389,9 +527,15 @@ h1 {
   padding: 14px;
 }
 
+.driver-profile-driver-row > label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
 .driver-profile-card span,
 .driver-profile-records h2,
-.driver-profile-records li span {
+.driver-profile-history h2 {
   color: rgba(191, 230, 255, 0.72);
   font-size: 11px;
   font-weight: 900;
@@ -406,7 +550,8 @@ h1 {
   text-transform: uppercase;
 }
 
-.driver-profile-card input {
+.driver-profile-card input,
+.driver-profile-card select {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -420,22 +565,98 @@ h1 {
   outline: none;
 }
 
-.driver-profile-card input:focus {
+.driver-profile-card select {
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.driver-profile-card select option {
+  background: #f6f2e8;
+  color: #15170f;
+}
+
+.driver-profile-card input:focus,
+.driver-profile-card select:focus {
   border-bottom-color: rgba(127, 199, 255, 0.86);
 }
 
-.driver-profile-records {
-  max-height: 360px;
+.driver-profile-records,
+.driver-profile-history {
+  max-height: 250px;
   padding: 14px;
   overflow: auto;
 }
 
-.driver-profile-records h2 {
+.driver-profile-history {
+  margin-top: 12px;
+}
+
+.driver-profile-records h2,
+.driver-profile-history h2 {
   margin: 0 0 10px;
   color: #7fc7ff;
 }
 
-.driver-profile-records ol {
+.driver-profile-history-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.driver-profile-history-header h2 {
+  margin: 0;
+}
+
+.driver-profile-history-header div {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-action-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(127, 199, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(7, 12, 16, 0.58);
+  color: #bfe6ff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.profile-action-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.profile-action-button:disabled {
+  opacity: 0.54;
+  cursor: default;
+}
+
+.profile-upload-button {
+  justify-self: end;
+  margin-top: 4px;
+}
+
+.profile-records-status {
+  margin: 0 0 8px;
+  color: rgba(246, 242, 232, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.driver-profile-records ol,
+.driver-profile-history ol {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -443,38 +664,56 @@ h1 {
   list-style: none;
 }
 
-.driver-profile-records li {
+.driver-profile-records li,
+.driver-profile-history li {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 5px;
-  background: rgba(246, 242, 232, 0.07);
+  background: rgba(246, 242, 232, 0.06);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
 }
 
-.driver-profile-records li.is-empty {
+.driver-profile-records li.is-empty,
+.driver-profile-history li.is-empty {
   display: block;
   color: rgba(246, 242, 232, 0.62);
   font-size: 13px;
   font-weight: 800;
 }
 
-.driver-profile-records li div {
+.driver-profile-records li div,
+.driver-profile-history li div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
-.driver-profile-records li div:last-child {
+.driver-profile-records li div:last-child,
+.driver-profile-history li div:last-child {
+  justify-items: end;
   text-align: right;
 }
 
-.driver-profile-records li strong {
+.driver-profile-records li strong,
+.driver-profile-history li strong {
   color: #f6f2e8;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
-  text-transform: uppercase;
+  text-transform: none;
+}
+
+.driver-profile-records li span,
+.driver-profile-records li small,
+.driver-profile-history li span,
+.driver-profile-history li small {
+  color: rgba(191, 230, 255, 0.7);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: none;
 }
 
 .driver-profile-customizer {
@@ -1605,6 +1844,16 @@ h1 {
   color: #ffcf4a;
   border-color: rgba(255, 207, 74, 0.58);
   background: rgba(82, 51, 9, 0.78);
+}
+
+.time-trial-message.is-saved {
+  color: #79f2a6;
+  border-color: rgba(121, 242, 166, 0.58);
+  background: rgba(9, 68, 39, 0.78);
+}
+
+.time-trial-ghost-select {
+  margin: 0 0 14px;
 }
 
 .race-countdown {
