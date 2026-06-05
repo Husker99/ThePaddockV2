@@ -29,7 +29,6 @@ const openTrackEditorButton = document.querySelector("#open-track-editor");
 const driverProfileButton = document.querySelector("#driver-profile-button");
 const driverProfileNameInput = document.querySelector("#driver-profile-name");
 const driverProfileTeamInput = document.querySelector("#driver-profile-team");
-const driverProfileStateSelect = document.querySelector("#driver-profile-state");
 const driverProfileRecordsEl = document.querySelector("#driver-profile-records");
 const timeTrialHistoryRecordsEl = document.querySelector("#time-trial-history-records");
 const timeTrialExportRecordsButton = document.querySelector("#time-trial-export-records");
@@ -83,6 +82,7 @@ const timeTrialGhostSelect = document.querySelector("#time-trial-ghost-select");
 const timeTrialOnlineBrowserEl = document.querySelector("#time-trial-online-browser");
 const timeTrialDownloadGhostsButton = document.querySelector("#time-trial-download-ghosts");
 const timeTrialOnlineStatusEl = document.querySelector("#time-trial-online-status");
+const timeTrialSelectedOnlineGhostEl = document.querySelector("#time-trial-selected-online-ghost");
 const timeTrialOnlineListEl = document.querySelector("#time-trial-online-list");
 const timeTrialOnlineFilterButtons = [...document.querySelectorAll("[data-online-ghost-filter]")];
 const aiOpponentsBackButton = document.querySelector("#ai-opponents-back");
@@ -113,6 +113,10 @@ const timeTrialTimerEl = document.querySelector("#time-trial-timer");
 const timeTrialTimerValueEl = document.querySelector("#time-trial-timer-value");
 const timeTrialSegmentEls = [...document.querySelectorAll("#time-trial-segments span")];
 const timeTrialMessageEl = document.querySelector("#time-trial-message");
+const timeTrialLapCardEl = document.querySelector("#time-trial-lap-card");
+const timeTrialLapCardTitleEl = document.querySelector("#time-trial-lap-card-title");
+const timeTrialLapCardTimeEl = document.querySelector("#time-trial-lap-card-time");
+const timeTrialLapCardDetailEl = document.querySelector("#time-trial-lap-card-detail");
 const timeTrialLocalBestEl = document.querySelector("#time-trial-local-best");
 const raceCountdownEl = document.querySelector("#race-countdown");
 const quickRaceHudEl = document.querySelector("#quick-race-hud");
@@ -120,6 +124,11 @@ const quickRacePositionEl = document.querySelector("#quick-race-position");
 const quickRaceLapEl = document.querySelector("#quick-race-lap");
 const quickRacePenaltyTimerEl = document.querySelector("#quick-race-penalty-timer");
 const quickRacePenaltyMessageEl = document.querySelector("#quick-race-penalty-message");
+const quickRaceResultsEl = document.querySelector("#quick-race-results");
+const quickRaceResultsPositionEl = document.querySelector("#quick-race-results-position");
+const quickRaceResultsListEl = document.querySelector("#quick-race-results-list");
+const quickRaceResultsRestartButton = document.querySelector("#quick-race-results-restart");
+const quickRaceResultsMenuButton = document.querySelector("#quick-race-results-menu");
 const timeTrialResultsEl = document.querySelector("#time-trial-results");
 const timeTrialLapsEl = document.querySelector("#time-trial-laps");
 const drivingLineRecorderEl = document.querySelector("#driving-line-recorder");
@@ -487,18 +496,6 @@ const AI_DIFFICULTY_SETTINGS = {
   amateur: { label: "Amateur", cyborgBrakingLookaheadScale: 0.8 },
   professional: { label: "Professional", cyborgBrakingLookaheadScale: 0.05 },
 };
-const US_STATE_NAMES = {
-  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
-  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
-  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
-  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
-  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
-  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
-};
 const editorUndoStack = [];
 const timeTrialState = {
   running: false,
@@ -526,6 +523,8 @@ const timeTrialState = {
   trackLimitsPenaltyCooldown: 0,
   trackLimitsPenaltyMessageTime: 0,
   saveMessageTime: 0,
+  lapCardTime: 0,
+  lapCard: null,
 };
 const drivingLineRecorder = {
   active: false,
@@ -558,6 +557,8 @@ const quickRaceState = {
   penaltyMessageTime: 0,
   penaltyMessageText: "",
   penaltyMessageServing: false,
+  resultsShown: false,
+  playerJoyride: null,
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
@@ -706,7 +707,6 @@ openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice
 driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
 driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
 driverProfileTeamInput?.addEventListener("input", updateDriverProfileFromInputs);
-driverProfileStateSelect?.addEventListener("change", updateDriverProfileFromInputs);
 teamPrimaryColorInput?.addEventListener("input", updateDriverProfileFromInputs);
 teamAccentColorInput?.addEventListener("input", updateDriverProfileFromInputs);
 timeTrialExportRecordsButton?.addEventListener("click", exportLocalTimeTrialRecords);
@@ -771,6 +771,8 @@ for (const button of startRaceButtons) {
 }
 quickRaceStartButton?.addEventListener("pointerenter", startMenuMusic);
 quickRaceStartButton?.addEventListener("click", startGame);
+quickRaceResultsRestartButton?.addEventListener("click", restartQuickRaceFromResults);
+quickRaceResultsMenuButton?.addEventListener("click", returnToMainMenuFromRace);
 timeTrialStandardButton?.addEventListener("click", () => selectTimeTrialMode("standard"));
 timeTrialRecordLineButton?.addEventListener("click", () => selectTimeTrialMode("record-line"));
 timeTrialGhostSelect?.addEventListener("change", updateTimeTrialGhostSelection);
@@ -1409,14 +1411,20 @@ renderer.setAnimationLoop(update);
 function update() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
   const raceStartBlocked = updateRaceCountdown(dt);
-  if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateCar(dt);
+  if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) {
+    if (isQuickRacePlayerFinished()) updatePostRacePlayerJoyride(dt);
+    else updateCar(dt);
+  }
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateAiOpponents(dt);
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) resolveRaceCarCollisions(dt);
   updateTimeTrialGhost(dt);
   updateSlipstreamDebugCones();
   updateQuickRaceState(dt, raceStartBlocked);
   if (!gameStarted || isPaused || isMenuOpen()) updateRevMeter();
-  if (selectedGameMode === "time-trial") updateTimeTrialHud();
+  if (selectedGameMode === "time-trial") {
+    updateTimeTrialLapCard(dt);
+    updateTimeTrialHud();
+  }
   if (selectedGameMode !== "quick-race" || isPaused || isMenuOpen()) updateAiDebugPanel(window.paddockAiDebugSummary ?? null);
   if (isMenuOpen()) updateMenuPreview(dt);
   updateCamera(dt);
@@ -2251,6 +2259,14 @@ function updateTimeTrial(dt, wheelSurface) {
       completeTimeTrialSegment(2);
       recordTimeTrialLap();
       holdCompletedTimeTrialSegments();
+    } else if (timeTrialState.running && timeTrialState.invalidated) {
+      showTimeTrialLapCard({
+        title: "Lap Invalidated",
+        lapTime: timeTrialState.currentTime,
+        segments: timeTrialState.currentSegments,
+        details: ["Off Track", "Ghost not saved"],
+        valid: false,
+      });
     }
     timeTrialState.running = true;
     timeTrialState.currentTime = 0;
@@ -2369,6 +2385,8 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   timeTrialState.trackLimitsPenaltyCooldown = 0;
   timeTrialState.trackLimitsPenaltyMessageTime = 0;
   timeTrialState.saveMessageTime = 0;
+  timeTrialState.lapCardTime = 0;
+  timeTrialState.lapCard = null;
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
@@ -2390,6 +2408,8 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
 function recordTimeTrialLap() {
   const lapTime = timeTrialState.currentTime;
   if (lapTime <= 0) return;
+  const previousSessionBest = timeTrialState.sessionBest?.lapTime ?? Infinity;
+  const previousLocalBest = timeTrialState.localBest?.lapTime ?? Infinity;
   recordDrivingLineLap(lapTime);
   timeTrialState.latestLapId += 1;
   const ghostSamples = timeTrialState.currentGhostSamples.map((sample) => ({ ...sample }));
@@ -2400,7 +2420,45 @@ function recordTimeTrialLap() {
   maybeSaveLocalTimeTrialBest(record);
   refreshSelectedTimeTrialGhost();
   refreshTimeTrialBestReferences();
+  const details = [
+    formatSegmentSummary(timeTrialState.currentSegments),
+    lapTime < previousSessionBest ? "New Session Best" : "",
+    lapTime < previousLocalBest ? "New My Best" : "",
+    ghostSamples.length >= 20 && lapTime < previousSessionBest ? "Session Ghost Saved" : "",
+  ].filter(Boolean);
+  showTimeTrialLapCard({
+    title: lapTime < previousLocalBest ? "New My Best" : "Lap Complete",
+    lapTime,
+    segments: timeTrialState.currentSegments,
+    details,
+    valid: true,
+  });
   updateTimeTrialHud();
+}
+
+function showTimeTrialLapCard({ title, lapTime, segments = [], details = [], valid = true }) {
+  timeTrialState.lapCard = {
+    title,
+    lapTime,
+    segments: [...segments],
+    details,
+    valid,
+  };
+  timeTrialState.lapCardTime = valid ? 4 : 3.2;
+  updateTimeTrialLapCard(0);
+}
+
+function updateTimeTrialLapCard(dt) {
+  if (timeTrialState.lapCardTime > 0) timeTrialState.lapCardTime = Math.max(0, timeTrialState.lapCardTime - dt);
+  const visible = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen() && timeTrialState.lapCard && timeTrialState.lapCardTime > 0;
+  if (!timeTrialLapCardEl) return;
+  timeTrialLapCardEl.hidden = !visible;
+  if (!visible) return;
+  const card = timeTrialState.lapCard;
+  timeTrialLapCardEl.classList.toggle("is-invalidated", !card.valid);
+  if (timeTrialLapCardTitleEl) timeTrialLapCardTitleEl.textContent = card.title;
+  if (timeTrialLapCardTimeEl) timeTrialLapCardTimeEl.textContent = formatLapTime(card.lapTime);
+  if (timeTrialLapCardDetailEl) timeTrialLapCardDetailEl.textContent = card.details.join("  |  ");
 }
 
 function refreshTimeTrialBestReferences() {
@@ -2549,8 +2607,6 @@ function createLocalTimeTrialRecord(lapTime, segments, ghostSamples = []) {
     driver: {
       name: driverProfile.driverName || "Driver Name",
       team: driverProfile.teamName || "Team Name",
-      stateCode: getValidStateCode(driverProfile.stateCode),
-      stateName: getStateName(driverProfile.stateCode),
       primaryColor: normalizeHexColor(driverProfile.primaryColor, "#242833"),
       accentColor: normalizeHexColor(driverProfile.accentColor, "#f6f2e8"),
     },
@@ -2978,7 +3034,7 @@ async function downloadOnlineTimeTrialGhostsForSelection() {
       track_version: `eq.${trackVersion}`,
       car_class: `eq.${carClass}`,
       order: "lap_time.asc",
-      limit: "20",
+      limit: "10",
     };
     if (selectedOnlineGhostFilter === "week") {
       query.created_at = `gte.${getMostRecentSundayFivePacificIso()}`;
@@ -3041,6 +3097,13 @@ function handleOnlineGhostListClick(event) {
 function renderOnlineGhostList(records = getMatchingOnlineTimeTrialGhostRecords()) {
   if (!timeTrialOnlineListEl) return;
   timeTrialOnlineListEl.replaceChildren();
+  const selectedRecord = records.find((record) => record.id === selectedOnlineGhostRecordId) ?? records[0] ?? null;
+  if (timeTrialSelectedOnlineGhostEl) {
+    timeTrialSelectedOnlineGhostEl.hidden = !selectedRecord;
+    timeTrialSelectedOnlineGhostEl.textContent = selectedRecord
+      ? `Selected: ${selectedRecord.driver?.name ?? "Driver Name"} - ${formatLapTime(selectedRecord.lap?.lapTime ?? 0)}`
+      : "";
+  }
   if (!records.length) {
     const empty = document.createElement("li");
     empty.className = "is-empty";
@@ -3048,15 +3111,15 @@ function renderOnlineGhostList(records = getMatchingOnlineTimeTrialGhostRecords(
     timeTrialOnlineListEl.appendChild(empty);
     return;
   }
-  for (const record of records.slice(0, 20)) {
+  for (const [index, record] of records.slice(0, 10).entries()) {
     const row = document.createElement("li");
     row.className = record.id === selectedOnlineGhostRecordId ? "is-selected" : "";
     const driver = record.driver?.name ?? "Driver Name";
     const team = record.driver?.team ?? "Team Name";
-    const stateCode = getValidStateCode(record.driver?.stateCode);
+    const shield = getTeamShieldMarkup(record.driver);
     row.innerHTML = `
       <div>
-        <strong class="online-driver-name"><span class="state-flag-badge" title="${getStateName(stateCode)}"><img src="${getStateFlagUrl(stateCode)}" alt="${getStateName(stateCode)} flag" loading="lazy" onerror="this.remove()" />${stateCode}</span>${driver}</strong>
+        <strong class="online-driver-name"><span class="online-rank">${index + 1}</span>${shield}${driver}</strong>
         <span>${team}</span>
         <small>${formatOnlineGhostSegmentSummary(record.lap.segments)}</small>
       </div>
@@ -3084,6 +3147,12 @@ function getMostRecentSundayFivePacificIso(now = new Date()) {
 function formatOnlineGhostSegmentSummary(segments = []) {
   if (!Array.isArray(segments) || segments.length < 3) return "-- / -- / --";
   return segments.map(formatSegmentTime).join(" / ");
+}
+
+function getTeamShieldMarkup(driver = {}) {
+  const primary = normalizeHexColor(driver?.primaryColor, "#242833");
+  const accent = normalizeHexColor(driver?.accentColor, "#f6f2e8");
+  return `<span class="team-shield-badge" style="--team-primary: ${primary}; --team-accent: ${accent};" aria-hidden="true"></span>`;
 }
 
 function getPacificDateParts(date) {
@@ -3415,6 +3484,7 @@ function updateTimeTrialHud() {
   const isTimeTrial = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen();
   if (timeTrialTimerEl) timeTrialTimerEl.hidden = !isTimeTrial;
   if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0 && timeTrialState.trackLimitsPenaltyMessageTime <= 0 && timeTrialState.saveMessageTime <= 0);
+  if (!isTimeTrial && timeTrialLapCardEl) timeTrialLapCardEl.hidden = true;
   if (timeTrialResultsEl) timeTrialResultsEl.hidden = !isTimeTrial;
   updateDrivingLineRecorderHud();
   if (!isTimeTrial) return;
@@ -7560,7 +7630,6 @@ function getDefaultDriverProfile() {
   return {
     driverName: "Driver Name",
     teamName: "Team Name",
-    stateCode: "CA",
     primaryColor: "#242833",
     accentColor: "#f6f2e8",
   };
@@ -7586,7 +7655,6 @@ function saveDriverProfile() {
 function applyDriverProfileToInputs() {
   if (driverProfileNameInput) driverProfileNameInput.value = driverProfile.driverName || "Driver Name";
   if (driverProfileTeamInput) driverProfileTeamInput.value = driverProfile.teamName || "Team Name";
-  if (driverProfileStateSelect) driverProfileStateSelect.value = getValidStateCode(driverProfile.stateCode);
   if (teamPrimaryColorInput) teamPrimaryColorInput.value = normalizeHexColor(driverProfile.primaryColor, "#242833");
   if (teamAccentColorInput) teamAccentColorInput.value = normalizeHexColor(driverProfile.accentColor, "#f6f2e8");
   updateProfileTeamLabels();
@@ -7599,7 +7667,6 @@ function updateDriverProfileFromInputs() {
   driverProfile = {
     driverName: driverProfileNameInput?.value || "Driver Name",
     teamName: driverProfileTeamInput?.value || "Team Name",
-    stateCode: getValidStateCode(driverProfileStateSelect?.value),
     primaryColor: normalizeHexColor(teamPrimaryColorInput?.value, "#242833"),
     accentColor: normalizeHexColor(teamAccentColorInput?.value, "#f6f2e8"),
   };
@@ -7696,19 +7763,6 @@ function getDriverProfileCorvetteScheme(profile = getDefaultDriverProfile()) {
 function normalizeHexColor(value, fallback) {
   const text = String(value ?? "").trim();
   return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
-}
-
-function getValidStateCode(value) {
-  const code = String(value ?? "").trim().toUpperCase();
-  return US_STATE_NAMES[code] ? code : "CA";
-}
-
-function getStateName(value) {
-  return US_STATE_NAMES[getValidStateCode(value)];
-}
-
-function getStateFlagUrl(value) {
-  return `https://flagscenter.com/api/v1/us-${getValidStateCode(value).toLowerCase()}.svg`;
 }
 
 function hexColorToNumber(value, fallback) {
@@ -9578,6 +9632,9 @@ function resetQuickRaceState() {
   quickRaceState.penaltyMessageTime = 0;
   quickRaceState.penaltyMessageText = "";
   quickRaceState.penaltyMessageServing = false;
+  quickRaceState.resultsShown = false;
+  quickRaceState.playerJoyride = null;
+  if (quickRaceResultsEl) quickRaceResultsEl.hidden = true;
   if (!quickRaceState.active || !track.samples?.length) {
     updateQuickRaceHud();
     return;
@@ -9622,6 +9679,7 @@ function updateQuickRaceState(dt, raceStartBlocked = false) {
     for (const entry of quickRaceState.entries) updateQuickRaceEntry(entry);
   }
   updateQuickRaceOrder();
+  if (quickRaceState.resultsShown) renderQuickRaceResults();
   updateQuickRaceHud();
 }
 
@@ -9649,15 +9707,12 @@ function updateQuickRaceEntry(entry) {
     entry.finished = true;
     entry.finishTime = quickRaceState.elapsed;
     entry.totalProgress = (selectedQuickRaceLapCount + 1) * sampleCount;
+    if (entry.type === "player") showQuickRaceResults();
   }
 }
 
 function updateQuickRaceOrder() {
-  const ordered = [...quickRaceState.entries].sort((a, b) => {
-    if (a.finished && b.finished) return (a.finishTime ?? 0) - (b.finishTime ?? 0);
-    if (a.finished !== b.finished) return a.finished ? -1 : 1;
-    return b.totalProgress - a.totalProgress;
-  });
+  const ordered = getQuickRaceOrderedEntries();
   const playerIndex = ordered.findIndex((entry) => entry.type === "player");
   quickRaceState.playerPosition = playerIndex >= 0 ? playerIndex + 1 : 1;
 }
@@ -9737,6 +9792,246 @@ function getQuickRacePenaltyNotice(reason) {
 
 function isQuickRacePenaltyServing() {
   return selectedGameMode === "quick-race" && quickRaceState.servingPenaltyTime > 0;
+}
+
+function isQuickRacePlayerFinished() {
+  if (selectedGameMode !== "quick-race" || !quickRaceState.active) return false;
+  return quickRaceState.entries.some((entry) => entry.type === "player" && entry.finished);
+}
+
+function updatePostRacePlayerJoyride(dt) {
+  if (!track.samples?.length) return;
+  const profile = getCarProfile();
+  const joyride = quickRaceState.playerJoyride ??= createPostRacePlayerJoyrideState();
+  joyride.car = car;
+  joyride.profile = profile;
+  joyride.position = carState.position;
+  joyride.velocity = carState.velocity;
+  joyride.heading = carState.heading;
+  joyride.yawRate = carState.yawRate;
+  joyride.steer = carState.steer;
+  joyride.wheelSpin = carState.wheelSpin;
+  joyride.speed = carState.velocity.length();
+  joyride.sampleIndex = getNearestAiSampleIndex(carState.position, track.samples, joyride.sampleIndex ?? track.startSampleIndex ?? 0);
+  if (joyride.cyborg?.line?.samples?.length) {
+    updatePostRaceCyborgJoyride(joyride, profile, dt);
+    syncPostRacePlayerCarFromJoyride(joyride, profile, dt);
+    return;
+  }
+  const lookaheadMeters = THREE.MathUtils.clamp(joyride.speed * 0.42 + 11, 12, 34);
+  const targetProgress = joyride.sampleIndex + metersToAiSamples(lookaheadMeters);
+  const targetPose = getAiPathPose(targetProgress, track.samples, 0);
+  targetPose.currentTrack = getAiTrackEdgeState(carState.position, track.samples, joyride.sampleIndex);
+  targetPose.pointBlendOverride = 0.22;
+  targetPose.steerGainOverride = 0.92;
+  targetPose.steerDampOverride = 8.2;
+  const targetSpeed = profile.maxForwardSpeed * 0.6 * THREE.MathUtils.lerp(0.58, 0.84, THREE.MathUtils.smoothstep(joyride.speed, 5, 30));
+  const overspeed = joyride.speed - targetSpeed;
+  const racing = {
+    lookahead: metersToAiSamples(lookaheadMeters),
+    targetSpeed,
+    maxSpeed: profile.maxForwardSpeed * 0.6,
+    cornerSeverity: 0.18,
+    throttle: overspeed > 2.5 ? 0 : 0.58,
+    brake: overspeed > 4 ? THREE.MathUtils.clamp(overspeed / 14, 0, 0.45) : 0,
+    boostActive: false,
+    collisionAvoidance: 0,
+    allowOffTrack: false,
+    ignoreWalls: false,
+    ignoreEdgePressure: false,
+    softenGrassEmergencySlowdown: true,
+  };
+  keepAiTargetOnTrack(joyride, targetPose, track.samples, targetProgress, racing);
+  applyAiRecoveryAndAvoidance(joyride, targetPose, racing, track.sample(carState.position.x, carState.position.z));
+  joyride.throttle = THREE.MathUtils.damp(joyride.throttle ?? 0, racing.throttle, 2.2, dt);
+  joyride.brake = THREE.MathUtils.damp(joyride.brake ?? 0, racing.brake, 3.6, dt);
+  updateAiDrivenCar(joyride, targetPose, racing, profile, dt);
+  syncPostRacePlayerCarFromJoyride(joyride, profile, dt);
+}
+
+function updatePostRaceCyborgJoyride(joyride, profile, dt) {
+  const cyborg = joyride.cyborg;
+  const line = cyborg.line;
+  const expectedProgress = cyborg.progress + Math.max(2, joyride.speed) * dt;
+  cyborg.progress = getNearestCyborgProgressNear(line, joyride.position, expectedProgress, 42);
+  const effectiveLaneOffset = cyborg.laneOffset ?? 0;
+  const learnedPose = getCyborgLinePose(line, cyborg.progress, effectiveLaneOffset);
+  const speedLookaheadDistance = THREE.MathUtils.clamp(joyride.speed * 0.54 + 10, 12, 32);
+  const targetPose = getCyborgLinePose(line, cyborg.progress + speedLookaheadDistance, effectiveLaneOffset);
+  const headingPose = getCyborgLinePose(line, cyborg.progress + THREE.MathUtils.clamp(joyride.speed * 0.08 + 3, 3, 7), effectiveLaneOffset);
+  const learnedTargetHeading = headingPose.heading;
+  const steeringReferenceDistance = THREE.MathUtils.clamp(joyride.speed * 0.08 + 4, 4, 8);
+  const forwardTarget = joyride.position
+    .clone()
+    .add(new THREE.Vector3(Math.sin(learnedTargetHeading), 0, Math.cos(learnedTargetHeading)).multiplyScalar(steeringReferenceDistance));
+  const trackTarget = getCyborgTrackTarget(forwardTarget, joyride.position, joyride.sampleIndex ?? 0, learnedTargetHeading, 0.3);
+  const maxSpeed = profile.maxForwardSpeed * 0.6;
+  const targetSpeed = Math.min(maxSpeed, Math.max(8, targetPose.speed * 0.6));
+  const speedError = joyride.speed - targetSpeed;
+  const learnedBrake = Math.max(targetPose.brake ?? 0, learnedPose.brake ?? 0);
+  const brake = speedError > 2
+    ? THREE.MathUtils.clamp(speedError / Math.max(5, profile.brakeForce * 0.22), 0.12, 0.55)
+    : learnedBrake > 0.25 && joyride.speed > targetSpeed * 0.95
+      ? learnedBrake * 0.55
+      : 0;
+  const throttle = brake > 0.08
+    ? 0
+    : THREE.MathUtils.clamp(Math.max(learnedPose.throttle ?? 0.35, (targetSpeed - joyride.speed) / 9), 0.24, 0.68);
+  const racing = {
+    lookahead: metersToAiSamples(speedLookaheadDistance),
+    targetSpeed,
+    maxSpeed,
+    cornerSeverity: THREE.MathUtils.clamp(Math.abs(angleDifference(headingPose.heading, learnedPose.heading)) / 0.72, 0, 1),
+    throttle,
+    brake,
+    boostActive: false,
+    collisionAvoidance: 0,
+    allowOffTrack: false,
+    ignoreWalls: false,
+    ignoreEdgePressure: false,
+    softenGrassEmergencySlowdown: true,
+  };
+  keepAiTargetOnTrack(joyride, trackTarget, track.samples, joyride.sampleIndex + racing.lookahead, racing);
+  applyAiRecoveryAndAvoidance(joyride, trackTarget, racing, track.sample(joyride.position.x, joyride.position.z));
+  joyride.throttle = THREE.MathUtils.damp(joyride.throttle ?? 0, racing.throttle, 1.8, dt);
+  joyride.brake = THREE.MathUtils.damp(joyride.brake ?? 0, racing.brake, 5.4, dt);
+  updateAiDrivenCar(joyride, trackTarget, racing, profile, dt);
+  joyride.sampleIndex = getNearestAiSampleIndex(joyride.position, track.samples, joyride.sampleIndex ?? 0);
+  cyborg.progress = getNearestCyborgProgressNear(line, joyride.position, cyborg.progress + Math.max(1, joyride.speed) * dt, 48);
+}
+
+function syncPostRacePlayerCarFromJoyride(joyride, profile, dt) {
+  carState.heading = joyride.heading;
+  carState.yawRate = joyride.yawRate;
+  carState.steer = joyride.steer;
+  carState.wheelSpin = joyride.wheelSpin;
+  carState.boostActive = false;
+  carState.ers = Math.min(100, carState.ers + (profile.boostRechargeRate ?? 2) * dt);
+  const forward = new THREE.Vector3(Math.sin(carState.heading), 0, Math.cos(carState.heading));
+  const forwardSpeed = carState.velocity.dot(forward);
+  carState.gear = getAutoGear(forwardSpeed, profile, joyride.throttle, joyride.brake);
+  carState.rpm = getEngineRpm(forwardSpeed, joyride.throttle > 0.1, carState.gear, profile);
+  updateEngineAudio(dt, forwardSpeed, joyride.throttle, false, profile, false);
+  car.root.position.copy(carState.position);
+  car.root.rotation.set(0, carState.heading, 0);
+  car.body.rotation.x = THREE.MathUtils.damp(car.body.rotation.x, 0, 5, dt);
+  car.body.rotation.z = THREE.MathUtils.damp(car.body.rotation.z, 0, 5, dt);
+  if (car.wheels.frontLeft) car.wheels.frontLeft.rotation.y = carState.steer;
+  if (car.wheels.frontRight) car.wheels.frontRight.rotation.y = carState.steer;
+  carState.wheelSpin -= Math.max(0, forwardSpeed) * dt * 1.25;
+  for (const wheel of car.wheelMeshes ?? []) {
+    if (wheel) wheel.rotation.x = carState.wheelSpin;
+  }
+  updateRearWing(dt, false, car);
+  updateCarLights(joyride.brake > 0.1, false, dt);
+  speedEl.textContent = `${Math.round(Math.abs(forwardSpeed) * 2.237)} mph`;
+  gearEl.textContent = carState.gear === -1 ? "R" : carState.gear === 0 ? "N" : `${carState.gear}`;
+  const surface = track.sample(carState.position.x, carState.position.z);
+  surfaceEl.textContent = surface.kind === "grass" ? "Grass" : surface.kind === "painted-kerb" ? "Painted Kerb" : surface.kind === "sausage" ? "Sausage" : surface.kind === "kerb" ? "Kerb" : "Track";
+  updateErsHud();
+  updateRevMeter();
+}
+
+function createPostRacePlayerJoyrideState() {
+  const cyborgLine = getCyborgLineForOpponent(0);
+  return {
+    id: "player-joyride",
+    car,
+    carId: selectedCar,
+    profile: getCarProfile(),
+    position: carState.position,
+    velocity: carState.velocity,
+    heading: carState.heading,
+    yawRate: carState.yawRate,
+    steer: carState.steer,
+    throttle: 0,
+    brake: 0,
+    speed: carState.velocity.length(),
+    wheelSpin: carState.wheelSpin,
+    sampleIndex: track.startSampleIndex ?? 0,
+    cyborg: cyborgLine?.samples?.length
+      ? {
+        line: cyborgLine,
+        progress: getNearestCyborgProgress(cyborgLine, carState.position),
+        laneOffset: 0,
+      }
+      : null,
+    stuckTimer: 0,
+    recoveryTimer: 0,
+    debug: {
+      grassFrames: 0,
+      predictiveAvoidanceFrames: 0,
+      wheelCorrectionFrames: 0,
+      wallDangerFrames: 0,
+      wallCorrectionFrames: 0,
+      maxEdgeRatio: 0,
+      lapTime: 0,
+      lapDistance: 0,
+    },
+  };
+}
+
+function showQuickRaceResults() {
+  quickRaceState.resultsShown = true;
+  renderQuickRaceResults();
+  if (quickRaceResultsEl) quickRaceResultsEl.hidden = false;
+}
+
+function renderQuickRaceResults() {
+  if (!quickRaceResultsListEl) return;
+  const ordered = getQuickRaceOrderedEntries();
+  const totalCars = Math.max(1, ordered.length);
+  const playerIndex = ordered.findIndex((entry) => entry.type === "player");
+  if (quickRaceResultsPositionEl) quickRaceResultsPositionEl.textContent = `${playerIndex + 1 || 1} / ${totalCars}`;
+  quickRaceResultsListEl.replaceChildren();
+  for (const [index, entry] of ordered.entries()) {
+    const row = document.createElement("li");
+    row.className = entry.type === "player" ? "is-player" : "";
+    const name = entry.type === "player" ? "You" : entry.label;
+    const status = entry.finished
+      ? formatLapTime(entry.finishTime ?? 0)
+      : `Lap ${Math.min(selectedQuickRaceLapCount, entry.completedLaps + 1)} / ${selectedQuickRaceLapCount}`;
+    row.innerHTML = `
+      <span>${index + 1}</span>
+      <strong>${name}</strong>
+      <small>${status}</small>
+    `;
+    quickRaceResultsListEl.appendChild(row);
+  }
+}
+
+function getQuickRaceOrderedEntries() {
+  return [...quickRaceState.entries].sort((a, b) => {
+    if (a.finished && b.finished) return (a.finishTime ?? 0) - (b.finishTime ?? 0);
+    if (a.finished !== b.finished) return a.finished ? -1 : 1;
+    return b.totalProgress - a.totalProgress;
+  });
+}
+
+function restartQuickRaceFromResults() {
+  selectedGameMode = "quick-race";
+  gameStarted = true;
+  setPaused(false);
+  keys.clear();
+  startMenu.classList.add("is-hidden");
+  resetCar();
+  setupQuickRaceOpponents();
+  resetQuickRaceState();
+  startRaceCountdown();
+}
+
+function returnToMainMenuFromRace() {
+  gameStarted = false;
+  setPaused(false);
+  keys.clear();
+  clearAiOpponents();
+  resetQuickRaceState();
+  clearTimeTrialGhost();
+  startMenu.classList.remove("is-hidden");
+  setMenuStep("intro");
+  updateMenuVisual();
+  updateTimeTrialHud();
+  updateQuickRaceHud();
 }
 
 function formatQuickRacePenaltyTime(seconds) {

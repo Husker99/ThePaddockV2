@@ -34,61 +34,6 @@
                   <span>Driver</span>
                   <input id="driver-profile-name" type="text" value="Driver Name" maxlength="28" />
                 </label>
-                <label>
-                  <span>State</span>
-                  <select id="driver-profile-state">
-                    <option value="AL">AL</option>
-                    <option value="AK">AK</option>
-                    <option value="AZ">AZ</option>
-                    <option value="AR">AR</option>
-                    <option value="CA" selected>CA</option>
-                    <option value="CO">CO</option>
-                    <option value="CT">CT</option>
-                    <option value="DE">DE</option>
-                    <option value="FL">FL</option>
-                    <option value="GA">GA</option>
-                    <option value="HI">HI</option>
-                    <option value="ID">ID</option>
-                    <option value="IL">IL</option>
-                    <option value="IN">IN</option>
-                    <option value="IA">IA</option>
-                    <option value="KS">KS</option>
-                    <option value="KY">KY</option>
-                    <option value="LA">LA</option>
-                    <option value="ME">ME</option>
-                    <option value="MD">MD</option>
-                    <option value="MA">MA</option>
-                    <option value="MI">MI</option>
-                    <option value="MN">MN</option>
-                    <option value="MS">MS</option>
-                    <option value="MO">MO</option>
-                    <option value="MT">MT</option>
-                    <option value="NE">NE</option>
-                    <option value="NV">NV</option>
-                    <option value="NH">NH</option>
-                    <option value="NJ">NJ</option>
-                    <option value="NM">NM</option>
-                    <option value="NY">NY</option>
-                    <option value="NC">NC</option>
-                    <option value="ND">ND</option>
-                    <option value="OH">OH</option>
-                    <option value="OK">OK</option>
-                    <option value="OR">OR</option>
-                    <option value="PA">PA</option>
-                    <option value="RI">RI</option>
-                    <option value="SC">SC</option>
-                    <option value="SD">SD</option>
-                    <option value="TN">TN</option>
-                    <option value="TX">TX</option>
-                    <option value="UT">UT</option>
-                    <option value="VT">VT</option>
-                    <option value="VA">VA</option>
-                    <option value="WA">WA</option>
-                    <option value="WV">WV</option>
-                    <option value="WI">WI</option>
-                    <option value="WY">WY</option>
-                  </select>
-                </label>
               </div>
               <label>
                 <span>Team</span>
@@ -316,11 +261,12 @@
             </label>
             <section id="time-trial-online-browser" class="time-trial-online-browser" hidden aria-label="Online ghost browser">
               <div class="time-trial-online-toolbar">
-                <button class="ghost-button is-selected" type="button" data-online-ghost-filter="top">Top 20</button>
+                <button class="ghost-button is-selected" type="button" data-online-ghost-filter="top">Top 10</button>
                 <button class="ghost-button" type="button" data-online-ghost-filter="week">This Week</button>
-                <button id="time-trial-download-ghosts" class="ghost-button" type="button">Refresh</button>
+                <button id="time-trial-download-ghosts" class="ghost-button refresh-ghost-button" type="button" aria-label="Refresh online ghosts" title="Refresh online ghosts">↻</button>
               </div>
               <p id="time-trial-online-status" class="time-trial-online-status"></p>
+              <div id="time-trial-selected-online-ghost" class="time-trial-selected-online-ghost" hidden></div>
               <ol id="time-trial-online-list" class="time-trial-online-list"></ol>
             </section>
             <button id="time-trial-setup-start" class="start-button" type="button">Start Time Trial</button>
@@ -627,6 +573,11 @@
       </div>
     </div>
     <div id="time-trial-message" class="time-trial-message" hidden></div>
+    <section id="time-trial-lap-card" class="time-trial-lap-card" hidden aria-label="Time trial lap result">
+      <strong id="time-trial-lap-card-title">Lap Complete</strong>
+      <span id="time-trial-lap-card-time">0:00.0</span>
+      <small id="time-trial-lap-card-detail"></small>
+    </section>
     <div id="race-countdown" class="race-countdown" hidden>5</div>
     <section id="quick-race-hud" class="quick-race-hud" hidden aria-label="Quick race status">
       <strong id="quick-race-position">1 / 1</strong>
@@ -634,6 +585,17 @@
       <span id="quick-race-penalty-timer" class="quick-race-penalty-timer" hidden>+0.0s</span>
     </section>
     <div id="quick-race-penalty-message" class="quick-race-penalty-message" hidden></div>
+    <section id="quick-race-results" class="quick-race-results" hidden aria-label="Quick race results">
+      <header>
+        <span>Race Complete</span>
+        <strong id="quick-race-results-position">1 / 1</strong>
+      </header>
+      <ol id="quick-race-results-list"></ol>
+      <div class="quick-race-results-actions">
+        <button id="quick-race-results-restart" type="button">Race Again</button>
+        <button id="quick-race-results-menu" type="button">Main Menu</button>
+      </div>
+    </section>
     <section id="time-trial-results" class="time-trial-results" hidden aria-label="Time trial lap times">
       <h2>Lap Times</h2>
       <div id="time-trial-local-best" class="time-trial-local-best">My Best: --</div>
