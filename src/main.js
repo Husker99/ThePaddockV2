@@ -12,6 +12,7 @@ import kyoshiLmpCyborgTraining from "./ai-training/kyoshi-circuit-lmp-cyborg-tra
 import makoStockCyborgTraining from "./ai-training/mako-city-stock-cyborg-training.json";
 import makoFormulaCyborgTraining from "./ai-training/mako-city-formula-cyborg-training.json";
 import yueStockCyborgTraining from "./ai-training/yue-ring-stock-cyborg-training.json";
+import yueFormulaCyborgTraining from "./ai-training/yue-ring-formula-cyborg-training.json";
 
 const canvas = document.querySelector("#game");
 const startMenu = document.querySelector("#start-menu");
@@ -25,6 +26,19 @@ const menuSteps = [...document.querySelectorAll("[data-menu-step]")];
 const playGameButton = document.querySelector("#play-game");
 const timeTrialGameButton = document.querySelector("#time-trial-game");
 const quickRaceGameButton = document.querySelector("#quick-race-game");
+const goOnlineGameButton = document.querySelector("#go-online-game");
+const onlineWeeklyTimeTrialButton = document.querySelector("#online-weekly-time-trial");
+const onlineHostGameButton = document.querySelector("#online-host-game");
+const onlineJoinGameButton = document.querySelector("#online-join-game");
+const onlineJoinRoomButton = document.querySelector("#online-join-room");
+const onlineRoomCodeInput = document.querySelector("#online-room-code-input");
+const onlineJoinStatusEl = document.querySelector("#online-join-status");
+const onlineRoomModeEl = document.querySelector("#online-room-mode");
+const onlineRoomCodeEl = document.querySelector("#online-room-code");
+const onlineRoomSummaryEl = document.querySelector("#online-room-summary");
+const onlineRoomStatusEl = document.querySelector("#online-room-status");
+const onlineRoomPlayersEl = document.querySelector("#online-room-players");
+const onlineRoomStartDriveButton = document.querySelector("#online-room-start-drive");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
 const driverProfileButton = document.querySelector("#driver-profile-button");
 const driverProfileNameInput = document.querySelector("#driver-profile-name");
@@ -77,7 +91,11 @@ const startRaceButtons = [...document.querySelectorAll("[data-start-race], #star
 const quickRaceStartButton = document.querySelector("#quick-race-start");
 const timeTrialStandardButton = document.querySelector("#time-trial-standard");
 const timeTrialRecordLineButton = document.querySelector("#time-trial-record-line");
+const timeTrialModeGridEl = document.querySelector("#time-trial-mode-options");
 const timeTrialSetupStartButton = document.querySelector("#time-trial-setup-start");
+const weeklyTimeTrialCardEl = document.querySelector("#weekly-time-trial-card");
+const weeklyTimeTrialTitleEl = document.querySelector("#weekly-time-trial-title");
+const weeklyTimeTrialResetEl = document.querySelector("#weekly-time-trial-reset");
 const timeTrialGhostSelect = document.querySelector("#time-trial-ghost-select");
 const timeTrialOnlineBrowserEl = document.querySelector("#time-trial-online-browser");
 const timeTrialDownloadGhostsButton = document.querySelector("#time-trial-download-ghosts");
@@ -111,8 +129,10 @@ const revFillEl = document.querySelector("#rev-fill");
 const manualGearEl = document.querySelector("#manual-gear");
 const timeTrialTimerEl = document.querySelector("#time-trial-timer");
 const timeTrialTimerValueEl = document.querySelector("#time-trial-timer-value");
+const timeTrialGhostDeltaEl = document.querySelector("#time-trial-ghost-delta");
 const timeTrialSegmentEls = [...document.querySelectorAll("#time-trial-segments span")];
 const timeTrialMessageEl = document.querySelector("#time-trial-message");
+const timeTrialSectorDeltaEl = document.querySelector("#time-trial-sector-delta");
 const timeTrialLapCardEl = document.querySelector("#time-trial-lap-card");
 const timeTrialLapCardTitleEl = document.querySelector("#time-trial-lap-card-title");
 const timeTrialLapCardTimeEl = document.querySelector("#time-trial-lap-card-time");
@@ -131,6 +151,7 @@ const quickRaceResultsRestartButton = document.querySelector("#quick-race-result
 const quickRaceResultsMenuButton = document.querySelector("#quick-race-results-menu");
 const timeTrialResultsEl = document.querySelector("#time-trial-results");
 const timeTrialLapsEl = document.querySelector("#time-trial-laps");
+const timeTrialUploadSessionBestButton = document.querySelector("#time-trial-upload-session-best");
 const drivingLineRecorderEl = document.querySelector("#driving-line-recorder");
 const drivingLineStatusEl = document.querySelector("#driving-line-status");
 const drivingLineExportButton = document.querySelector("#driving-line-export");
@@ -144,6 +165,7 @@ const TIME_TRIAL_RECORDS_KEY = "the-paddock:time-trial-records:v1";
 const SUPABASE_URL = "https://dvckkaqlbyphlxyogbif.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gADFEoFX4NeCNuUqPKtX3w_3r-JpBEH";
 const SUPABASE_TIME_TRIAL_RECORDS_URL = `${SUPABASE_URL}/rest/v1/time_trial_records`;
+const SUPABASE_REALTIME_URL = `${SUPABASE_URL.replace("https://", "wss://")}/realtime/v1/websocket?apikey=${SUPABASE_PUBLISHABLE_KEY}&vsn=1.0.0`;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -490,6 +512,10 @@ let draggedEditorCurveSegment = null;
 let editorGhostPoint = null;
 let isEditorTestDrive = false;
 let pendingEditorUndoSnapshot = null;
+function isTimeTrialGameMode() {
+  return selectedGameMode === "time-trial" || selectedGameMode === "weekly-time-trial";
+}
+
 const AI_DIFFICULTY_SETTINGS = {
   beginner: { label: "Beginner", cyborgBrakingLookaheadScale: 3 },
   standard: { label: "Standard", cyborgBrakingLookaheadScale: 1.2 },
@@ -523,8 +549,13 @@ const timeTrialState = {
   trackLimitsPenaltyCooldown: 0,
   trackLimitsPenaltyMessageTime: 0,
   saveMessageTime: 0,
+  saveMessageText: "My Best Saved",
   lapCardTime: 0,
   lapCard: null,
+  ghostDelta: null,
+  sectorDeltaTime: 0,
+  sectorDeltaText: "",
+  sectorDeltaValue: null,
 };
 const drivingLineRecorder = {
   active: false,
@@ -559,6 +590,19 @@ const quickRaceState = {
   penaltyMessageServing: false,
   resultsShown: false,
   playerJoyride: null,
+};
+const onlineRoomState = {
+  role: "none",
+  roomCode: "",
+  topic: "",
+  socket: null,
+  heartbeatId: null,
+  ref: 1,
+  joinRef: "",
+  connected: false,
+  playerId: getOnlinePlayerId(),
+  players: new Map(),
+  lastError: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
@@ -640,6 +684,13 @@ const quickRaceAiCarPools = {
   jeep: ["dune-jeep", "forest-jeep", "rescue-jeep", "storm-jeep"],
   corvette: ["vette-yellow", "vette-white", "vette-red", "vette-striped"],
 };
+const weeklyTimeTrialClassPool = ["formula", "lmp", "stock", "corvette"];
+const weeklyTimeTrialTrackPool = [
+  KATARA_TRACK_ID,
+  KYOSHI_TRACK_ID,
+  MAKO_TRACK_ID,
+  YUE_TRACK_ID,
+];
 if (trackShowcaseCar) {
   trackShowcaseCar.style.setProperty("--showcase-car-color", trackShowcaseColors[Math.floor(Math.random() * trackShowcaseColors.length)]);
 }
@@ -657,7 +708,8 @@ window.addEventListener("keydown", (event) => {
   }
   keys.add(event.code);
   if (event.code === "Escape" && gameStarted && !event.repeat) {
-    openCarSelectionMenu();
+    if (selectedGameMode === "weekly-time-trial") openWeeklyTimeTrialMenu();
+    else openCarSelectionMenu();
     return;
   }
   if (event.code === "KeyP" && gameStarted && !isMenuOpen() && !event.repeat) {
@@ -703,6 +755,22 @@ startMenu.addEventListener("pointerdown", startMenuMusic);
 playGameButton.addEventListener("click", () => startGameModeSelection("drive"));
 timeTrialGameButton.addEventListener("click", () => startGameModeSelection("time-trial"));
 quickRaceGameButton?.addEventListener("click", () => startGameModeSelection("quick-race"));
+goOnlineGameButton?.addEventListener("click", () => setMenuStep("go-online"));
+onlineWeeklyTimeTrialButton?.addEventListener("click", startWeeklyOnlineTimeTrialFlow);
+onlineHostGameButton?.addEventListener("click", startOnlineHostFlow);
+onlineJoinGameButton?.addEventListener("click", () => {
+  setOnlineJoinStatus("");
+  setMenuStep("online-join");
+});
+onlineJoinRoomButton?.addEventListener("click", joinOnlineRoomFromInput);
+onlineRoomCodeInput?.addEventListener("input", () => {
+  onlineRoomCodeInput.value = normalizeOnlineRoomCode(onlineRoomCodeInput.value);
+  setOnlineJoinStatus("");
+});
+onlineRoomCodeInput?.addEventListener("keydown", (event) => {
+  if (event.code === "Enter") joinOnlineRoomFromInput();
+});
+onlineRoomStartDriveButton?.addEventListener("click", startGame);
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
 driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
 driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
@@ -778,6 +846,7 @@ timeTrialRecordLineButton?.addEventListener("click", () => selectTimeTrialMode("
 timeTrialGhostSelect?.addEventListener("change", updateTimeTrialGhostSelection);
 timeTrialDownloadGhostsButton?.addEventListener("click", downloadOnlineTimeTrialGhostsForSelection);
 timeTrialOnlineListEl?.addEventListener("click", handleOnlineGhostListClick);
+timeTrialUploadSessionBestButton?.addEventListener("click", uploadCurrentSessionBestTimeTrial);
 for (const button of timeTrialOnlineFilterButtons) {
   button.addEventListener("click", () => selectOnlineGhostFilter(button.dataset.onlineGhostFilter));
 }
@@ -1020,6 +1089,9 @@ const carProfiles = {
     yawDamping: 4.4,
     slipLimitLowSpeed: 22,
     slipLimitHighSpeed: 34,
+    boostPowerScale: 1.416,
+    boostRechargeRate: 2,
+    boostBrakeRechargeRate: 6.8,
     cockpitPosition: { forward: 0.46, height: 1.54 },
     cockpitTarget: { forward: 18, height: 1.68, steerLook: 1.1 },
   },
@@ -1375,6 +1447,8 @@ const makoFormulaCyborgLines = createCyborgRacingLines(makoFormulaCyborgTraining
 const makoFormulaCyborgLine = makoFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const yueStockCyborgLines = createCyborgRacingLines(yueStockCyborgTraining);
 const yueStockCyborgLine = yueStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const yueFormulaCyborgLines = createCyborgRacingLines(yueFormulaCyborgTraining);
+const yueFormulaCyborgLine = yueFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const cyborgLineBanksByClass = {
   stock: {
     [KATARA_TRACK_ID]: { lines: kataraStockCyborgLines, fallback: kataraStockCyborgLine },
@@ -1385,6 +1459,7 @@ const cyborgLineBanksByClass = {
   formula: {
     [KATARA_TRACK_ID]: { lines: kataraFormulaCyborgLines, fallback: kataraFormulaCyborgLine },
     [MAKO_TRACK_ID]: { lines: makoFormulaCyborgLines, fallback: makoFormulaCyborgLine },
+    [YUE_TRACK_ID]: { lines: yueFormulaCyborgLines, fallback: yueFormulaCyborgLine },
   },
   lmp: {
     [KATARA_TRACK_ID]: { lines: kataraLmpCyborgLines, fallback: kataraLmpCyborgLine },
@@ -1421,7 +1496,7 @@ function update() {
   updateSlipstreamDebugCones();
   updateQuickRaceState(dt, raceStartBlocked);
   if (!gameStarted || isPaused || isMenuOpen()) updateRevMeter();
-  if (selectedGameMode === "time-trial") {
+  if (isTimeTrialGameMode()) {
     updateTimeTrialLapCard(dt);
     updateTimeTrialHud();
   }
@@ -1728,7 +1803,7 @@ function updateCar(dt) {
   const lmpCoastTurnBoost = profile.kind === "lmp" && coasting
     ? THREE.MathUtils.lerp(1.38, 1.18, topSpeedRatio)
     : 1;
-  const canStartBoost = profile.kind === "corvette" ? carState.ers >= 20 : carState.ers > 0;
+  const canStartBoost = carState.ers >= getBoostStartThreshold(profile);
   const boostActive = profile.hasErs && throttle && ersPressed && carState.ers > 0 && (carState.boostActive || canStartBoost);
   carState.boostActive = boostActive;
   const boostPowerScale = profile.boostPowerScale ?? 1.18;
@@ -2193,8 +2268,19 @@ function updateErs(dt, boostActive, brake, profile) {
     return;
   }
 
-  const rechargeRate = profile.boostRechargeRate ?? (brake ? 4 : 2);
+  const rechargeRate = getBoostRechargeRate(profile, brake);
   carState.ers = Math.min(100, carState.ers + rechargeRate * dt);
+}
+
+function getBoostStartThreshold(profile) {
+  if (profile.kind === "corvette") return 20;
+  if (profile.kind === "formula") return 10;
+  return 0.001;
+}
+
+function getBoostRechargeRate(profile, brake = false) {
+  if (brake && Number.isFinite(profile.boostBrakeRechargeRate)) return profile.boostBrakeRechargeRate;
+  return profile.boostRechargeRate ?? (brake ? 4 : 2);
 }
 
 function updateAiErs(opponent, dt, boostRequested, brake, profile) {
@@ -2205,7 +2291,7 @@ function updateAiErs(opponent, dt, boostRequested, brake, profile) {
   }
 
   opponent.ers = THREE.MathUtils.clamp(opponent.ers ?? 100, 0, 100);
-  const canStartBoost = profile.kind === "corvette" ? opponent.ers >= 20 : opponent.ers > 0;
+  const canStartBoost = opponent.ers >= getBoostStartThreshold(profile);
   const boostActive = Boolean(boostRequested && opponent.ers > 0 && (opponent.boostActive || canStartBoost));
   opponent.boostActive = boostActive;
 
@@ -2214,13 +2300,13 @@ function updateAiErs(opponent, dt, boostRequested, brake, profile) {
     return true;
   }
 
-  const rechargeRate = profile.boostRechargeRate ?? (brake ? 4 : 2);
+  const rechargeRate = getBoostRechargeRate(profile, brake);
   opponent.ers = Math.min(100, opponent.ers + rechargeRate * dt);
   return false;
 }
 
 function updateTimeTrial(dt, wheelSurface) {
-  if (selectedGameMode !== "time-trial" || !track.startLine) return;
+  if (!isTimeTrialGameMode() || !track.startLine) return;
   if (timeTrialState.running) timeTrialState.currentTime += dt;
   timeTrialState.wallPenaltyCooldown = Math.max(0, timeTrialState.wallPenaltyCooldown - dt);
   timeTrialState.wallPenaltyMessageTime = Math.max(0, timeTrialState.wallPenaltyMessageTime - dt);
@@ -2228,6 +2314,7 @@ function updateTimeTrial(dt, wheelSurface) {
   timeTrialState.trackLimitsPenaltyMessageTime = Math.max(0, timeTrialState.trackLimitsPenaltyMessageTime - dt);
   timeTrialState.saveMessageTime = Math.max(0, timeTrialState.saveMessageTime - dt);
   timeTrialState.segmentStatusHoldTime = Math.max(0, timeTrialState.segmentStatusHoldTime - dt);
+  timeTrialState.sectorDeltaTime = Math.max(0, timeTrialState.sectorDeltaTime - dt);
   if (timeTrialState.running && wheelSurface?.grassCount === 4) {
     timeTrialState.invalidated = true;
     drivingLineRecorder.currentLapClean = false;
@@ -2287,10 +2374,11 @@ function startTimeTrialGhostLap() {
 }
 
 function recordTimeTrialGhostSample(dt, input) {
-  if (selectedGameMode !== "time-trial" || !timeTrialState.running || !track.samples?.length) return;
+  if (!isTimeTrialGameMode() || !timeTrialState.running || !track.samples?.length) return;
   timeTrialState.ghostSampleTimer += dt;
   if (timeTrialState.ghostSampleTimer < 0.05 && timeTrialState.currentGhostSamples.length > 0) return;
   timeTrialState.ghostSampleTimer = 0;
+  const sampleIndex = getNearestSampleIndex(track.samples, carState.position);
   timeTrialState.currentGhostSamples.push({
     t: roundDrivingLineNumber(timeTrialState.currentTime),
     x: roundDrivingLineNumber(carState.position.x),
@@ -2303,6 +2391,8 @@ function recordTimeTrialGhostSample(dt, input) {
     steer: input.steerInput,
     boost: input.boostActive ? 1 : 0,
     ers: roundDrivingLineNumber(carState.ers),
+    sampleIndex,
+    progress: roundDrivingLineNumber(sampleIndex / Math.max(1, track.samples.length - 1), 5),
   });
 }
 
@@ -2330,9 +2420,20 @@ function completeTimeTrialSegment(index) {
   const segmentTime = Math.max(0, timeTrialState.currentTime - timeTrialState.currentSegmentStartTime);
   timeTrialState.currentSegments[index] = segmentTime;
   timeTrialState.segmentStatuses[index] = getTimeTrialSegmentStatus(index, segmentTime);
+  showTimeTrialSectorDelta(index, segmentTime);
   timeTrialState.currentSegmentStartTime = timeTrialState.currentTime;
   timeTrialState.currentSegmentIndex = Math.min(3, index + 1);
   updateTimeTrialHud();
+}
+
+function showTimeTrialSectorDelta(index, segmentTime) {
+  const ghostSegments = timeTrialGhost.run?.segments ?? timeTrialGhost.run?.lap?.segments;
+  const reference = Array.isArray(ghostSegments) ? ghostSegments[index] : null;
+  if (!Number.isFinite(reference) || !Number.isFinite(segmentTime) || segmentTime <= 0) return;
+  const delta = segmentTime - reference;
+  timeTrialState.sectorDeltaValue = delta;
+  timeTrialState.sectorDeltaText = `Sector ${index + 1}: ${formatSignedDelta(delta)}`;
+  timeTrialState.sectorDeltaTime = 2.6;
 }
 
 function getTimeTrialSegmentStatus(index, segmentTime) {
@@ -2357,7 +2458,7 @@ function holdCompletedTimeTrialSegments() {
 }
 
 function registerTimeTrialWallContact() {
-  if (selectedGameMode !== "time-trial" || !timeTrialState.running) return;
+  if (!isTimeTrialGameMode() || !timeTrialState.running) return;
   if (timeTrialState.wallPenaltyCooldown > 0) return;
   timeTrialState.currentTime += 1;
   timeTrialState.wallPenaltyCooldown = 5;
@@ -2385,8 +2486,13 @@ function resetTimeTrialState({ clearLaps = true } = {}) {
   timeTrialState.trackLimitsPenaltyCooldown = 0;
   timeTrialState.trackLimitsPenaltyMessageTime = 0;
   timeTrialState.saveMessageTime = 0;
+  timeTrialState.saveMessageText = "My Best Saved";
   timeTrialState.lapCardTime = 0;
   timeTrialState.lapCard = null;
+  timeTrialState.ghostDelta = null;
+  timeTrialState.sectorDeltaTime = 0;
+  timeTrialState.sectorDeltaText = "";
+  timeTrialState.sectorDeltaValue = null;
   if (clearLaps) {
     timeTrialState.laps = [];
     timeTrialState.latestLapId = 0;
@@ -2410,6 +2516,7 @@ function recordTimeTrialLap() {
   if (lapTime <= 0) return;
   const previousSessionBest = timeTrialState.sessionBest?.lapTime ?? Infinity;
   const previousLocalBest = timeTrialState.localBest?.lapTime ?? Infinity;
+  const referenceGhostRun = timeTrialGhost.run;
   recordDrivingLineLap(lapTime);
   timeTrialState.latestLapId += 1;
   const ghostSamples = timeTrialState.currentGhostSamples.map((sample) => ({ ...sample }));
@@ -2421,10 +2528,8 @@ function recordTimeTrialLap() {
   refreshSelectedTimeTrialGhost();
   refreshTimeTrialBestReferences();
   const details = [
-    formatSegmentSummary(timeTrialState.currentSegments),
-    lapTime < previousSessionBest ? "New Session Best" : "",
+    ...getTimeTrialGhostComparisonDetails(lapTime, referenceGhostRun),
     lapTime < previousLocalBest ? "New My Best" : "",
-    ghostSamples.length >= 20 && lapTime < previousSessionBest ? "Session Ghost Saved" : "",
   ].filter(Boolean);
   showTimeTrialLapCard({
     title: lapTime < previousLocalBest ? "New My Best" : "Lap Complete",
@@ -2436,6 +2541,13 @@ function recordTimeTrialLap() {
   updateTimeTrialHud();
 }
 
+function getTimeTrialGhostComparisonDetails(lapTime, ghostRun) {
+  const details = [];
+  const ghostLapTime = ghostRun?.lapTime;
+  if (Number.isFinite(ghostLapTime)) details.push(`Vs Ghost ${formatSignedDelta(lapTime - ghostLapTime)}`);
+  return details;
+}
+
 function showTimeTrialLapCard({ title, lapTime, segments = [], details = [], valid = true }) {
   timeTrialState.lapCard = {
     title,
@@ -2444,13 +2556,13 @@ function showTimeTrialLapCard({ title, lapTime, segments = [], details = [], val
     details,
     valid,
   };
-  timeTrialState.lapCardTime = valid ? 4 : 3.2;
+  timeTrialState.lapCardTime = valid ? 8 : 6.4;
   updateTimeTrialLapCard(0);
 }
 
 function updateTimeTrialLapCard(dt) {
   if (timeTrialState.lapCardTime > 0) timeTrialState.lapCardTime = Math.max(0, timeTrialState.lapCardTime - dt);
-  const visible = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen() && timeTrialState.lapCard && timeTrialState.lapCardTime > 0;
+  const visible = isTimeTrialGameMode() && gameStarted && !isMenuOpen() && timeTrialState.lapCard && timeTrialState.lapCardTime > 0;
   if (!timeTrialLapCardEl) return;
   timeTrialLapCardEl.hidden = !visible;
   if (!visible) return;
@@ -2697,6 +2809,7 @@ function maybeSaveLocalTimeTrialBest(record) {
   }
   timeTrialState.localBest = savedBest;
   timeTrialState.saveMessageTime = 3;
+  timeTrialState.saveMessageText = "My Best Saved";
 }
 
 function maybeSaveSessionTimeTrialBest(record) {
@@ -2967,6 +3080,28 @@ function setTimeTrialOnlineStatus(message) {
   updateTimeTrialOnlineGhostControls();
 }
 
+async function uploadCurrentSessionBestTimeTrial() {
+  const recordId = timeTrialState.sessionBest?.recordId;
+  const record = loadLocalTimeTrialRecords().find((candidate) => candidate.id === recordId);
+  if (!record || !canUploadTimeTrialRecord(record)) return;
+  if (timeTrialUploadSessionBestButton) {
+    timeTrialUploadSessionBestButton.disabled = true;
+    timeTrialUploadSessionBestButton.textContent = "Uploading";
+  }
+  const uploaded = await uploadTimeTrialRecordToSupabase(record);
+  if (uploaded) {
+    updateLocalTimeTrialRecord(record.id, (current) => ({
+      ...current,
+      uploadedAt: new Date().toISOString(),
+    }));
+    timeTrialState.saveMessageTime = 3;
+    timeTrialState.saveMessageText = "Best Time Uploaded";
+    setTimeTrialRecordsStatus("Ghost uploaded properly.");
+    updateTimeTrialHistoryRecords();
+  }
+  updateTimeTrialHud();
+}
+
 function getSupabaseHeaders(extra = {}) {
   return {
     apikey: SUPABASE_PUBLISHABLE_KEY,
@@ -3024,6 +3159,16 @@ async function uploadTimeTrialRecordToSupabase(record) {
 }
 
 async function downloadOnlineTimeTrialGhostsForSelection() {
+  if (selectedOnlineGhostFilter === "mine") {
+    const records = getMatchingOnlineTimeTrialGhostRecords();
+    selectedOnlineGhostRecordId = records[0]?.id ?? "";
+    renderOnlineGhostList(records);
+    refreshSelectedTimeTrialGhost();
+    setTimeTrialOnlineStatus(records.length
+      ? `Loaded ${records.length} uploaded ghost${records.length === 1 ? "" : "s"}.`
+      : "No uploaded ghosts found for this track and car class yet.");
+    return;
+  }
   const carClass = getCarProfile().kind;
   const trackVersion = trackDefinitions[selectedTrack]?.version ?? "local-v1";
   setTimeTrialOnlineStatus("Loading online ghosts...");
@@ -3077,11 +3222,26 @@ async function downloadOnlineTimeTrialGhostsForSelection() {
   }
 }
 
-function selectOnlineGhostFilter(filter) {
-  selectedOnlineGhostFilter = filter === "week" ? "week" : "top";
+function selectOnlineGhostFilter(filter, options = {}) {
+  selectedOnlineGhostFilter = selectedGameMode === "weekly-time-trial"
+    ? (filter === "mine" ? "mine" : "week")
+    : ["week", "mine"].includes(filter)
+      ? filter
+      : "top";
   selectedOnlineGhostRecordId = "";
   for (const button of timeTrialOnlineFilterButtons) {
     button.classList.toggle("is-selected", button.dataset.onlineGhostFilter === selectedOnlineGhostFilter);
+  }
+  if (options.skipDownload) return;
+  if (selectedOnlineGhostFilter === "mine") {
+    const records = getMatchingOnlineTimeTrialGhostRecords();
+    selectedOnlineGhostRecordId = records[0]?.id ?? "";
+    renderOnlineGhostList(records);
+    refreshSelectedTimeTrialGhost();
+    setTimeTrialOnlineStatus(records.length
+      ? `Loaded ${records.length} uploaded ghost${records.length === 1 ? "" : "s"}.`
+      : "No uploaded ghosts found for this track and car class yet.");
+    return;
   }
   downloadOnlineTimeTrialGhostsForSelection();
 }
@@ -3147,6 +3307,12 @@ function getMostRecentSundayFivePacificIso(now = new Date()) {
 function formatOnlineGhostSegmentSummary(segments = []) {
   if (!Array.isArray(segments) || segments.length < 3) return "-- / -- / --";
   return segments.map(formatSegmentTime).join(" / ");
+}
+
+function formatSignedDelta(delta) {
+  if (!Number.isFinite(delta)) return "--";
+  const sign = delta > 0 ? "+" : delta < 0 ? "-" : "+";
+  return `${sign}${Math.abs(delta).toFixed(1)}`;
 }
 
 function getTeamShieldMarkup(driver = {}) {
@@ -3216,7 +3382,9 @@ function getBestExternalTimeTrialGhostRun(sourceFilter) {
 
 function getMatchingOnlineTimeTrialGhostRecords() {
   return loadLocalTimeTrialRecords()
-    .filter((record) => record.source === "online" || record.downloadedAt)
+    .filter((record) => selectedOnlineGhostFilter === "mine"
+      ? Boolean(record.uploadedAt)
+      : record.source === "online" || record.downloadedAt)
     .filter((record) => record.ghost?.samples?.length >= 2)
     .filter((record) => record.track?.id === selectedTrack)
     .filter((record) => (record.track?.version ?? "local-v1") === (trackDefinitions[selectedTrack]?.version ?? "local-v1"))
@@ -3230,6 +3398,8 @@ function clearTimeTrialGhost() {
   timeTrialGhost.car = null;
   timeTrialGhost.run = null;
   timeTrialGhost.active = false;
+  timeTrialGhost.progressSamples = [];
+  timeTrialState.ghostDelta = null;
 }
 
 function setTimeTrialGhostRun(best) {
@@ -3243,6 +3413,7 @@ function setTimeTrialGhostRun(best) {
   timeTrialGhost.car = ghostCar;
   timeTrialGhost.run = best;
   timeTrialGhost.active = true;
+  timeTrialGhost.progressSamples = buildTimeTrialGhostProgressSamples(samples);
 }
 
 function styleTimeTrialGhostCar(ghostCar) {
@@ -3273,18 +3444,21 @@ function styleTimeTrialGhostCar(ghostCar) {
 }
 
 function updateTimeTrialGhost(dt) {
-  if (selectedTimeTrialGhostMode === "off" || !timeTrialGhost.active || !timeTrialGhost.car?.root || selectedGameMode !== "time-trial" || !gameStarted || isMenuOpen()) {
+  if (selectedTimeTrialGhostMode === "off" || !timeTrialGhost.active || !timeTrialGhost.car?.root || !isTimeTrialGameMode() || !gameStarted || isMenuOpen()) {
     if (timeTrialGhost.car?.root) timeTrialGhost.car.root.visible = false;
+    timeTrialState.ghostDelta = null;
     return;
   }
   const samples = timeTrialGhost.run?.ghost?.samples ?? [];
   if (!timeTrialState.running || samples.length < 2 || timeTrialState.currentTime <= 0.12) {
     timeTrialGhost.car.root.visible = false;
+    timeTrialState.ghostDelta = null;
     return;
   }
   const pose = getTimeTrialGhostPose(samples, timeTrialState.currentTime);
   if (!pose) {
     timeTrialGhost.car.root.visible = false;
+    timeTrialState.ghostDelta = null;
     return;
   }
   timeTrialGhost.car.root.visible = true;
@@ -3297,6 +3471,48 @@ function updateTimeTrialGhost(dt) {
     if (wheel) wheel.rotation.x = spin;
   }
   updateRearWing(dt, Boolean(pose.boost), timeTrialGhost.car);
+  updateTimeTrialLiveGhostDelta();
+}
+
+function buildTimeTrialGhostProgressSamples(samples = []) {
+  return samples
+    .map((sample) => {
+      let progress = Number(sample.progress);
+      if (!Number.isFinite(progress) && track.samples?.length && Number.isFinite(sample.x) && Number.isFinite(sample.z)) {
+        const index = getNearestSampleIndex(track.samples, new THREE.Vector3(sample.x, track.groundY, sample.z));
+        progress = index / Math.max(1, track.samples.length - 1);
+      }
+      return {
+        t: Number(sample.t),
+        progress,
+      };
+    })
+    .filter((sample) => Number.isFinite(sample.t) && Number.isFinite(sample.progress))
+    .sort((a, b) => a.progress - b.progress);
+}
+
+function updateTimeTrialLiveGhostDelta() {
+  if (!timeTrialState.running || !timeTrialGhost.active || !timeTrialGhost.progressSamples?.length || !track.samples?.length) {
+    timeTrialState.ghostDelta = null;
+    return;
+  }
+  const progress = getNearestSampleIndex(track.samples, carState.position) / Math.max(1, track.samples.length - 1);
+  const ghostTime = getGhostTimeAtProgress(timeTrialGhost.progressSamples, progress);
+  timeTrialState.ghostDelta = Number.isFinite(ghostTime) ? timeTrialState.currentTime - ghostTime : null;
+}
+
+function getGhostTimeAtProgress(progressSamples, progress) {
+  if (!progressSamples?.length) return null;
+  if (progress <= progressSamples[0].progress) return progressSamples[0].t;
+  for (let i = 0; i < progressSamples.length - 1; i += 1) {
+    const lower = progressSamples[i];
+    const upper = progressSamples[i + 1];
+    if (progress < lower.progress || progress > upper.progress) continue;
+    const span = Math.max(0.00001, upper.progress - lower.progress);
+    const blend = THREE.MathUtils.clamp((progress - lower.progress) / span, 0, 1);
+    return THREE.MathUtils.lerp(lower.t, upper.t, blend);
+  }
+  return progressSamples[progressSamples.length - 1].t;
 }
 
 function getTimeTrialGhostPose(samples, currentTime) {
@@ -3325,7 +3541,7 @@ function getTimeTrialGhostPose(samples, currentTime) {
 }
 
 function isDrivingLineRecordingAvailable() {
-  return selectedGameMode === "time-trial" && selectedTimeTrialMode === "record-line";
+  return isTimeTrialGameMode() && selectedTimeTrialMode === "record-line";
 }
 
 function resetDrivingLineRecorderForRun() {
@@ -3463,7 +3679,7 @@ function roundDrivingLineNumber(value, digits = 3) {
 
 function updateDrivingLineRecorderHud() {
   if (!drivingLineRecorderEl || !drivingLineStatusEl) return;
-  const visible = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen() && drivingLineRecorder.active;
+  const visible = isTimeTrialGameMode() && gameStarted && !isMenuOpen() && drivingLineRecorder.active;
   drivingLineRecorderEl.hidden = !visible;
   if (!visible) return;
 
@@ -3481,16 +3697,21 @@ function updateDrivingLineRecorderHud() {
 }
 
 function updateTimeTrialHud() {
-  const isTimeTrial = selectedGameMode === "time-trial" && gameStarted && !isMenuOpen();
+  const isTimeTrial = isTimeTrialGameMode() && gameStarted && !isMenuOpen();
   if (timeTrialTimerEl) timeTrialTimerEl.hidden = !isTimeTrial;
   if (timeTrialMessageEl) timeTrialMessageEl.hidden = !isTimeTrial || (!timeTrialState.invalidated && timeTrialState.wallPenaltyMessageTime <= 0 && timeTrialState.trackLimitsPenaltyMessageTime <= 0 && timeTrialState.saveMessageTime <= 0);
   if (!isTimeTrial && timeTrialLapCardEl) timeTrialLapCardEl.hidden = true;
+  if (!isTimeTrial && timeTrialGhostDeltaEl) timeTrialGhostDeltaEl.hidden = true;
+  if (!isTimeTrial && timeTrialSectorDeltaEl) timeTrialSectorDeltaEl.hidden = true;
+  if (!isTimeTrial && timeTrialUploadSessionBestButton) timeTrialUploadSessionBestButton.hidden = true;
   if (timeTrialResultsEl) timeTrialResultsEl.hidden = !isTimeTrial;
   updateDrivingLineRecorderHud();
   if (!isTimeTrial) return;
 
   if (timeTrialTimerValueEl) timeTrialTimerValueEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
   else timeTrialTimerEl.textContent = timeTrialState.running ? formatLapTime(timeTrialState.currentTime) : "0:00.0";
+  updateTimeTrialGhostDeltaHud();
+  updateTimeTrialSectorDeltaHud();
   if (timeTrialLocalBestEl) {
     const best = timeTrialState.localBest;
     timeTrialLocalBestEl.innerHTML = best
@@ -3508,7 +3729,7 @@ function updateTimeTrialHud() {
   }
   if (timeTrialMessageEl && !timeTrialMessageEl.hidden) {
     timeTrialMessageEl.textContent = timeTrialState.saveMessageTime > 0
-      ? "My Best Saved"
+      ? timeTrialState.saveMessageText || "My Best Saved"
       : timeTrialState.invalidated
       ? "Invalidated Lap - Off Track"
       : timeTrialState.trackLimitsPenaltyMessageTime > 0
@@ -3518,6 +3739,7 @@ function updateTimeTrialHud() {
     timeTrialMessageEl.classList.toggle("is-saved", timeTrialState.saveMessageTime > 0);
   }
   if (!timeTrialLapsEl) return;
+  updateTimeTrialUploadSessionBestButton();
 
   timeTrialLapsEl.replaceChildren();
   for (const [index, lap] of timeTrialState.laps.entries()) {
@@ -3527,6 +3749,41 @@ function updateTimeTrialHud() {
     timeTrialLapsEl.appendChild(row);
   }
   updateDrivingLineRecorderHud();
+}
+
+function updateTimeTrialGhostDeltaHud() {
+  if (!timeTrialGhostDeltaEl) return;
+  const delta = timeTrialState.ghostDelta;
+  const visible = timeTrialState.running && Number.isFinite(delta);
+  timeTrialGhostDeltaEl.hidden = !visible;
+  if (!visible) return;
+  timeTrialGhostDeltaEl.textContent = formatSignedDelta(delta);
+  timeTrialGhostDeltaEl.classList.toggle("is-ahead", delta <= 0);
+  timeTrialGhostDeltaEl.classList.toggle("is-behind", delta > 0);
+}
+
+function updateTimeTrialSectorDeltaHud() {
+  if (!timeTrialSectorDeltaEl) return;
+  const visible = timeTrialState.sectorDeltaTime > 0 && timeTrialState.sectorDeltaText;
+  timeTrialSectorDeltaEl.hidden = !visible;
+  if (!visible) return;
+  timeTrialSectorDeltaEl.textContent = timeTrialState.sectorDeltaText;
+  timeTrialSectorDeltaEl.classList.toggle("is-ahead", (timeTrialState.sectorDeltaValue ?? 0) <= 0);
+  timeTrialSectorDeltaEl.classList.toggle("is-behind", (timeTrialState.sectorDeltaValue ?? 0) > 0);
+}
+
+function updateTimeTrialUploadSessionBestButton() {
+  if (!timeTrialUploadSessionBestButton) return;
+  const record = getCurrentSessionBestTimeTrialRecord();
+  timeTrialUploadSessionBestButton.hidden = !record;
+  timeTrialUploadSessionBestButton.disabled = !record || Boolean(record.uploadedAt) || !canUploadTimeTrialRecord(record);
+  timeTrialUploadSessionBestButton.textContent = record?.uploadedAt ? "Best Time Uploaded" : "Upload Best Time";
+}
+
+function getCurrentSessionBestTimeTrialRecord() {
+  const recordId = timeTrialState.sessionBest?.recordId;
+  if (!recordId) return null;
+  return loadLocalTimeTrialRecords().find((candidate) => candidate.id === recordId) ?? null;
 }
 
 function formatSegmentSummary(segments = []) {
@@ -3603,7 +3860,7 @@ function updateErsHud() {
   if (ersControlHintEl) ersControlHintEl.textContent = `Shift: ${label}`;
   const ratio = THREE.MathUtils.clamp(carState.ers / 100, 0, 1);
   ersFillEl.style.transform = `scaleX(${ratio})`;
-  ersFillEl.classList.toggle("is-low", profile.kind === "corvette" && carState.ers < 20);
+  ersFillEl.classList.toggle("is-low", profile.hasErs && carState.ers < getBoostStartThreshold(profile));
   ersReadoutEl.textContent = `${Math.round(carState.ers)}%`;
 }
 
@@ -7534,7 +7791,7 @@ function selectCarCategory(category) {
     corvette: PROFILE_TEAM_CAR_IDS.corvette,
   };
   selectCar(defaultCars[category] ?? "red");
-  if (selectedGameMode === "time-trial") {
+  if (isTimeTrialGameMode()) {
     const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
     if (backButton) backButton.dataset.menuBack = "car-category";
     updateTimeTrialModeSelection();
@@ -7544,15 +7801,270 @@ function selectCarCategory(category) {
   setMenuStep(category);
 }
 
-function startGameModeSelection(mode) {
+function startGameModeSelection(mode, backStep = "intro") {
   selectedGameMode = mode;
   selectedTimeTrialMode = "standard";
+  const trackBackButton = document.querySelector("[data-menu-step=\"track\"] [data-menu-back]");
+  if (trackBackButton) trackBackButton.dataset.menuBack = backStep;
   updateTimeTrialModeSelection();
   clearAiOpponents();
   if (selectedGameMode !== "quick-race") selectedAiOpponentCount = 0;
   else updateAiOpponentSelection();
   updateTimeTrialHud();
   setMenuStep("track");
+}
+
+function startWeeklyOnlineTimeTrialFlow() {
+  const challenge = getWeeklyTimeTrialChallenge();
+  selectedGameMode = "weekly-time-trial";
+  selectedTimeTrialMode = "standard";
+  selectedTimeTrialGhostMode = "online";
+  selectedOnlineGhostFilter = "week";
+  clearAiOpponents();
+  selectedAiOpponentCount = 0;
+  selectTrack(challenge.trackId);
+  selectCar(challenge.carId);
+  const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
+  if (backButton) backButton.dataset.menuBack = "go-online";
+  selectOnlineGhostFilter("week", { skipDownload: true });
+  updateTimeTrialModeSelection();
+  renderWeeklyTimeTrialCard();
+  updateTimeTrialHud();
+  setMenuStep("time-trial-setup");
+  downloadOnlineTimeTrialGhostsForSelection();
+}
+
+function getWeeklyTimeTrialChallenge(now = new Date()) {
+  const weekStartIso = getMostRecentSundayFivePacificIso(now);
+  const seed = hashStringToUint32(`the-paddock-weekly:${weekStartIso}`);
+  const trackId = weeklyTimeTrialTrackPool[seed % weeklyTimeTrialTrackPool.length] ?? KATARA_TRACK_ID;
+  const carClass = weeklyTimeTrialClassPool[Math.floor(seed / Math.max(1, weeklyTimeTrialTrackPool.length)) % weeklyTimeTrialClassPool.length] ?? "stock";
+  const carId = PROFILE_TEAM_CAR_IDS[carClass] ?? PROFILE_TEAM_CAR_IDS.stock;
+  return { trackId, carClass, carId, weekStartIso };
+}
+
+function hashStringToUint32(text = "") {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function renderWeeklyTimeTrialCard() {
+  const isWeekly = selectedGameMode === "weekly-time-trial";
+  if (weeklyTimeTrialCardEl) weeklyTimeTrialCardEl.hidden = !isWeekly;
+  if (!isWeekly) return;
+  if (weeklyTimeTrialTitleEl) weeklyTimeTrialTitleEl.textContent = `${getSelectedTrackLabel()} / ${getCarClassLabel(getCarProfile().kind)}`;
+  if (weeklyTimeTrialResetEl) weeklyTimeTrialResetEl.textContent = `Resets Sunday at 5pm Pacific`;
+}
+
+function startOnlineHostFlow() {
+  selectedGameMode = "online-host";
+  clearAiOpponents();
+  selectedAiOpponentCount = 0;
+  const roomCode = generateOnlineRoomCode();
+  connectOnlineRoom(roomCode, "host");
+  startGameModeSelection("online-host", "go-online");
+}
+
+function completeOnlineHostSetup() {
+  if (!onlineRoomState.roomCode) connectOnlineRoom(generateOnlineRoomCode(), "host");
+  sendOnlineRoomEvent("host_settings", getOnlineRoomPlayerPayload());
+  renderOnlineRoom();
+  setMenuStep("online-room");
+}
+
+function joinOnlineRoomFromInput() {
+  const roomCode = normalizeOnlineRoomCode(onlineRoomCodeInput?.value ?? "");
+  if (roomCode.length < 4) {
+    setOnlineJoinStatus("Enter the room code from the host.", "is-warning");
+    return;
+  }
+  selectedGameMode = "online-join";
+  connectOnlineRoom(roomCode, "guest");
+  setMenuStep("online-room");
+}
+
+function getOnlinePlayerId() {
+  try {
+    const key = "the-paddock:online-player-id";
+    const saved = window.localStorage?.getItem(key);
+    if (saved) return saved;
+    const id = (window.crypto?.randomUUID?.() ?? `player-${Date.now()}-${Math.floor(Math.random() * 100000)}`).replace(/[^a-z0-9-]/gi, "");
+    window.localStorage?.setItem(key, id);
+    return id;
+  } catch {
+    return `player-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  }
+}
+
+function generateOnlineRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return code;
+}
+
+function normalizeOnlineRoomCode(value = "") {
+  return String(value).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
+
+function connectOnlineRoom(roomCode, role) {
+  disconnectOnlineRoom();
+  onlineRoomState.role = role;
+  onlineRoomState.roomCode = normalizeOnlineRoomCode(roomCode);
+  onlineRoomState.topic = `realtime:paddock-${onlineRoomState.roomCode.toLowerCase()}`;
+  onlineRoomState.players = new Map([[onlineRoomState.playerId, getOnlineRoomPlayerPayload()]]);
+  onlineRoomState.connected = false;
+  onlineRoomState.lastError = "";
+  renderOnlineRoom();
+
+  try {
+    onlineRoomState.socket = new WebSocket(SUPABASE_REALTIME_URL);
+    onlineRoomState.socket.addEventListener("open", () => {
+      joinOnlineRealtimeChannel();
+      onlineRoomState.heartbeatId = window.setInterval(sendOnlineHeartbeat, 25000);
+      renderOnlineRoomStatus("Connecting to room...", "is-warning");
+    });
+    onlineRoomState.socket.addEventListener("message", handleOnlineRealtimeMessage);
+    onlineRoomState.socket.addEventListener("close", () => {
+      onlineRoomState.connected = false;
+      renderOnlineRoomStatus("Room connection closed. Reopen the room to reconnect.", "is-warning");
+      if (onlineRoomState.heartbeatId) window.clearInterval(onlineRoomState.heartbeatId);
+      onlineRoomState.heartbeatId = null;
+    });
+    onlineRoomState.socket.addEventListener("error", () => {
+      onlineRoomState.lastError = "Could not connect to the online room.";
+      renderOnlineRoomStatus(onlineRoomState.lastError, "is-bad");
+    });
+  } catch {
+    onlineRoomState.lastError = "This browser could not open the online room connection.";
+    renderOnlineRoomStatus(onlineRoomState.lastError, "is-bad");
+  }
+}
+
+function disconnectOnlineRoom() {
+  if (onlineRoomState.heartbeatId) window.clearInterval(onlineRoomState.heartbeatId);
+  onlineRoomState.heartbeatId = null;
+  if (onlineRoomState.socket) {
+    try {
+      onlineRoomState.socket.close();
+    } catch {
+      // The socket may already be closed.
+    }
+  }
+  onlineRoomState.socket = null;
+  onlineRoomState.connected = false;
+}
+
+function joinOnlineRealtimeChannel() {
+  sendOnlineRealtimeMessage(onlineRoomState.topic, "phx_join", {
+    config: {
+      broadcast: { ack: false, self: false },
+      presence: { enabled: false },
+      private: false,
+    },
+  });
+}
+
+function sendOnlineHeartbeat() {
+  sendOnlineRealtimeMessage("phoenix", "heartbeat", {});
+}
+
+function sendOnlineRealtimeMessage(topic, event, payload = {}) {
+  const socket = onlineRoomState.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  const ref = String(onlineRoomState.ref++);
+  if (event === "phx_join") onlineRoomState.joinRef = ref;
+  socket.send(JSON.stringify({
+    topic,
+    event,
+    payload,
+    ref,
+    join_ref: topic === "phoenix" ? undefined : onlineRoomState.joinRef || ref,
+  }));
+  return true;
+}
+
+function sendOnlineRoomEvent(event, payload = {}) {
+  return sendOnlineRealtimeMessage(onlineRoomState.topic, "broadcast", { type: "broadcast", event, payload });
+}
+
+function handleOnlineRealtimeMessage(event) {
+  let message = null;
+  try {
+    message = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+  if (message.topic !== onlineRoomState.topic) return;
+  if (message.event === "phx_reply" && message.payload?.status === "ok") {
+    onlineRoomState.connected = true;
+    renderOnlineRoomStatus(`Connected to room ${onlineRoomState.roomCode}.`, "is-good");
+    sendOnlineRoomEvent("player_joined", getOnlineRoomPlayerPayload());
+    return;
+  }
+  if (message.event !== "broadcast") return;
+  const broadcastEvent = message.payload?.event;
+  const payload = message.payload?.payload ?? {};
+  if (broadcastEvent === "player_joined" || broadcastEvent === "host_settings") {
+    if (payload.playerId) onlineRoomState.players.set(payload.playerId, payload);
+    renderOnlineRoom();
+  }
+}
+
+function getOnlineRoomPlayerPayload() {
+  return {
+    playerId: onlineRoomState.playerId,
+    role: onlineRoomState.role,
+    driverName: driverProfile.driverName || "Driver Name",
+    teamName: driverProfile.teamName || "Team Name",
+    primaryColor: driverProfile.primaryColor,
+    accentColor: driverProfile.accentColor,
+    selectedTrack,
+    trackName: getSelectedTrackLabel(),
+    selectedCar,
+    carName: getSelectedCarLabel(),
+    carClass: getCarProfile().kind,
+  };
+}
+
+function renderOnlineRoom() {
+  const modeLabel = onlineRoomState.role === "host" ? "Host Game" : onlineRoomState.role === "guest" ? "Join Game" : "Online Room";
+  if (onlineRoomModeEl) onlineRoomModeEl.textContent = modeLabel;
+  if (onlineRoomCodeEl) onlineRoomCodeEl.textContent = `Room ${onlineRoomState.roomCode || "----"}`;
+  if (onlineRoomSummaryEl) {
+    const payload = getOnlineRoomPlayerPayload();
+    onlineRoomSummaryEl.textContent = onlineRoomState.role === "host"
+      ? `${payload.trackName} / ${getCarClassLabel(payload.carClass)} / ${payload.carName}`
+      : "Waiting for the host room.";
+  }
+  if (onlineRoomPlayersEl) {
+    onlineRoomPlayersEl.replaceChildren();
+    const players = [...onlineRoomState.players.values()];
+    for (const player of players) {
+      const row = document.createElement("li");
+      row.innerHTML = `<span>${player.driverName || "Driver Name"}</span><span>${player.role === "host" ? "Host" : "Guest"}</span>`;
+      onlineRoomPlayersEl.appendChild(row);
+    }
+  }
+  if (!onlineRoomStatusEl?.textContent) renderOnlineRoomStatus("Preparing online room...", "is-warning");
+}
+
+function renderOnlineRoomStatus(text, className = "") {
+  if (!onlineRoomStatusEl) return;
+  onlineRoomStatusEl.textContent = text;
+  onlineRoomStatusEl.classList.remove("is-good", "is-warning", "is-bad");
+  if (className) onlineRoomStatusEl.classList.add(className);
+}
+
+function setOnlineJoinStatus(text, className = "") {
+  if (!onlineJoinStatusEl) return;
+  onlineJoinStatusEl.textContent = text;
+  onlineJoinStatusEl.classList.remove("is-good", "is-warning", "is-bad");
+  if (className) onlineJoinStatusEl.classList.add(className);
 }
 
 function selectTrack(trackId) {
@@ -7575,6 +8087,9 @@ function setMenuStep(step) {
   const titles = {
     intro: "The Paddock",
     "driver-profile": "Driver Profile",
+    "go-online": "Go Online",
+    "online-join": "Join Game",
+    "online-room": "Online Room",
     "editor-choice": "Track Editor",
     "editor-default-track": "Default Tracks",
     track: "Choose Track",
@@ -7589,10 +8104,13 @@ function setMenuStep(step) {
   };
 
   menuTitle.textContent = titles[menuStep] ?? titles.intro;
+  if (menuStep === "time-trial-setup" && selectedGameMode === "weekly-time-trial") menuTitle.textContent = "Weekly Time Trial";
   for (const stepEl of menuSteps) {
     stepEl.classList.toggle("is-hidden", stepEl.dataset.menuStep !== menuStep);
   }
   if (menuStep === "driver-profile") updateDriverProfilePage();
+  if (menuStep === "online-room") renderOnlineRoom();
+  if (menuStep === "time-trial-setup") renderWeeklyTimeTrialCard();
   updateMenuVisual();
 }
 
@@ -7914,7 +8432,15 @@ function isPaintMenuStep() {
 }
 
 function updateMenuVisual() {
-  const visual = menuStep === "intro" ? "intro" : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track") ? "track" : menuStep === "car-category" ? "driver" : menuStep === "driver-profile" ? "profile" : "car";
+  const visual = menuStep === "intro" || menuStep === "go-online" || menuStep === "online-join" || menuStep === "online-room"
+    ? "intro"
+    : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track")
+      ? "track"
+      : menuStep === "car-category"
+        ? "driver"
+        : menuStep === "driver-profile"
+          ? "profile"
+          : "car";
   for (const visualEl of showroomVisuals) {
     visualEl.classList.toggle("is-hidden", visualEl.dataset.showroomVisual !== visual);
   }
@@ -7928,12 +8454,17 @@ function updateMenuVisual() {
   const labels = {
     intro: ["Ready to Roll", "Just Drive"],
     "driver-profile": ["Driver Profile", "My Garage"],
+    "go-online": ["Online Racing", "Go Online"],
+    "online-join": ["Online Racing", "Join Game"],
+    "online-room": ["Room Code", onlineRoomState.roomCode || "Waiting"],
     "editor-choice": ["Track Editor", "Choose Starting Point"],
     "editor-default-track": ["Default Track", "Choose Layout"],
     track: ["Selected Track", getSelectedTrackLabel()],
     "car-category": ["Pick a Garage", "Driver Ready"],
     "ai-opponents": ["Race Grid", `${selectedAiOpponentCount} AI - ${getAiDifficultyLabel()}`],
-    "time-trial-setup": ["Time Trial", selectedTimeTrialMode === "record-line" ? "Record Driving Line" : "Normal Run"],
+    "time-trial-setup": selectedGameMode === "weekly-time-trial"
+      ? ["Weekly Time Trial", `${getSelectedTrackLabel()} / ${getCarClassLabel(getCarProfile().kind)}`]
+      : ["Time Trial", selectedTimeTrialMode === "record-line" ? "Record Driving Line" : "Normal Run"],
   };
   const [label, title] = labels[menuStep] ?? ["Selected Machine", getSelectedCarLabel()];
   const labelEl = previewTitle?.previousElementSibling;
@@ -8006,9 +8537,19 @@ function selectTimeTrialMode(mode) {
 }
 
 function updateTimeTrialModeSelection() {
+  if (selectedGameMode === "weekly-time-trial") {
+    selectedTimeTrialMode = "standard";
+    selectedTimeTrialGhostMode = "online";
+    selectedOnlineGhostFilter = selectedOnlineGhostFilter === "mine" ? "mine" : "week";
+  }
   timeTrialStandardButton?.classList.toggle("is-selected", selectedTimeTrialMode === "standard");
   timeTrialRecordLineButton?.classList.toggle("is-selected", selectedTimeTrialMode === "record-line");
+  if (timeTrialModeGridEl) timeTrialModeGridEl.hidden = selectedGameMode === "weekly-time-trial";
+  if (timeTrialSetupStartButton) timeTrialSetupStartButton.textContent = selectedGameMode === "weekly-time-trial" ? "Start Weekly Time Trial" : "Start Time Trial";
   if (timeTrialGhostSelect) timeTrialGhostSelect.value = selectedTimeTrialGhostMode;
+  for (const button of timeTrialOnlineFilterButtons) {
+    button.hidden = selectedGameMode === "weekly-time-trial" && button.dataset.onlineGhostFilter === "top";
+  }
   updateTimeTrialOnlineGhostControls();
 }
 
@@ -8049,12 +8590,16 @@ function formatOrdinal(value) {
 }
 
 function handleStartRaceClick() {
-  if (selectedGameMode === "time-trial") {
+  if (isTimeTrialGameMode()) {
     timeTrialPaintStep = menuStep;
     const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
     if (backButton) backButton.dataset.menuBack = timeTrialPaintStep;
     updateTimeTrialModeSelection();
     setMenuStep("time-trial-setup");
+    return;
+  }
+  if (selectedGameMode === "online-host") {
+    completeOnlineHostSetup();
     return;
   }
   if (selectedGameMode !== "quick-race") {
@@ -8966,6 +9511,21 @@ function togglePause() {
 function openCarSelectionMenu() {
   setPaused(true);
   setMenuStep("car-category");
+  startMenu.classList.remove("is-hidden");
+  pauseBadge.hidden = true;
+  keys.clear();
+}
+
+function openWeeklyTimeTrialMenu() {
+  setPaused(true);
+  selectedTimeTrialMode = "standard";
+  selectedTimeTrialGhostMode = "online";
+  selectedOnlineGhostFilter = selectedOnlineGhostFilter === "mine" ? "mine" : "week";
+  const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
+  if (backButton) backButton.dataset.menuBack = "go-online";
+  updateTimeTrialModeSelection();
+  renderWeeklyTimeTrialCard();
+  setMenuStep("time-trial-setup");
   startMenu.classList.remove("is-hidden");
   pauseBadge.hidden = true;
   keys.clear();
@@ -11538,7 +12098,7 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
   const gridPose = selectedGameMode === "quick-race" ? getQuickRaceGridPose(selectedGridPosition) : null;
   const spawn = gridPose
     ? { x: gridPose.position.x, z: gridPose.position.z, heading: gridPose.heading }
-    : selectedGameMode === "time-trial" && track.timeTrialStart
+    : isTimeTrialGameMode() && track.timeTrialStart
       ? track.timeTrialStart
       : track.start;
   carState.position.set(spawn.x, track.groundY, spawn.z);
@@ -11583,7 +12143,7 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
   cameraTarget.copy(carState.position);
   updateCarLights(false, false);
   resetAiOpponentsToGrid();
-  if (selectedGameMode === "time-trial") resetTimeTrialState({ clearLaps: !keepTimeTrialLaps });
+  if (isTimeTrialGameMode()) resetTimeTrialState({ clearLaps: !keepTimeTrialLaps });
   else updateTimeTrialHud();
   if (selectedGameMode === "quick-race" && gameStarted) resetQuickRaceState();
   else updateQuickRaceHud();

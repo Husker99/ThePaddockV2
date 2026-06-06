@@ -23,6 +23,7 @@
               <button id="time-trial-game" class="start-button" type="button">Time Trial</button>
               <button id="quick-race-game" class="start-button" type="button">Quick Race</button>
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
+              <button id="go-online-game" class="start-button go-online-button" type="button">Go Online</button>
             </div>
           </div>
 
@@ -58,6 +59,50 @@
               <p id="time-trial-records-status" class="profile-records-status"></p>
               <ol id="time-trial-history-records"></ol>
             </section>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="go-online">
+            <button class="back-button" type="button" data-menu-back="intro">Back</button>
+            <div class="selection-grid">
+              <button id="online-weekly-time-trial" class="selection-card online-menu-card" type="button">
+                <span>Go Online</span>
+                <strong>Weekly Time Trial</strong>
+              </button>
+              <button id="online-host-game" class="selection-card online-menu-card" type="button">
+                <span>Go Online</span>
+                <strong>Host Game</strong>
+              </button>
+              <button id="online-join-game" class="selection-card online-menu-card" type="button">
+                <span>Go Online</span>
+                <strong>Join Game</strong>
+              </button>
+            </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="online-join">
+            <button class="back-button" type="button" data-menu-back="go-online">Back</button>
+            <section class="race-setup-panel online-room-panel" aria-label="Join online room">
+              <span>Join Game</span>
+              <strong>Enter Room Code</strong>
+              <label class="race-select online-code-field">
+                <span>Room Code</span>
+                <input id="online-room-code-input" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="ABCD12" />
+              </label>
+              <p id="online-join-status" class="online-room-status"></p>
+            </section>
+            <button id="online-join-room" class="start-button" type="button">Join Game</button>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="online-room">
+            <button class="back-button" type="button" data-menu-back="go-online">Back</button>
+            <section class="race-setup-panel online-room-panel" aria-label="Online room">
+              <span id="online-room-mode">Online Room</span>
+              <strong id="online-room-code">Room ----</strong>
+              <p id="online-room-summary" class="online-room-summary"></p>
+              <p id="online-room-status" class="online-room-status">Not connected yet.</p>
+              <ol id="online-room-players" class="online-room-players"></ol>
+            </section>
+            <button id="online-room-start-drive" class="start-button" type="button">Start Practice</button>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="editor-choice">
@@ -240,7 +285,12 @@
 
           <div class="menu-step is-hidden" data-menu-step="time-trial-setup">
             <button class="back-button" type="button" data-menu-back="stock">Back</button>
-            <div class="selection-grid">
+            <section id="weekly-time-trial-card" class="weekly-time-trial-card" hidden aria-label="Weekly time trial challenge">
+              <span>Weekly Time Trial</span>
+              <strong id="weekly-time-trial-title">Loading Challenge</strong>
+              <small id="weekly-time-trial-reset">Resets Sunday at 5pm Pacific</small>
+            </section>
+            <div id="time-trial-mode-options" class="selection-grid">
               <button id="time-trial-standard" class="selection-card is-selected" type="button">
                 <span>Time Trial</span>
                 <strong>Normal Run</strong>
@@ -263,6 +313,7 @@
               <div class="time-trial-online-toolbar">
                 <button class="ghost-button is-selected" type="button" data-online-ghost-filter="top">Top 10</button>
                 <button class="ghost-button" type="button" data-online-ghost-filter="week">This Week</button>
+                <button class="ghost-button" type="button" data-online-ghost-filter="mine">My Uploads</button>
                 <button id="time-trial-download-ghosts" class="ghost-button refresh-ghost-button" type="button" aria-label="Refresh online ghosts" title="Refresh online ghosts">↻</button>
               </div>
               <p id="time-trial-online-status" class="time-trial-online-status"></p>
@@ -566,6 +617,7 @@
     </div>
     <div id="time-trial-timer" class="time-trial-timer" hidden>
       <span id="time-trial-timer-value">0:00.0</span>
+      <span id="time-trial-ghost-delta" class="time-trial-ghost-delta" hidden>+0.0</span>
       <div id="time-trial-segments" class="time-trial-segments" aria-hidden="true">
         <span></span>
         <span></span>
@@ -573,6 +625,7 @@
       </div>
     </div>
     <div id="time-trial-message" class="time-trial-message" hidden></div>
+    <div id="time-trial-sector-delta" class="time-trial-sector-delta" hidden></div>
     <section id="time-trial-lap-card" class="time-trial-lap-card" hidden aria-label="Time trial lap result">
       <strong id="time-trial-lap-card-title">Lap Complete</strong>
       <span id="time-trial-lap-card-time">0:00.0</span>
@@ -599,6 +652,7 @@
     <section id="time-trial-results" class="time-trial-results" hidden aria-label="Time trial lap times">
       <h2>Lap Times</h2>
       <div id="time-trial-local-best" class="time-trial-local-best">My Best: --</div>
+      <button id="time-trial-upload-session-best" class="time-trial-upload-session-best" type="button" hidden>Upload Best Time</button>
       <ol id="time-trial-laps"></ol>
     </section>
     <section id="driving-line-recorder" class="driving-line-recorder" hidden aria-label="Driving line recorder">
