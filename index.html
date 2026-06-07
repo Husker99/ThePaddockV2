@@ -94,6 +94,10 @@
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="online-room">
+            <div id="online-lobby-room-code" class="online-lobby-room-code" hidden>
+              <span>Room</span>
+              <strong>----</strong>
+            </div>
             <button class="back-button" type="button" data-menu-back="go-online">Back</button>
             <section class="race-setup-panel online-room-panel" aria-label="Online room">
               <span id="online-room-mode">Online Room</span>
@@ -102,7 +106,10 @@
               <p id="online-room-status" class="online-room-status">Not connected yet.</p>
               <ol id="online-room-players" class="online-room-players"></ol>
             </section>
-            <button id="online-room-start-drive" class="start-button" type="button">Start Practice</button>
+            <div class="online-room-actions">
+              <button id="online-room-ready" class="start-button" type="button">Ready</button>
+              <button id="online-room-start-drive" class="start-button" type="button">Start Online Race</button>
+            </div>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="editor-choice">

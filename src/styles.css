@@ -393,6 +393,57 @@ h1 {
   font-weight: 850;
 }
 
+.online-room-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.online-room-actions .start-button[disabled] {
+  opacity: 0.42;
+  cursor: default;
+  transform: none;
+  filter: grayscale(0.18);
+}
+
+.online-lobby-room-code {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(8, 10, 8, 0.56);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+  color: #f6f2e8;
+  pointer-events: none;
+}
+
+.online-lobby-room-code[hidden] {
+  display: none;
+}
+
+.online-lobby-room-code span {
+  color: rgba(246, 242, 232, 0.68);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.online-lobby-room-code strong {
+  color: #ffcf4a;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
 .start-button,
 .ghost-button {
   width: 100%;

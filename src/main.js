@@ -35,9 +35,11 @@ const onlineRoomCodeInput = document.querySelector("#online-room-code-input");
 const onlineJoinStatusEl = document.querySelector("#online-join-status");
 const onlineRoomModeEl = document.querySelector("#online-room-mode");
 const onlineRoomCodeEl = document.querySelector("#online-room-code");
+const onlineLobbyRoomCodeEl = document.querySelector("#online-lobby-room-code");
 const onlineRoomSummaryEl = document.querySelector("#online-room-summary");
 const onlineRoomStatusEl = document.querySelector("#online-room-status");
 const onlineRoomPlayersEl = document.querySelector("#online-room-players");
+const onlineRoomReadyButton = document.querySelector("#online-room-ready");
 const onlineRoomStartDriveButton = document.querySelector("#online-room-start-drive");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
 const driverProfileButton = document.querySelector("#driver-profile-button");
@@ -516,6 +518,10 @@ function isTimeTrialGameMode() {
   return selectedGameMode === "time-trial" || selectedGameMode === "weekly-time-trial";
 }
 
+function isOnlineRaceGameMode() {
+  return selectedGameMode === "online-host" || selectedGameMode === "online-join";
+}
+
 const AI_DIFFICULTY_SETTINGS = {
   beginner: { label: "Beginner", cyborgBrakingLookaheadScale: 3 },
   standard: { label: "Standard", cyborgBrakingLookaheadScale: 1.2 },
@@ -602,6 +608,11 @@ const onlineRoomState = {
   connected: false,
   playerId: getOnlinePlayerId(),
   players: new Map(),
+  hostSettings: null,
+  ready: false,
+  raceStarted: false,
+  poseSendTimer: 0,
+  remoteCars: new Map(),
   lastError: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
@@ -770,7 +781,8 @@ onlineRoomCodeInput?.addEventListener("input", () => {
 onlineRoomCodeInput?.addEventListener("keydown", (event) => {
   if (event.code === "Enter") joinOnlineRoomFromInput();
 });
-onlineRoomStartDriveButton?.addEventListener("click", startGame);
+onlineRoomReadyButton?.addEventListener("click", toggleOnlineReady);
+onlineRoomStartDriveButton?.addEventListener("click", startOnlineRaceFromLobby);
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
 driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
 driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
@@ -1492,6 +1504,7 @@ function update() {
   }
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateAiOpponents(dt);
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) resolveRaceCarCollisions(dt);
+  updateOnlineRaceNetworking(dt);
   updateTimeTrialGhost(dt);
   updateSlipstreamDebugCones();
   updateQuickRaceState(dt, raceStartBlocked);
@@ -7871,7 +7884,11 @@ function startOnlineHostFlow() {
 
 function completeOnlineHostSetup() {
   if (!onlineRoomState.roomCode) connectOnlineRoom(generateOnlineRoomCode(), "host");
-  sendOnlineRoomEvent("host_settings", getOnlineRoomPlayerPayload());
+  onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
+  onlineRoomState.ready = true;
+  onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
+  sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
+  sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
   renderOnlineRoom();
   setMenuStep("online-room");
 }
@@ -7912,10 +7929,15 @@ function normalizeOnlineRoomCode(value = "") {
 }
 
 function connectOnlineRoom(roomCode, role) {
+  removeOnlineRemoteCars();
   disconnectOnlineRoom();
   onlineRoomState.role = role;
   onlineRoomState.roomCode = normalizeOnlineRoomCode(roomCode);
   onlineRoomState.topic = `realtime:paddock-${onlineRoomState.roomCode.toLowerCase()}`;
+  onlineRoomState.hostSettings = role === "host" ? getOnlineRoomSettingsPayload() : null;
+  onlineRoomState.ready = role === "host";
+  onlineRoomState.raceStarted = false;
+  onlineRoomState.poseSendTimer = 0;
   onlineRoomState.players = new Map([[onlineRoomState.playerId, getOnlineRoomPlayerPayload()]]);
   onlineRoomState.connected = false;
   onlineRoomState.lastError = "";
@@ -8004,14 +8026,22 @@ function handleOnlineRealtimeMessage(event) {
     onlineRoomState.connected = true;
     renderOnlineRoomStatus(`Connected to room ${onlineRoomState.roomCode}.`, "is-good");
     sendOnlineRoomEvent("player_joined", getOnlineRoomPlayerPayload());
+    if (onlineRoomState.role === "host" && onlineRoomState.hostSettings) sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
     return;
   }
   if (message.event !== "broadcast") return;
   const broadcastEvent = message.payload?.event;
   const payload = message.payload?.payload ?? {};
-  if (broadcastEvent === "player_joined" || broadcastEvent === "host_settings") {
+  if (broadcastEvent === "player_joined" || broadcastEvent === "player_ready") {
     if (payload.playerId) onlineRoomState.players.set(payload.playerId, payload);
     renderOnlineRoom();
+  } else if (broadcastEvent === "host_settings") {
+    applyOnlineHostSettings(payload);
+    renderOnlineRoom();
+  } else if (broadcastEvent === "race_start") {
+    beginOnlineRaceFromMessage(payload);
+  } else if (broadcastEvent === "player_pose") {
+    receiveOnlinePlayerPose(payload);
   }
 }
 
@@ -8028,17 +8058,204 @@ function getOnlineRoomPlayerPayload() {
     selectedCar,
     carName: getSelectedCarLabel(),
     carClass: getCarProfile().kind,
+    ready: onlineRoomState.ready,
   };
+}
+
+function getOnlineRoomSettingsPayload() {
+  return {
+    hostPlayerId: onlineRoomState.playerId,
+    selectedTrack,
+    trackName: getSelectedTrackLabel(),
+    selectedCar,
+    carName: getSelectedCarLabel(),
+    carClass: getCarProfile().kind,
+    laps: 3,
+  };
+}
+
+function applyOnlineHostSettings(settings = {}) {
+  if (!settings.selectedTrack || !settings.selectedCar) return;
+  onlineRoomState.hostSettings = settings;
+  if (onlineRoomState.role === "guest" && !gameStarted) {
+    if (selectedTrack !== settings.selectedTrack) selectTrack(settings.selectedTrack);
+    if (selectedCar !== settings.selectedCar) selectCar(settings.selectedCar);
+  }
+}
+
+function toggleOnlineReady() {
+  onlineRoomState.ready = !onlineRoomState.ready;
+  onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
+  sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
+  renderOnlineRoom();
+}
+
+function startOnlineRaceFromLobby() {
+  if (onlineRoomState.role !== "host") {
+    renderOnlineRoomStatus("Waiting for the host to start the race.", "is-warning");
+    return;
+  }
+  onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
+  const payload = {
+    ...onlineRoomState.hostSettings,
+    startAt: Date.now() + 900,
+  };
+  sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
+  sendOnlineRoomEvent("race_start", payload);
+  beginOnlineRaceFromMessage(payload);
+}
+
+function beginOnlineRaceFromMessage(payload = {}) {
+  if (gameStarted && isOnlineRaceGameMode()) return;
+  applyOnlineHostSettings(payload);
+  onlineRoomState.raceStarted = true;
+  renderOnlineRoomStatus("Starting online race...", "is-good");
+  const delay = Math.max(0, Number(payload.startAt ?? Date.now()) - Date.now());
+  window.setTimeout(() => {
+    selectedGameMode = onlineRoomState.role === "host" ? "online-host" : "online-join";
+    startGame();
+  }, delay);
+}
+
+function updateOnlineRaceNetworking(dt) {
+  if (!isOnlineRaceGameMode()) {
+    updateOnlineRemoteCars(dt, false);
+    return;
+  }
+  if (gameStarted && !isMenuOpen()) {
+    onlineRoomState.poseSendTimer += dt;
+    if (onlineRoomState.poseSendTimer >= 1 / 12) {
+      onlineRoomState.poseSendTimer = 0;
+      sendOnlineRoomEvent("player_pose", getOnlinePosePayload());
+    }
+  }
+  updateOnlineRemoteCars(dt, gameStarted && !isMenuOpen());
+}
+
+function getOnlinePosePayload() {
+  return {
+    ...getOnlineRoomPlayerPayload(),
+    t: performance.now(),
+    x: roundOnlinePoseNumber(carState.position.x),
+    y: roundOnlinePoseNumber(carState.position.y),
+    z: roundOnlinePoseNumber(carState.position.z),
+    heading: roundOnlinePoseNumber(carState.heading),
+    steer: roundOnlinePoseNumber(carState.steer),
+    wheelSpin: roundOnlinePoseNumber(carState.wheelSpin),
+    speed: roundOnlinePoseNumber(carState.velocity.length()),
+    boostActive: Boolean(carState.boostActive),
+    brake: pressed("KeyS", "ArrowDown") ? 1 : 0,
+  };
+}
+
+function roundOnlinePoseNumber(value) {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+function receiveOnlinePlayerPose(payload = {}) {
+  if (!payload.playerId || payload.playerId === onlineRoomState.playerId) return;
+  if (!isOnlineRaceGameMode() && !onlineRoomState.raceStarted) return;
+  onlineRoomState.players.set(payload.playerId, {
+    ...(onlineRoomState.players.get(payload.playerId) ?? {}),
+    ...payload,
+  });
+  let remote = onlineRoomState.remoteCars.get(payload.playerId);
+  if (!remote) {
+    remote = createOnlineRemoteCar(payload);
+    onlineRoomState.remoteCars.set(payload.playerId, remote);
+  }
+  remote.lastSeen = performance.now();
+  remote.target.position.set(Number(payload.x) || 0, track.groundY + 0.04, Number(payload.z) || 0);
+  remote.target.heading = Number(payload.heading) || 0;
+  remote.target.steer = Number(payload.steer) || 0;
+  remote.target.wheelSpin = Number(payload.wheelSpin) || remote.target.wheelSpin;
+  remote.target.boostActive = Boolean(payload.boostActive);
+  remote.target.brake = Number(payload.brake) > 0.1;
+  remote.car.root.visible = true;
+}
+
+function createOnlineRemoteCar(payload = {}) {
+  const ghostCar = createSelectedCar(payload.selectedCar ?? selectedCar);
+  applyOnlineGhostMaterial(ghostCar.root);
+  ghostCar.root.visible = false;
+  scene.add(ghostCar.root);
+  return {
+    car: ghostCar,
+    target: {
+      position: new THREE.Vector3(),
+      heading: 0,
+      steer: 0,
+      wheelSpin: 0,
+      boostActive: false,
+      brake: false,
+    },
+    lastSeen: performance.now(),
+  };
+}
+
+function applyOnlineGhostMaterial(root) {
+  root.traverse((object) => {
+    if (object.isLight) {
+      object.visible = false;
+      return;
+    }
+    object.castShadow = false;
+    object.receiveShadow = false;
+    if (!object.isMesh || !object.material) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const ghostMaterials = materials.map((material) => {
+      const clone = material.clone();
+      clone.transparent = true;
+      clone.opacity = 0.46;
+      clone.depthWrite = false;
+      clone.emissive?.multiplyScalar?.(0.35);
+      return clone;
+    });
+    object.material = Array.isArray(object.material) ? ghostMaterials : ghostMaterials[0];
+  });
+}
+
+function updateOnlineRemoteCars(dt, visible) {
+  const now = performance.now();
+  for (const [playerId, remote] of onlineRoomState.remoteCars.entries()) {
+    const stale = now - remote.lastSeen > 1600;
+    remote.car.root.visible = visible && !stale;
+    if (stale) continue;
+    remote.car.root.position.lerp(remote.target.position, 1 - Math.exp(-dt * 11));
+    remote.car.root.rotation.y = angleLerp(remote.car.root.rotation.y, remote.target.heading, 1 - Math.exp(-dt * 10));
+    if (remote.car.wheels?.frontLeft) remote.car.wheels.frontLeft.rotation.y = remote.target.steer;
+    if (remote.car.wheels?.frontRight) remote.car.wheels.frontRight.rotation.y = remote.target.steer;
+    for (const wheel of remote.car.wheelMeshes ?? []) {
+      if (wheel) wheel.rotation.x = remote.target.wheelSpin;
+    }
+    updateRearWing(dt, remote.target.boostActive, remote.car);
+    for (const brakeLight of remote.car.lights?.brakeLights ?? []) {
+      if (!brakeLight.material?.emissive) continue;
+      brakeLight.material.emissiveIntensity = remote.target.brake ? 2.4 : 0.18;
+    }
+  }
+}
+
+function removeOnlineRemoteCars() {
+  for (const remote of onlineRoomState.remoteCars.values()) {
+    scene.remove(remote.car.root);
+  }
+  onlineRoomState.remoteCars.clear();
 }
 
 function renderOnlineRoom() {
   const modeLabel = onlineRoomState.role === "host" ? "Host Game" : onlineRoomState.role === "guest" ? "Join Game" : "Online Room";
   if (onlineRoomModeEl) onlineRoomModeEl.textContent = modeLabel;
   if (onlineRoomCodeEl) onlineRoomCodeEl.textContent = `Room ${onlineRoomState.roomCode || "----"}`;
+  if (onlineLobbyRoomCodeEl) {
+    onlineLobbyRoomCodeEl.hidden = menuStep !== "online-room" || !onlineRoomState.roomCode;
+    const valueEl = onlineLobbyRoomCodeEl.querySelector("strong");
+    if (valueEl) valueEl.textContent = onlineRoomState.roomCode || "----";
+  }
   if (onlineRoomSummaryEl) {
-    const payload = getOnlineRoomPlayerPayload();
-    onlineRoomSummaryEl.textContent = onlineRoomState.role === "host"
-      ? `${payload.trackName} / ${getCarClassLabel(payload.carClass)} / ${payload.carName}`
+    const settings = onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload();
+    onlineRoomSummaryEl.textContent = onlineRoomState.hostSettings || onlineRoomState.role === "host"
+      ? `${settings.trackName} / ${getCarClassLabel(settings.carClass)} / ${settings.carName}`
       : "Waiting for the host room.";
   }
   if (onlineRoomPlayersEl) {
@@ -8046,9 +8263,18 @@ function renderOnlineRoom() {
     const players = [...onlineRoomState.players.values()];
     for (const player of players) {
       const row = document.createElement("li");
-      row.innerHTML = `<span>${player.driverName || "Driver Name"}</span><span>${player.role === "host" ? "Host" : "Guest"}</span>`;
+      const state = player.role === "host" ? "Host" : player.ready ? "Ready" : "Not Ready";
+      row.innerHTML = `<span>${player.driverName || "Driver Name"}</span><span>${state}</span>`;
       onlineRoomPlayersEl.appendChild(row);
     }
+  }
+  if (onlineRoomReadyButton) {
+    onlineRoomReadyButton.textContent = onlineRoomState.ready ? "Ready" : "Ready Up";
+    onlineRoomReadyButton.disabled = onlineRoomState.role === "host";
+  }
+  if (onlineRoomStartDriveButton) {
+    onlineRoomStartDriveButton.hidden = onlineRoomState.role !== "host";
+    onlineRoomStartDriveButton.disabled = onlineRoomState.role !== "host" || !onlineRoomState.connected;
   }
   if (!onlineRoomStatusEl?.textContent) renderOnlineRoomStatus("Preparing online room...", "is-warning");
 }
@@ -9978,7 +10204,7 @@ function moveToward(value, target, amount) {
 }
 
 function startRaceCountdown() {
-  raceCountdownState.active = selectedGameMode === "quick-race";
+  raceCountdownState.active = selectedGameMode === "quick-race" || isOnlineRaceGameMode();
   raceCountdownState.elapsed = 0;
   raceCountdownState.hideTime = 0;
   raceCountdownState.lastCue = "";
@@ -9991,7 +10217,7 @@ function startRaceCountdown() {
 }
 
 function updateRaceCountdown(dt) {
-  if (selectedGameMode !== "quick-race" || !gameStarted || isMenuOpen()) {
+  if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !gameStarted || isMenuOpen()) {
     if (raceCountdownEl) raceCountdownEl.hidden = true;
     raceCountdownState.active = false;
     raceCountdownState.hideTime = 0;
