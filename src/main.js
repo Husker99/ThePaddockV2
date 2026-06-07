@@ -8027,7 +8027,7 @@ function handleOnlineRealtimeMessage(event) {
     onlineRoomState.connected = true;
     renderOnlineRoomStatus(`Connected to room ${onlineRoomState.roomCode}.`, "is-good");
     sendOnlineRoomEvent("player_joined", getOnlineRoomPlayerPayload());
-    if (onlineRoomState.role === "host" && onlineRoomState.hostSettings) sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
+    if (onlineRoomState.role === "host") sendOnlineRosterUpdate();
     return;
   }
   if (message.event !== "broadcast") return;
@@ -8035,9 +8035,13 @@ function handleOnlineRealtimeMessage(event) {
   const payload = message.payload?.payload ?? {};
   if (broadcastEvent === "player_joined" || broadcastEvent === "player_ready") {
     if (payload.playerId) onlineRoomState.players.set(payload.playerId, payload);
+    if (onlineRoomState.role === "host") sendOnlineRosterUpdate();
     renderOnlineRoom();
   } else if (broadcastEvent === "host_settings") {
     applyOnlineHostSettings(payload);
+    renderOnlineRoom();
+  } else if (broadcastEvent === "roster_update") {
+    applyOnlineRosterUpdate(payload);
     renderOnlineRoom();
   } else if (broadcastEvent === "race_start") {
     beginOnlineRaceFromMessage(payload);
@@ -8075,6 +8079,31 @@ function getOnlineRoomSettingsPayload() {
   };
 }
 
+function getOnlineRosterPayload() {
+  return {
+    hostSettings: onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload(),
+    players: [...onlineRoomState.players.values()],
+  };
+}
+
+function sendOnlineRosterUpdate() {
+  if (onlineRoomState.role !== "host") return;
+  onlineRoomState.hostSettings ??= getOnlineRoomSettingsPayload();
+  onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
+  sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
+  sendOnlineRoomEvent("roster_update", getOnlineRosterPayload());
+}
+
+function applyOnlineRosterUpdate(payload = {}) {
+  if (payload.hostSettings) applyOnlineHostSettings(payload.hostSettings);
+  const players = Array.isArray(payload.players) ? payload.players : [];
+  if (!players.length) return;
+  for (const player of players) {
+    if (player?.playerId) onlineRoomState.players.set(player.playerId, player);
+  }
+  onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
+}
+
 function applyOnlineHostSettings(settings = {}) {
   if (!settings.selectedTrack || !settings.selectedCar) return;
   onlineRoomState.hostSettings = settings;
@@ -8088,6 +8117,7 @@ function toggleOnlineReady() {
   onlineRoomState.ready = !onlineRoomState.ready;
   onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
   sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
+  renderOnlineRoomStatus(onlineRoomState.ready ? "Ready. Waiting for the host to start." : "Not ready.", onlineRoomState.ready ? "is-good" : "is-warning");
   renderOnlineRoom();
 }
 
@@ -8266,13 +8296,19 @@ function renderOnlineRoom() {
   }
   if (onlineRoomReadyButton) {
     onlineRoomReadyButton.textContent = onlineRoomState.ready ? "Ready" : "Ready Up";
+    onlineRoomReadyButton.hidden = onlineRoomState.role === "host";
     onlineRoomReadyButton.disabled = onlineRoomState.role === "host";
   }
   if (onlineRoomStartDriveButton) {
     onlineRoomStartDriveButton.hidden = onlineRoomState.role !== "host";
     onlineRoomStartDriveButton.disabled = onlineRoomState.role !== "host" || !onlineRoomState.connected;
   }
-  if (!onlineRoomStatusEl?.textContent) renderOnlineRoomStatus("Preparing online room...", "is-warning");
+  if (!onlineRoomStatusEl?.textContent) {
+    renderOnlineRoomStatus(
+      onlineRoomState.role === "host" ? "Host chooses the setup, then starts the race." : "Press Ready Up, then wait for the host to start.",
+      "is-warning",
+    );
+  }
 }
 
 function updateOnlineSessionRoomCodeHud() {
