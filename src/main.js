@@ -35,7 +35,7 @@ const onlineRoomCodeInput = document.querySelector("#online-room-code-input");
 const onlineJoinStatusEl = document.querySelector("#online-join-status");
 const onlineRoomModeEl = document.querySelector("#online-room-mode");
 const onlineRoomCodeEl = document.querySelector("#online-room-code");
-const onlineLobbyRoomCodeEl = document.querySelector("#online-lobby-room-code");
+const onlineSessionRoomCodeEl = document.querySelector("#online-session-room-code");
 const onlineRoomSummaryEl = document.querySelector("#online-room-summary");
 const onlineRoomStatusEl = document.querySelector("#online-room-status");
 const onlineRoomPlayersEl = document.querySelector("#online-room-players");
@@ -1519,6 +1519,7 @@ function update() {
   updateSkyObjects();
   updateSceneryVisibility();
   updateSceneryLights();
+  updateOnlineSessionRoomCodeHud();
   renderer.render(scene, camera);
 }
 
@@ -8247,11 +8248,6 @@ function renderOnlineRoom() {
   const modeLabel = onlineRoomState.role === "host" ? "Host Game" : onlineRoomState.role === "guest" ? "Join Game" : "Online Room";
   if (onlineRoomModeEl) onlineRoomModeEl.textContent = modeLabel;
   if (onlineRoomCodeEl) onlineRoomCodeEl.textContent = `Room ${onlineRoomState.roomCode || "----"}`;
-  if (onlineLobbyRoomCodeEl) {
-    onlineLobbyRoomCodeEl.hidden = menuStep !== "online-room" || !onlineRoomState.roomCode;
-    const valueEl = onlineLobbyRoomCodeEl.querySelector("strong");
-    if (valueEl) valueEl.textContent = onlineRoomState.roomCode || "----";
-  }
   if (onlineRoomSummaryEl) {
     const settings = onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload();
     onlineRoomSummaryEl.textContent = onlineRoomState.hostSettings || onlineRoomState.role === "host"
@@ -8277,6 +8273,15 @@ function renderOnlineRoom() {
     onlineRoomStartDriveButton.disabled = onlineRoomState.role !== "host" || !onlineRoomState.connected;
   }
   if (!onlineRoomStatusEl?.textContent) renderOnlineRoomStatus("Preparing online room...", "is-warning");
+}
+
+function updateOnlineSessionRoomCodeHud() {
+  if (!onlineSessionRoomCodeEl) return;
+  const visible = isOnlineRaceGameMode() && gameStarted && !isMenuOpen() && Boolean(onlineRoomState.roomCode);
+  onlineSessionRoomCodeEl.hidden = !visible;
+  if (!visible) return;
+  const valueEl = onlineSessionRoomCodeEl.querySelector("strong");
+  if (valueEl) valueEl.textContent = onlineRoomState.roomCode;
 }
 
 function renderOnlineRoomStatus(text, className = "") {
