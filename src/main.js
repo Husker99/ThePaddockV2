@@ -613,6 +613,7 @@ const onlineRoomState = {
   raceStarted: false,
   poseSendTimer: 0,
   remoteCars: new Map(),
+  progress: new Map(),
   lastError: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
@@ -7939,6 +7940,7 @@ function connectOnlineRoom(roomCode, role) {
   onlineRoomState.ready = role === "host";
   onlineRoomState.raceStarted = false;
   onlineRoomState.poseSendTimer = 0;
+  onlineRoomState.progress.clear();
   onlineRoomState.players = new Map([[onlineRoomState.playerId, getOnlineRoomPlayerPayload()]]);
   onlineRoomState.connected = false;
   onlineRoomState.lastError = "";
@@ -8154,6 +8156,7 @@ function updateOnlineRaceNetworking(dt) {
     return;
   }
   if (gameStarted && !isMenuOpen()) {
+    updateLocalOnlineRaceProgress();
     onlineRoomState.poseSendTimer += dt;
     if (onlineRoomState.poseSendTimer >= 1 / 12) {
       onlineRoomState.poseSendTimer = 0;
@@ -8161,9 +8164,44 @@ function updateOnlineRaceNetworking(dt) {
     }
   }
   updateOnlineRemoteCars(dt, gameStarted && !isMenuOpen());
+  updateOnlineRaceHud();
+}
+
+function updateLocalOnlineRaceProgress() {
+  const progress = getOnlineRaceProgressForPosition(carState.position);
+  onlineRoomState.progress.set(onlineRoomState.playerId, {
+    playerId: onlineRoomState.playerId,
+    ...progress,
+    lastSeen: performance.now(),
+  });
+}
+
+function getOnlineRaceProgressForPosition(position) {
+  const samples = track.samples ?? [];
+  if (!samples.length) return { lap: 0, progress: 0, raceDistance: 0 };
+  let nearestIndex = 0;
+  let nearestDistanceSq = Infinity;
+  for (let i = 0; i < samples.length; i += 1) {
+    const dx = position.x - samples[i].x;
+    const dz = position.z - samples[i].z;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq < nearestDistanceSq) {
+      nearestDistanceSq = distanceSq;
+      nearestIndex = i;
+    }
+  }
+  const progress = nearestIndex / samples.length;
+  const previous = onlineRoomState.progress.get(onlineRoomState.playerId);
+  let lap = previous?.lap ?? 0;
+  if (previous) {
+    if (previous.progress > 0.78 && progress < 0.22) lap += 1;
+    else if (previous.progress < 0.22 && progress > 0.78 && lap > 0) lap -= 1;
+  }
+  return { lap, progress, raceDistance: lap + progress };
 }
 
 function getOnlinePosePayload() {
+  const progress = getOnlineRaceProgressForPosition(carState.position);
   return {
     ...getOnlineRoomPlayerPayload(),
     t: performance.now(),
@@ -8174,6 +8212,9 @@ function getOnlinePosePayload() {
     steer: roundOnlinePoseNumber(carState.steer),
     wheelSpin: roundOnlinePoseNumber(carState.wheelSpin),
     speed: roundOnlinePoseNumber(carState.velocity.length()),
+    lap: progress.lap,
+    progress: roundOnlinePoseNumber(progress.progress),
+    raceDistance: roundOnlinePoseNumber(progress.raceDistance),
     boostActive: Boolean(carState.boostActive),
     brake: pressed("KeyS", "ArrowDown") ? 1 : 0,
   };
@@ -8189,6 +8230,13 @@ function receiveOnlinePlayerPose(payload = {}) {
   onlineRoomState.players.set(payload.playerId, {
     ...(onlineRoomState.players.get(payload.playerId) ?? {}),
     ...payload,
+  });
+  onlineRoomState.progress.set(payload.playerId, {
+    playerId: payload.playerId,
+    lap: Math.max(0, Number(payload.lap) || 0),
+    progress: Math.max(0, Number(payload.progress) || 0),
+    raceDistance: Math.max(0, Number(payload.raceDistance) || 0),
+    lastSeen: performance.now(),
   });
   let remote = onlineRoomState.remoteCars.get(payload.playerId);
   if (!remote) {
@@ -8265,6 +8313,41 @@ function updateOnlineRemoteCars(dt, visible) {
       brakeLight.material.emissiveIntensity = remote.target.brake ? 2.4 : 0.18;
     }
   }
+}
+
+function updateOnlineRaceHud() {
+  const visible = isOnlineRaceGameMode() && gameStarted && !isMenuOpen();
+  if (quickRaceHudEl) quickRaceHudEl.hidden = !visible;
+  if (!visible) return;
+  const entries = getOnlineRaceStandings();
+  const playerIndex = entries.findIndex((entry) => entry.playerId === onlineRoomState.playerId);
+  const playerProgress = onlineRoomState.progress.get(onlineRoomState.playerId) ?? { lap: 0 };
+  const totalPlayers = Math.max(1, entries.length);
+  const totalLaps = Number(onlineRoomState.hostSettings?.laps ?? 3) || 3;
+  const currentLap = THREE.MathUtils.clamp((playerProgress.lap ?? 0) + 1, 1, totalLaps);
+  if (quickRacePositionEl) quickRacePositionEl.textContent = `${playerIndex >= 0 ? playerIndex + 1 : 1} / ${totalPlayers}`;
+  if (quickRaceLapEl) quickRaceLapEl.textContent = `Lap ${currentLap} / ${totalLaps}`;
+  if (quickRacePenaltyTimerEl) quickRacePenaltyTimerEl.hidden = true;
+  if (quickRacePenaltyMessageEl) quickRacePenaltyMessageEl.hidden = true;
+}
+
+function getOnlineRaceStandings() {
+  const now = performance.now();
+  const playerIds = new Set([...onlineRoomState.players.keys(), ...onlineRoomState.progress.keys()]);
+  const standings = [];
+  for (const playerId of playerIds) {
+    const progress = onlineRoomState.progress.get(playerId);
+    if (!progress && playerId !== onlineRoomState.playerId) continue;
+    if (progress?.lastSeen && playerId !== onlineRoomState.playerId && now - progress.lastSeen > 3500) continue;
+    standings.push({
+      playerId,
+      raceDistance: progress?.raceDistance ?? 0,
+      lap: progress?.lap ?? 0,
+      progress: progress?.progress ?? 0,
+    });
+  }
+  standings.sort((a, b) => b.raceDistance - a.raceDistance);
+  return standings;
 }
 
 function removeOnlineRemoteCars() {
@@ -10545,6 +10628,10 @@ function updateQuickRaceOrder() {
 }
 
 function updateQuickRaceHud() {
+  if (isOnlineRaceGameMode()) {
+    updateOnlineRaceHud();
+    return;
+  }
   const visible = selectedGameMode === "quick-race" && gameStarted && !isMenuOpen() && quickRaceState.entries.length > 0;
   if (quickRaceHudEl) quickRaceHudEl.hidden = !visible;
   if (!visible) {
