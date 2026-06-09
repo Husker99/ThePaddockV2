@@ -614,6 +614,7 @@ const onlineRoomState = {
   poseSendTimer: 0,
   remoteCars: new Map(),
   progress: new Map(),
+  gridOrder: [],
   lastError: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
@@ -5725,6 +5726,29 @@ function createSelectedCar(carId) {
   return addUniversalHeadlights(createFormulaCar(carId), "formula");
 }
 
+function createSelectedCarForDriverProfile(carId, profile = driverProfile) {
+  if (!Object.values(PROFILE_TEAM_CAR_IDS).includes(carId)) return createSelectedCar(carId);
+  const previousSchemes = {
+    formula: carPaintSchemes[PROFILE_TEAM_CAR_IDS.formula],
+    lmp: lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp],
+    stock: stockPaintSchemes[PROFILE_TEAM_CAR_IDS.stock],
+    jeep: jeepPaintSchemes[PROFILE_TEAM_CAR_IDS.jeep],
+    corvette: corvettePaintSchemes[PROFILE_TEAM_CAR_IDS.corvette],
+  };
+  carPaintSchemes[PROFILE_TEAM_CAR_IDS.formula] = getDriverProfileFormulaScheme(profile);
+  lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp] = getDriverProfileLmpScheme(profile);
+  stockPaintSchemes[PROFILE_TEAM_CAR_IDS.stock] = getDriverProfileStockScheme(profile);
+  jeepPaintSchemes[PROFILE_TEAM_CAR_IDS.jeep] = getDriverProfileJeepScheme(profile);
+  corvettePaintSchemes[PROFILE_TEAM_CAR_IDS.corvette] = getDriverProfileCorvetteScheme(profile);
+  const model = createSelectedCar(carId);
+  carPaintSchemes[PROFILE_TEAM_CAR_IDS.formula] = previousSchemes.formula;
+  lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp] = previousSchemes.lmp;
+  stockPaintSchemes[PROFILE_TEAM_CAR_IDS.stock] = previousSchemes.stock;
+  jeepPaintSchemes[PROFILE_TEAM_CAR_IDS.jeep] = previousSchemes.jeep;
+  corvettePaintSchemes[PROFILE_TEAM_CAR_IDS.corvette] = previousSchemes.corvette;
+  return model;
+}
+
 function addUniversalHeadlights(car, kind = "formula") {
   const headlightColor = 0xffc45c;
   const headlightIntensity = 24.48;
@@ -7941,6 +7965,7 @@ function connectOnlineRoom(roomCode, role) {
   onlineRoomState.raceStarted = false;
   onlineRoomState.poseSendTimer = 0;
   onlineRoomState.progress.clear();
+  onlineRoomState.gridOrder = [];
   onlineRoomState.players = new Map([[onlineRoomState.playerId, getOnlineRoomPlayerPayload()]]);
   onlineRoomState.connected = false;
   onlineRoomState.lastError = "";
@@ -8131,6 +8156,7 @@ function startOnlineRaceFromLobby() {
   onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
   const payload = {
     ...onlineRoomState.hostSettings,
+    gridOrder: createOnlineGridOrder(),
     startAt: Date.now() + 900,
   };
   sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
@@ -8141,6 +8167,9 @@ function startOnlineRaceFromLobby() {
 function beginOnlineRaceFromMessage(payload = {}) {
   if (gameStarted && isOnlineRaceGameMode()) return;
   applyOnlineHostSettings(payload);
+  onlineRoomState.gridOrder = Array.isArray(payload.gridOrder) && payload.gridOrder.length
+    ? payload.gridOrder
+    : createOnlineGridOrder();
   onlineRoomState.raceStarted = true;
   renderOnlineRoomStatus("Starting online race...", "is-good");
   const delay = Math.max(0, Number(payload.startAt ?? Date.now()) - Date.now());
@@ -8148,6 +8177,29 @@ function beginOnlineRaceFromMessage(payload = {}) {
     selectedGameMode = onlineRoomState.role === "host" ? "online-host" : "online-join";
     startGame();
   }, delay);
+}
+
+function createOnlineGridOrder() {
+  const players = [...onlineRoomState.players.values()]
+    .filter((player) => player?.playerId)
+    .map((player) => player.playerId);
+  if (!players.includes(onlineRoomState.playerId)) players.push(onlineRoomState.playerId);
+  return shuffleOnlineGridOrder([...new Set(players)], onlineRoomState.roomCode || "online");
+}
+
+function shuffleOnlineGridOrder(playerIds, seedText = "online") {
+  let seed = hashStringToUint32(`${seedText}:${playerIds.join(",")}:${Date.now()}`);
+  for (let i = playerIds.length - 1; i > 0; i -= 1) {
+    seed = Math.imul(seed ^ (seed >>> 13), 1664525) + 1013904223;
+    const j = Math.abs(seed) % (i + 1);
+    [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
+  }
+  return playerIds;
+}
+
+function getOnlineGridPositionForPlayer(playerId = onlineRoomState.playerId) {
+  const index = onlineRoomState.gridOrder.indexOf(playerId);
+  return index >= 0 ? index + 1 : 1;
 }
 
 function updateOnlineRaceNetworking(dt) {
@@ -8254,7 +8306,12 @@ function receiveOnlinePlayerPose(payload = {}) {
 }
 
 function createOnlineRemoteCar(payload = {}) {
-  const ghostCar = createSelectedCar(payload.selectedCar ?? selectedCar);
+  const ghostCar = createSelectedCarForDriverProfile(payload.selectedCar ?? selectedCar, {
+    driverName: payload.driverName || "Driver Name",
+    teamName: payload.teamName || "Team Name",
+    primaryColor: payload.primaryColor || "#242833",
+    accentColor: payload.accentColor || "#f6f2e8",
+  });
   applyOnlineGhostMaterial(ghostCar.root);
   ghostCar.root.visible = false;
   scene.add(ghostCar.root);
@@ -12449,7 +12506,11 @@ function angleLerp(from, to, amount) {
 }
 
 function resetCar({ keepTimeTrialLaps = false } = {}) {
-  const gridPose = selectedGameMode === "quick-race" ? getQuickRaceGridPose(selectedGridPosition) : null;
+  const gridPose = selectedGameMode === "quick-race"
+    ? getQuickRaceGridPose(selectedGridPosition)
+    : isOnlineRaceGameMode()
+      ? getQuickRaceGridPose(getOnlineGridPositionForPlayer())
+      : null;
   const spawn = gridPose
     ? { x: gridPose.position.x, z: gridPose.position.z, heading: gridPose.heading }
     : isTimeTrialGameMode() && track.timeTrialStart
