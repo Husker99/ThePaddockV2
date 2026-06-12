@@ -9,6 +9,7 @@
   <body>
     <canvas id="game"></canvas>
     <main id="start-menu" class="start-menu">
+      <button id="how-to-play-button" class="driver-profile-button how-to-play-button" type="button">How to Play</button>
       <button id="driver-profile-button" class="driver-profile-button" type="button">Driver Profile</button>
       <section class="menu-shell">
         <div class="menu-panel">
@@ -25,6 +26,29 @@
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
               <button id="go-online-game" class="start-button go-online-button" type="button">Go Online</button>
             </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="how-to-play">
+            <button class="profile-main-menu-button" type="button" data-menu-back="intro">Main Menu</button>
+            <section class="how-to-play-layout" aria-label="How to play">
+              <nav class="how-to-play-topics" aria-label="How to play topics">
+                <button class="how-to-play-topic is-selected" type="button" data-how-to-play-topic="quick-start">Quick Start</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="game-modes">Game Modes</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="difficulty">Difficulty</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="ai-drivers">AI Drivers</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="time-trial-ghosts">Time Trial Ghosts</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="quick-race">Quick Race</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="online-races">Online Races</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="track-editor">Track Editor</button>
+                <button class="how-to-play-topic" type="button" data-how-to-play-topic="cars-boost">Cars & Boost</button>
+              </nav>
+              <section class="how-to-play-content" id="how-to-play-content" aria-live="polite">
+                <h2 id="how-to-play-title">Quick Start</h2>
+                <p id="how-to-play-summary"></p>
+                <ul id="how-to-play-list"></ul>
+                <p id="how-to-play-note"></p>
+              </section>
+            </section>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="driver-profile">
