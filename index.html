@@ -102,6 +102,29 @@
               <p id="online-room-status" class="online-room-status">Not connected yet.</p>
               <ol id="online-room-players" class="online-room-players"></ol>
             </section>
+            <section id="online-host-settings" class="race-setup-panel online-host-settings" aria-label="Online race settings">
+              <span>Host Settings</span>
+              <strong>Race Setup</strong>
+              <label class="race-slider">
+                <span>AI Opponents</span>
+                <input id="online-ai-opponent-slider" type="range" min="0" max="10" step="1" value="4" />
+                <strong id="online-ai-opponent-readout">4</strong>
+              </label>
+              <label class="race-slider">
+                <span>Laps</span>
+                <input id="online-race-lap-slider" type="range" min="1" max="10" step="1" value="3" />
+                <strong id="online-race-lap-readout">3</strong>
+              </label>
+              <label class="race-select">
+                <span>AI Difficulty</span>
+                <select id="online-ai-difficulty-select">
+                  <option value="beginner">Beginner</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="amateur">Amateur</option>
+                  <option value="professional">Professional</option>
+                </select>
+              </label>
+            </section>
             <div class="online-room-actions">
               <button id="online-room-ready" class="start-button" type="button">Ready</button>
               <button id="online-room-start-drive" class="start-button" type="button">Start Online Race</button>
@@ -644,7 +667,15 @@
       <span id="quick-race-lap">Lap 1 / 3</span>
       <span id="quick-race-penalty-timer" class="quick-race-penalty-timer" hidden>+0.0s</span>
     </section>
+    <section id="race-leaderboard" class="race-leaderboard" hidden aria-label="Race leaderboard">
+      <header>
+        <span>Leaderboard</span>
+        <strong id="race-leaderboard-position">1 / 1</strong>
+      </header>
+      <ol id="race-leaderboard-list"></ol>
+    </section>
     <div id="quick-race-penalty-message" class="quick-race-penalty-message" hidden></div>
+    <div id="boss-mode-message" class="boss-mode-message" hidden></div>
     <section id="quick-race-results" class="quick-race-results" hidden aria-label="Quick race results">
       <header>
         <span>Race Complete</span>

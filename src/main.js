@@ -39,6 +39,12 @@ const onlineSessionRoomCodeEl = document.querySelector("#online-session-room-cod
 const onlineRoomSummaryEl = document.querySelector("#online-room-summary");
 const onlineRoomStatusEl = document.querySelector("#online-room-status");
 const onlineRoomPlayersEl = document.querySelector("#online-room-players");
+const onlineHostSettingsEl = document.querySelector("#online-host-settings");
+const onlineAiOpponentSlider = document.querySelector("#online-ai-opponent-slider");
+const onlineAiOpponentReadout = document.querySelector("#online-ai-opponent-readout");
+const onlineRaceLapSlider = document.querySelector("#online-race-lap-slider");
+const onlineRaceLapReadout = document.querySelector("#online-race-lap-readout");
+const onlineAiDifficultySelect = document.querySelector("#online-ai-difficulty-select");
 const onlineRoomReadyButton = document.querySelector("#online-room-ready");
 const onlineRoomStartDriveButton = document.querySelector("#online-room-start-drive");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
@@ -146,6 +152,10 @@ const quickRacePositionEl = document.querySelector("#quick-race-position");
 const quickRaceLapEl = document.querySelector("#quick-race-lap");
 const quickRacePenaltyTimerEl = document.querySelector("#quick-race-penalty-timer");
 const quickRacePenaltyMessageEl = document.querySelector("#quick-race-penalty-message");
+const bossModeMessageEl = document.querySelector("#boss-mode-message");
+const raceLeaderboardEl = document.querySelector("#race-leaderboard");
+const raceLeaderboardPositionEl = document.querySelector("#race-leaderboard-position");
+const raceLeaderboardListEl = document.querySelector("#race-leaderboard-list");
 const quickRaceResultsEl = document.querySelector("#quick-race-results");
 const quickRaceResultsPositionEl = document.querySelector("#quick-race-results-position");
 const quickRaceResultsListEl = document.querySelector("#quick-race-results-list");
@@ -523,10 +533,54 @@ function isOnlineRaceGameMode() {
 }
 
 const AI_DIFFICULTY_SETTINGS = {
-  beginner: { label: "Beginner", cyborgBrakingLookaheadScale: 3 },
-  standard: { label: "Standard", cyborgBrakingLookaheadScale: 1.2 },
-  amateur: { label: "Amateur", cyborgBrakingLookaheadScale: 0.8 },
-  professional: { label: "Professional", cyborgBrakingLookaheadScale: 0.05 },
+  beginner: {
+    label: "Beginner",
+    cyborgBrakingLookaheadScale: 3,
+    accelerationScale: 0.9,
+    topSpeedScale: 0.9,
+    safetyMarginScale: 3,
+    rubberbandAheadSeconds: 3,
+    rubberbandAheadAccelerationScale: 0.8,
+    rubberbandBehindSeconds: null,
+    rubberbandBehindAccelerationScale: 1,
+    overtakeIntentScale: 0.75,
+  },
+  standard: {
+    label: "Standard",
+    cyborgBrakingLookaheadScale: 1.2,
+    accelerationScale: 0.98,
+    topSpeedScale: 0.96,
+    safetyMarginScale: 2,
+    rubberbandAheadSeconds: 4,
+    rubberbandAheadAccelerationScale: 0.85,
+    rubberbandBehindSeconds: null,
+    rubberbandBehindAccelerationScale: 1,
+    overtakeIntentScale: 1,
+  },
+  amateur: {
+    label: "Amateur",
+    cyborgBrakingLookaheadScale: 0.8,
+    accelerationScale: 1,
+    topSpeedScale: 1,
+    safetyMarginScale: 1,
+    rubberbandAheadSeconds: 4,
+    rubberbandAheadAccelerationScale: 0.85,
+    rubberbandBehindSeconds: 2,
+    rubberbandBehindAccelerationScale: 1.1,
+    overtakeIntentScale: 1.08,
+  },
+  professional: {
+    label: "Professional",
+    cyborgBrakingLookaheadScale: 0.05,
+    accelerationScale: 1,
+    topSpeedScale: 1,
+    safetyMarginScale: 1,
+    rubberbandAheadSeconds: 5,
+    rubberbandAheadAccelerationScale: 0.85,
+    rubberbandBehindSeconds: 2,
+    rubberbandBehindAccelerationScale: 1.12,
+    overtakeIntentScale: 1.45,
+  },
 };
 const editorUndoStack = [];
 const timeTrialState = {
@@ -597,6 +651,14 @@ const quickRaceState = {
   resultsShown: false,
   playerJoyride: null,
 };
+const raceLeaderboardState = {
+  updateTimer: 0,
+};
+const bossModeState = {
+  messageTime: 0,
+  messageText: "",
+  announcedIds: new Set(),
+};
 const onlineRoomState = {
   role: "none",
   roomCode: "",
@@ -613,8 +675,18 @@ const onlineRoomState = {
   raceStarted: false,
   poseSendTimer: 0,
   remoteCars: new Map(),
+  collisionSendCooldowns: new Map(),
   progress: new Map(),
+  aiProgress: new Map(),
   gridOrder: [],
+  elapsed: 0,
+  localPenaltyTime: 0,
+  localPenaltyCooldown: 0,
+  localPenaltyMessageTime: 0,
+  localPenaltyMessageText: "",
+  localFinished: false,
+  localFinishTime: null,
+  resultsShown: false,
   lastError: "",
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
@@ -785,6 +857,9 @@ onlineRoomCodeInput?.addEventListener("keydown", (event) => {
 });
 onlineRoomReadyButton?.addEventListener("click", toggleOnlineReady);
 onlineRoomStartDriveButton?.addEventListener("click", startOnlineRaceFromLobby);
+onlineAiOpponentSlider?.addEventListener("input", updateOnlineAiOpponentSelection);
+onlineRaceLapSlider?.addEventListener("input", updateOnlineRaceLapSelection);
+onlineAiDifficultySelect?.addEventListener("change", updateOnlineAiDifficultySelection);
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
 driverProfileButton?.addEventListener("click", () => setMenuStep("driver-profile"));
 driverProfileNameInput?.addEventListener("input", updateDriverProfileFromInputs);
@@ -894,6 +969,17 @@ const carPaintSchemes = {
     accent: 0xffd21f,
     sideStripeXs: [],
   },
+  "louisa-hampton-formula": {
+    primary: 0xdc101f,
+    secondary: 0xf5f2ea,
+    stripe: 0xf5f2ea,
+    accent: 0xffd21f,
+    rearWing: 0x101113,
+    rearWingStripe: 0xf5f2ea,
+    rim: 0x151515,
+    sideStripeXs: [-0.34, 0.34],
+    louisaBoss: true,
+  },
   mersedeez: {
     primary: 0x111315,
     secondary: 0xc7ccd0,
@@ -951,6 +1037,13 @@ const stockPaintSchemes = {
     secondary: 0xd85616,
     stripe: 0x0b3f88,
     glass: 0x78c8ee,
+  },
+  "geoff-corden-stock": {
+    primary: 0xf43a2f,
+    secondary: 0x081a43,
+    stripe: 0xffd42a,
+    glass: 0x78c8ee,
+    geoffBoss: true,
   },
   "thunder-stock": {
     primary: 0x242833,
@@ -1216,7 +1309,8 @@ carProfiles.alpeen = carProfiles.ferraro;
 carProfiles.red = carProfiles.ferraro;
 carProfiles.blue = carProfiles.ferraro;
 carProfiles[PROFILE_TEAM_CAR_IDS.formula] = carProfiles.ferraro;
-for (const stockId of ["thunder-stock", "jade-stock", "grape-stock"]) {
+carProfiles["louisa-hampton-formula"] = carProfiles.ferraro;
+for (const stockId of ["thunder-stock", "jade-stock", "grape-stock", "geoff-corden-stock"]) {
   carProfiles[stockId] = carProfiles["orange-stock"];
 }
 carProfiles[PROFILE_TEAM_CAR_IDS.stock] = carProfiles["orange-stock"];
@@ -1427,6 +1521,7 @@ let cameraPosition = new THREE.Vector3();
 const scratchForward = new THREE.Vector3();
 const scratchRight = new THREE.Vector3();
 const scratchLightPosition = new THREE.Vector3();
+const scratchZeroVelocity = new THREE.Vector3();
 const dirtGroup = new THREE.Group();
 const dirtParticles = [];
 const smokeParticles = [];
@@ -1506,10 +1601,13 @@ function update() {
   }
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) updateAiOpponents(dt);
   if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) resolveRaceCarCollisions(dt);
+  if (gameStarted && !isPaused && !isMenuOpen() && !raceStartBlocked) resolveOnlineSoftRemoteCollisions(dt);
   updateOnlineRaceNetworking(dt);
   updateTimeTrialGhost(dt);
   updateSlipstreamDebugCones();
   updateQuickRaceState(dt, raceStartBlocked);
+  updateRaceLeaderboard(dt);
+  updateBossModeHud(dt);
   if (!gameStarted || isPaused || isMenuOpen()) updateRevMeter();
   if (isTimeTrialGameMode()) {
     updateTimeTrialLapCard(dt);
@@ -1806,6 +1904,7 @@ function updateCar(dt) {
   const surface = track.sample(carState.position.x, carState.position.z);
   const wheelSurface = getWheelSurfaceState();
   updateQuickRacePenalties(dt, wheelSurface);
+  updateOnlineRacePenalties(dt, wheelSurface);
 
   scratchForward.set(Math.sin(carState.heading), 0, Math.cos(carState.heading));
   scratchRight.set(scratchForward.z, 0, -scratchForward.x);
@@ -5432,6 +5531,43 @@ function createRacePaintMaterial(color, roughness = 0.36, metalness = 0.14) {
     flatShading: true,
   });
 }
+
+function createCarDecalMaterial(text, {
+  bg = "#111315",
+  fg = "#f6f2e8",
+  accent = null,
+  width = 256,
+  height = 96,
+  font = "900 48px Arial",
+} = {}) {
+  const decalCanvas = document.createElement("canvas");
+  decalCanvas.width = width;
+  decalCanvas.height = height;
+  const ctx = decalCanvas.getContext("2d");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+  if (accent) {
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, height - Math.max(8, height * 0.12), width, Math.max(8, height * 0.12));
+  }
+  ctx.fillStyle = fg;
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, width / 2, height / 2);
+  const texture = new THREE.CanvasTexture(decalCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+}
+
+function addFlatDecal(parent, text, position, rotation, size, options = {}) {
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(size.width, size.height), createCarDecalMaterial(text, options));
+  decal.position.set(position.x, position.y, position.z);
+  decal.rotation.set(rotation.x ?? 0, rotation.y ?? 0, rotation.z ?? 0);
+  decal.renderOrder = 8;
+  parent.add(decal);
+  return decal;
+}
 function addRainbowRim(parent, side) {
   const segmentColors = [0xe84135, 0xf8d447, 0x29a650];
   for (let i = 0; i < segmentColors.length; i += 1) {
@@ -5556,6 +5692,8 @@ function createFormulaCar(paint = "red") {
     body.add(sideStripe);
   }
 
+  if (scheme.louisaBoss) addLouisaHamptonFormulaDetails(body, { stripeMaterial, accentMaterial, carbon });
+
   const wheelMeshes = [];
   const wheels = {};
   const tireGeometry = new THREE.CylinderGeometry(0.43, 0.43, 0.46, 14);
@@ -5596,6 +5734,52 @@ function createFormulaCar(paint = "red") {
   }
 
   return { root, body, wheels, wheelMeshes, frontWing, frontWingStandardAngle, rearWing, rearWingStandardAngle };
+}
+
+function addLouisaHamptonFormulaDetails(body, { stripeMaterial, accentMaterial, carbon }) {
+  const centerWhite = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.046, 2.15), stripeMaterial);
+  centerWhite.position.set(0, 0.88, -0.38);
+  body.add(centerWhite);
+
+  const redPin = createRacePaintMaterial(0xdc101f, 0.24, 0.42);
+  for (const x of [-0.22, 0.22]) {
+    const pinstripe = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.052, 2.05), redPin);
+    pinstripe.position.set(x, 0.91, -0.36);
+    body.add(pinstripe);
+  }
+
+  const blackFloorFlash = new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.04, 0.16), carbon);
+  blackFloorFlash.position.set(0, 0.52, -1.12);
+  body.add(blackFloorFlash);
+
+  for (const x of [-1.03, 1.03]) {
+    const sideSponsor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.038, 0.76), stripeMaterial);
+    sideSponsor.position.set(x, 0.72, -0.22);
+    sideSponsor.rotation.z = x > 0 ? -0.03 : 0.03;
+    body.add(sideSponsor);
+
+    addFlatDecal(
+      body,
+      "LH",
+      { x: x * 1.006, y: 0.934, z: -0.25 },
+      { x: -Math.PI / 2, y: 0, z: x > 0 ? -Math.PI / 2 : Math.PI / 2 },
+      { width: 0.5, height: 0.22 },
+      { bg: "#f5f2ea", fg: "#dc101f", accent: "#ffd21f", width: 220, height: 92, font: "900 54px Arial" },
+    );
+  }
+
+  const noseBadge = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.42), accentMaterial);
+  noseBadge.position.set(0, 0.68, 2.18);
+  body.add(noseBadge);
+
+  addFlatDecal(
+    body,
+    "FERRARO",
+    { x: 0, y: 0.935, z: 0.54 },
+    { x: -Math.PI / 2, y: 0, z: 0 },
+    { width: 1.08, height: 0.28 },
+    { bg: "#dc101f", fg: "#f5f2ea", accent: "#ffd21f", width: 320, height: 92, font: "900 40px Arial" },
+  );
 }
 
 function createStockCar(paint = "orange-stock") {
@@ -5663,6 +5847,8 @@ function createStockCar(paint = "orange-stock") {
     body.add(sideStripe);
   }
 
+  if (scheme.geoffBoss) addGeoffCordenStockDetails(body, { red: orange, navy: darkerOrange, yellow: blue, black });
+
   const grille = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.25, 0.08), black);
   grille.position.set(0, 0.52, 2.74);
   grille.rotation.x = -0.18;
@@ -5716,6 +5902,97 @@ function createStockCar(paint = "orange-stock") {
   }
 
   return { root, body, wheels, wheelMeshes, lights: { brakeLights } };
+}
+
+function addGeoffCordenStockDetails(body, { red, navy, yellow, black }) {
+  const flameOrange = createRacePaintMaterial(0xff7a18, 0.28, 0.24);
+  const flameYellow = createRacePaintMaterial(0xffd42a, 0.26, 0.22);
+  const whiteMaterial = createRacePaintMaterial(0xf6f2e8, 0.32, 0.18);
+  const deepBlue = createRacePaintMaterial(0x06173d, 0.32, 0.2);
+
+  const rearDeckPanel = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.055, 1.12), deepBlue);
+  rearDeckPanel.position.set(0, 1.03, -1.86);
+  rearDeckPanel.rotation.x = 0.04;
+  body.add(rearDeckPanel);
+
+  const rearBumperPanel = new THREE.Mesh(new THREE.BoxGeometry(2.12, 0.42, 0.065), deepBlue);
+  rearBumperPanel.position.set(0, 0.77, -2.9);
+  body.add(rearBumperPanel);
+
+  for (const x of [-1.085, 1.085]) {
+    const sideBluePanel = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.62, 2.35), deepBlue);
+    sideBluePanel.position.set(x, 0.83, -0.78);
+    body.add(sideBluePanel);
+
+    const lowerBlueSweep = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.24, 3.0), deepBlue);
+    lowerBlueSweep.position.set(x, 0.55, -0.18);
+    lowerBlueSweep.rotation.y = x > 0 ? 0.08 : -0.08;
+    body.add(lowerBlueSweep);
+  }
+
+  const hoodPanel = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.052, 0.74), navy);
+  hoodPanel.position.set(0, 1.04, 1.65);
+  hoodPanel.rotation.x = -0.1;
+  body.add(hoodPanel);
+
+  addFlatDecal(
+    body,
+    "CORDEN",
+    { x: 0, y: 1.078, z: 1.68 },
+    { x: -Math.PI / 2 - 0.1, y: 0, z: 0 },
+    { width: 1.05, height: 0.3 },
+    { bg: "#081a43", fg: "#f6f2e8", accent: "#ffcf24", width: 300, height: 92, font: "900 38px Arial" },
+  );
+
+  for (const [x, z, length, angle, material] of [
+    [-0.42, 1.05, 0.92, -0.55, flameYellow],
+    [-0.18, 1.0, 1.18, -0.32, flameOrange],
+    [0.16, 1.02, 1.24, 0.3, flameYellow],
+    [0.44, 1.08, 0.96, 0.52, flameOrange],
+  ]) {
+    const flame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.058, length), material);
+    flame.position.set(x, 1.075, z);
+    flame.rotation.x = -0.1;
+    flame.rotation.y = angle;
+    body.add(flame);
+  }
+
+  const roofPlate = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.055, 0.72), yellow);
+  roofPlate.position.set(0, 1.69, -0.56);
+  body.add(roofPlate);
+  addFlatDecal(
+    body,
+    "24",
+    { x: 0, y: 1.724, z: -0.56 },
+    { x: -Math.PI / 2, y: 0, z: 0 },
+    { width: 0.86, height: 0.5 },
+    { bg: "#ffd42a", fg: "#081a43", width: 220, height: 130, font: "900 82px Arial" },
+  );
+
+  for (const x of [-1.075, 1.075]) {
+    const sideNumberBase = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.56, 0.72), whiteMaterial);
+    sideNumberBase.position.set(x, 1.02, -0.15);
+    body.add(sideNumberBase);
+    addFlatDecal(
+      body,
+      "24",
+      { x, y: 1.03, z: -0.15 },
+      { x: 0, y: x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 },
+      { width: 0.62, height: 0.48 },
+      { bg: "#f6f2e8", fg: "#081a43", accent: "#f43a2f", width: 190, height: 140, font: "900 74px Arial" },
+    );
+
+    for (const [z, material] of [[0.64, flameYellow], [0.34, flameOrange], [-0.58, flameYellow]]) {
+      const sideFlame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.72), material);
+      sideFlame.position.set(x, 0.82, z);
+      sideFlame.rotation.y = x > 0 ? 0.24 : -0.24;
+      body.add(sideFlame);
+    }
+  }
+
+  const deckStripe = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.05, 0.22), black);
+  deckStripe.position.set(0, 1.12, -2.2);
+  body.add(deckStripe);
 }
 
 function createSelectedCar(carId) {
@@ -7847,7 +8124,7 @@ function startGameModeSelection(mode, backStep = "intro") {
   if (trackBackButton) trackBackButton.dataset.menuBack = backStep;
   updateTimeTrialModeSelection();
   clearAiOpponents();
-  if (selectedGameMode !== "quick-race") selectedAiOpponentCount = 0;
+  if (selectedGameMode !== "quick-race" && selectedGameMode !== "online-host") selectedAiOpponentCount = 0;
   else updateAiOpponentSelection();
   updateTimeTrialHud();
   setMenuStep("track");
@@ -7902,7 +8179,9 @@ function renderWeeklyTimeTrialCard() {
 function startOnlineHostFlow() {
   selectedGameMode = "online-host";
   clearAiOpponents();
-  selectedAiOpponentCount = 0;
+  selectedAiOpponentCount = 4;
+  selectedQuickRaceLapCount = 3;
+  selectedAiDifficulty = "standard";
   const roomCode = generateOnlineRoomCode();
   connectOnlineRoom(roomCode, "host");
   startGameModeSelection("online-host", "go-online");
@@ -7965,7 +8244,9 @@ function connectOnlineRoom(roomCode, role) {
   onlineRoomState.raceStarted = false;
   onlineRoomState.poseSendTimer = 0;
   onlineRoomState.progress.clear();
+  onlineRoomState.aiProgress.clear();
   onlineRoomState.gridOrder = [];
+  resetOnlineRaceRunState();
   onlineRoomState.players = new Map([[onlineRoomState.playerId, getOnlineRoomPlayerPayload()]]);
   onlineRoomState.connected = false;
   onlineRoomState.lastError = "";
@@ -8074,6 +8355,8 @@ function handleOnlineRealtimeMessage(event) {
     beginOnlineRaceFromMessage(payload);
   } else if (broadcastEvent === "player_pose") {
     receiveOnlinePlayerPose(payload);
+  } else if (broadcastEvent === "car_collision") {
+    receiveOnlineCarCollision(payload);
   }
 }
 
@@ -8102,7 +8385,9 @@ function getOnlineRoomSettingsPayload() {
     selectedCar,
     carName: getSelectedCarLabel(),
     carClass: getCarProfile().kind,
-    laps: 3,
+    laps: selectedQuickRaceLapCount,
+    aiOpponentCount: selectedAiOpponentCount,
+    aiDifficulty: selectedAiDifficulty,
   };
 }
 
@@ -8134,6 +8419,10 @@ function applyOnlineRosterUpdate(payload = {}) {
 function applyOnlineHostSettings(settings = {}) {
   if (!settings.selectedTrack || !settings.selectedCar) return;
   onlineRoomState.hostSettings = settings;
+  selectedQuickRaceLapCount = THREE.MathUtils.clamp(Math.round(Number(settings.laps ?? selectedQuickRaceLapCount) || 3), 1, 10);
+  selectedAiOpponentCount = THREE.MathUtils.clamp(Math.round(Number(settings.aiOpponentCount ?? selectedAiOpponentCount) || 0), 0, 10);
+  selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[settings.aiDifficulty] ? settings.aiDifficulty : selectedAiDifficulty;
+  updateOnlineHostSettingsControls();
   if (onlineRoomState.role === "guest" && !gameStarted) {
     if (selectedTrack !== settings.selectedTrack) selectTrack(settings.selectedTrack);
     if (selectedCar !== settings.selectedCar) selectCar(settings.selectedCar);
@@ -8145,6 +8434,36 @@ function toggleOnlineReady() {
   onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
   sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
   renderOnlineRoomStatus(onlineRoomState.ready ? "Ready. Waiting for the host to start." : "Not ready.", onlineRoomState.ready ? "is-good" : "is-warning");
+  renderOnlineRoom();
+}
+
+function updateOnlineAiOpponentSelection() {
+  const count = THREE.MathUtils.clamp(Math.round(Number(onlineAiOpponentSlider?.value ?? selectedAiOpponentCount) || 0), 0, 10);
+  selectedAiOpponentCount = count;
+  if (onlineAiOpponentSlider) onlineAiOpponentSlider.value = String(count);
+  if (onlineAiOpponentReadout) onlineAiOpponentReadout.textContent = String(count);
+  syncOnlineHostSettingsFromControls();
+}
+
+function updateOnlineRaceLapSelection() {
+  const laps = THREE.MathUtils.clamp(Math.round(Number(onlineRaceLapSlider?.value ?? selectedQuickRaceLapCount) || 3), 1, 10);
+  selectedQuickRaceLapCount = laps;
+  if (onlineRaceLapSlider) onlineRaceLapSlider.value = String(laps);
+  if (onlineRaceLapReadout) onlineRaceLapReadout.textContent = String(laps);
+  syncOnlineHostSettingsFromControls();
+}
+
+function updateOnlineAiDifficultySelection() {
+  const value = onlineAiDifficultySelect?.value ?? selectedAiDifficulty;
+  selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[value] ? value : "standard";
+  if (onlineAiDifficultySelect) onlineAiDifficultySelect.value = selectedAiDifficulty;
+  syncOnlineHostSettingsFromControls();
+}
+
+function syncOnlineHostSettingsFromControls() {
+  if (onlineRoomState.role !== "host" || menuStep !== "online-room") return;
+  onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
+  sendOnlineRosterUpdate();
   renderOnlineRoom();
 }
 
@@ -8171,12 +8490,28 @@ function beginOnlineRaceFromMessage(payload = {}) {
     ? payload.gridOrder
     : createOnlineGridOrder();
   onlineRoomState.raceStarted = true;
+  resetOnlineRaceRunState();
   renderOnlineRoomStatus("Starting online race...", "is-good");
   const delay = Math.max(0, Number(payload.startAt ?? Date.now()) - Date.now());
   window.setTimeout(() => {
     selectedGameMode = onlineRoomState.role === "host" ? "online-host" : "online-join";
     startGame();
   }, delay);
+}
+
+function resetOnlineRaceRunState() {
+  onlineRoomState.elapsed = 0;
+  onlineRoomState.progress.clear();
+  onlineRoomState.collisionSendCooldowns.clear();
+  onlineRoomState.localPenaltyTime = 0;
+  onlineRoomState.localPenaltyCooldown = 0;
+  onlineRoomState.localPenaltyMessageTime = 0;
+  onlineRoomState.localPenaltyMessageText = "";
+  onlineRoomState.localFinished = false;
+  onlineRoomState.localFinishTime = null;
+  onlineRoomState.resultsShown = false;
+  resetBossModeState();
+  if (quickRaceResultsEl && isOnlineRaceGameMode()) quickRaceResultsEl.hidden = true;
 }
 
 function createOnlineGridOrder() {
@@ -8199,7 +8534,8 @@ function shuffleOnlineGridOrder(playerIds, seedText = "online") {
 
 function getOnlineGridPositionForPlayer(playerId = onlineRoomState.playerId) {
   const index = onlineRoomState.gridOrder.indexOf(playerId);
-  return index >= 0 ? index + 1 : 1;
+  const aiCount = THREE.MathUtils.clamp(Math.round(Number(onlineRoomState.hostSettings?.aiOpponentCount ?? selectedAiOpponentCount) || 0), 0, 10);
+  return aiCount + (index >= 0 ? index + 1 : 1);
 }
 
 function updateOnlineRaceNetworking(dt) {
@@ -8207,8 +8543,12 @@ function updateOnlineRaceNetworking(dt) {
     updateOnlineRemoteCars(dt, false);
     return;
   }
-  if (gameStarted && !isMenuOpen()) {
+  const raceStartBlocked = raceCountdownState.active;
+  if (gameStarted && !isMenuOpen() && !isPaused && !raceStartBlocked) {
+    onlineRoomState.elapsed += dt;
     updateLocalOnlineRaceProgress();
+    updateOnlineAiRaceProgress();
+    updateOnlineFinishState();
     onlineRoomState.poseSendTimer += dt;
     if (onlineRoomState.poseSendTimer >= 1 / 12) {
       onlineRoomState.poseSendTimer = 0;
@@ -8217,43 +8557,117 @@ function updateOnlineRaceNetworking(dt) {
   }
   updateOnlineRemoteCars(dt, gameStarted && !isMenuOpen());
   updateOnlineRaceHud();
+  if (onlineRoomState.resultsShown) renderOnlineRaceResults();
+}
+
+function updateOnlineAiRaceProgress() {
+  if (!aiOpponents.length) return;
+  const totalLaps = getOnlineRaceLapCount();
+  for (let i = 0; i < aiOpponents.length; i += 1) {
+    const opponent = aiOpponents[i];
+    const id = opponent.id ?? `ai-${i}`;
+    const previous = onlineRoomState.aiProgress.get(id);
+    if (previous?.finished) continue;
+    const progress = getOnlineRaceProgressForPosition(opponent.position, id, onlineRoomState.aiProgress);
+    const finished = progress.lap >= totalLaps;
+    onlineRoomState.aiProgress.set(id, {
+      playerId: id,
+      label: opponent.displayName ?? `AI ${i + 1}`,
+      ...progress,
+      penaltyTime: 0,
+      finished,
+      finishTime: finished ? onlineRoomState.elapsed : null,
+      adjustedFinishTime: finished ? onlineRoomState.elapsed : null,
+      lastSeen: performance.now(),
+      isAi: true,
+    });
+  }
 }
 
 function updateLocalOnlineRaceProgress() {
-  const progress = getOnlineRaceProgressForPosition(carState.position);
+  const progress = getOnlineRaceProgressForPosition(carState.position, onlineRoomState.playerId, onlineRoomState.progress);
   onlineRoomState.progress.set(onlineRoomState.playerId, {
     playerId: onlineRoomState.playerId,
     ...progress,
+    penaltyTime: onlineRoomState.localPenaltyTime,
+    finished: onlineRoomState.localFinished,
+    finishTime: onlineRoomState.localFinishTime,
+    adjustedFinishTime: onlineRoomState.localFinishTime === null ? null : onlineRoomState.localFinishTime + onlineRoomState.localPenaltyTime,
     lastSeen: performance.now(),
   });
 }
 
-function getOnlineRaceProgressForPosition(position) {
+function getOnlineRaceProgressForPosition(position, entityId = onlineRoomState.playerId, progressMap = onlineRoomState.progress) {
   const samples = track.samples ?? [];
   if (!samples.length) return { lap: 0, progress: 0, raceDistance: 0 };
-  let nearestIndex = 0;
-  let nearestDistanceSq = Infinity;
-  for (let i = 0; i < samples.length; i += 1) {
-    const dx = position.x - samples[i].x;
-    const dz = position.z - samples[i].z;
-    const distanceSq = dx * dx + dz * dz;
-    if (distanceSq < nearestDistanceSq) {
-      nearestDistanceSq = distanceSq;
-      nearestIndex = i;
+  const previous = progressMap.get(entityId);
+  const previousIndex = previous?.sampleIndex ?? track.startSampleIndex ?? 0;
+  const nearestIndex = getNearestQuickRaceSampleIndex(position, previousIndex);
+  const relativeIndex = getQuickRaceRelativeSampleIndex(nearestIndex);
+  const progress = relativeIndex / samples.length;
+  let lap = previous?.lap ?? 0;
+  let started = previous?.started ?? false;
+  if (previous) {
+    if (previous.progress > 0.78 && progress < 0.22) {
+      if (started) lap += 1;
+      else started = true;
+    } else if (previous.progress < 0.22 && progress > 0.78 && started) {
+      if (lap > 0) lap -= 1;
+      else started = false;
     }
   }
-  const progress = nearestIndex / samples.length;
-  const previous = onlineRoomState.progress.get(onlineRoomState.playerId);
-  let lap = previous?.lap ?? 0;
-  if (previous) {
-    if (previous.progress > 0.78 && progress < 0.22) lap += 1;
-    else if (previous.progress < 0.22 && progress > 0.78 && lap > 0) lap -= 1;
+  const startBonus = started ? 1 : 0;
+  return { lap, progress, started, raceDistance: startBonus + lap + progress, sampleIndex: nearestIndex };
+}
+
+function updateOnlineFinishState() {
+  if (onlineRoomState.localFinished) return;
+  const totalLaps = getOnlineRaceLapCount();
+  const progress = onlineRoomState.progress.get(onlineRoomState.playerId);
+  if (!progress || progress.lap < totalLaps) return;
+  onlineRoomState.localFinished = true;
+  onlineRoomState.localFinishTime = onlineRoomState.elapsed;
+  updateLocalOnlineRaceProgress();
+  sendOnlineRoomEvent("player_pose", getOnlinePosePayload());
+  showOnlineRaceResults();
+}
+
+function getOnlineRaceLapCount() {
+  return Math.max(1, Number(onlineRoomState.hostSettings?.laps ?? selectedQuickRaceLapCount) || 3);
+}
+
+function updateOnlineRacePenalties(dt, wheelSurface) {
+  if (!isOnlineRaceGameMode() || !gameStarted || isPaused || isMenuOpen() || onlineRoomState.localFinished) return;
+  onlineRoomState.localPenaltyCooldown = Math.max(0, onlineRoomState.localPenaltyCooldown - dt);
+  onlineRoomState.localPenaltyMessageTime = Math.max(0, onlineRoomState.localPenaltyMessageTime - dt);
+  if (onlineRoomState.localPenaltyCooldown > 0) return;
+  if (wheelSurface?.grassCount === 4) {
+    addOnlineRacePenalty(3, "3 Second Penalty - Off Track");
+  } else if (wheelSurface?.frontGrassCount === 2 || wheelSurface?.rearGrassCount === 2) {
+    addOnlineRacePenalty(2, "2 Second Penalty - Track Limits");
   }
-  return { lap, progress, raceDistance: lap + progress };
+}
+
+function addOnlineRacePenalty(seconds, reason) {
+  onlineRoomState.localPenaltyTime += seconds;
+  onlineRoomState.localPenaltyCooldown = 5;
+  onlineRoomState.localPenaltyMessageTime = 5;
+  onlineRoomState.localPenaltyMessageText = `${getOnlineRacePositionLabel()} - Lap ${getOnlineRaceCurrentLap()}: ${reason}`;
+}
+
+function getOnlineRacePositionLabel() {
+  const standings = getOnlineRaceStandings();
+  const playerIndex = standings.findIndex((entry) => entry.playerId === onlineRoomState.playerId);
+  return `${playerIndex >= 0 ? playerIndex + 1 : 1} / ${Math.max(1, standings.length)}`;
+}
+
+function getOnlineRaceCurrentLap() {
+  const progress = onlineRoomState.progress.get(onlineRoomState.playerId) ?? { lap: 0 };
+  return THREE.MathUtils.clamp((progress.lap ?? 0) + 1, 1, getOnlineRaceLapCount());
 }
 
 function getOnlinePosePayload() {
-  const progress = getOnlineRaceProgressForPosition(carState.position);
+  const progress = getOnlineRaceProgressForPosition(carState.position, onlineRoomState.playerId, onlineRoomState.progress);
   return {
     ...getOnlineRoomPlayerPayload(),
     t: performance.now(),
@@ -8267,6 +8681,10 @@ function getOnlinePosePayload() {
     lap: progress.lap,
     progress: roundOnlinePoseNumber(progress.progress),
     raceDistance: roundOnlinePoseNumber(progress.raceDistance),
+    penaltyTime: roundOnlinePoseNumber(onlineRoomState.localPenaltyTime),
+    finished: onlineRoomState.localFinished,
+    finishTime: onlineRoomState.localFinishTime,
+    adjustedFinishTime: onlineRoomState.localFinishTime === null ? null : roundOnlinePoseNumber(onlineRoomState.localFinishTime + onlineRoomState.localPenaltyTime),
     boostActive: Boolean(carState.boostActive),
     brake: pressed("KeyS", "ArrowDown") ? 1 : 0,
   };
@@ -8288,6 +8706,10 @@ function receiveOnlinePlayerPose(payload = {}) {
     lap: Math.max(0, Number(payload.lap) || 0),
     progress: Math.max(0, Number(payload.progress) || 0),
     raceDistance: Math.max(0, Number(payload.raceDistance) || 0),
+    penaltyTime: Math.max(0, Number(payload.penaltyTime) || 0),
+    finished: Boolean(payload.finished),
+    finishTime: Number.isFinite(Number(payload.finishTime)) ? Number(payload.finishTime) : null,
+    adjustedFinishTime: Number.isFinite(Number(payload.adjustedFinishTime)) ? Number(payload.adjustedFinishTime) : null,
     lastSeen: performance.now(),
   });
   let remote = onlineRoomState.remoteCars.get(payload.playerId);
@@ -8298,6 +8720,11 @@ function receiveOnlinePlayerPose(payload = {}) {
   remote.lastSeen = performance.now();
   remote.target.position.set(Number(payload.x) || 0, track.groundY + 0.04, Number(payload.z) || 0);
   remote.target.heading = Number(payload.heading) || 0;
+  remote.target.velocity.set(
+    Math.sin(remote.target.heading) * (Number(payload.speed) || 0),
+    0,
+    Math.cos(remote.target.heading) * (Number(payload.speed) || 0),
+  );
   remote.target.steer = Number(payload.steer) || 0;
   remote.target.wheelSpin = Number(payload.wheelSpin) || remote.target.wheelSpin;
   remote.target.boostActive = Boolean(payload.boostActive);
@@ -8317,8 +8744,10 @@ function createOnlineRemoteCar(payload = {}) {
   scene.add(ghostCar.root);
   return {
     car: ghostCar,
+    carId: payload.selectedCar ?? selectedCar,
     target: {
       position: new THREE.Vector3(),
+      velocity: new THREE.Vector3(),
       heading: 0,
       steer: 0,
       wheelSpin: 0,
@@ -8372,6 +8801,84 @@ function updateOnlineRemoteCars(dt, visible) {
   }
 }
 
+function resolveOnlineSoftRemoteCollisions(dt) {
+  if (!isOnlineRaceGameMode() || !onlineRoomState.remoteCars.size || onlineRoomState.localFinished) return;
+  for (const [playerId, cooldown] of onlineRoomState.collisionSendCooldowns.entries()) {
+    const nextCooldown = cooldown - dt;
+    if (nextCooldown <= 0) onlineRoomState.collisionSendCooldowns.delete(playerId);
+    else onlineRoomState.collisionSendCooldowns.set(playerId, nextCooldown);
+  }
+  const playerBody = {
+    kind: "player",
+    position: carState.position,
+    velocity: carState.velocity,
+    headingRef: carState,
+    get heading() { return carState.heading; },
+    profile: getCarProfile(),
+    root: car.root,
+  };
+  const playerBox = getRaceCarCollisionBox(playerBody);
+  for (const [playerId, remote] of onlineRoomState.remoteCars.entries()) {
+    if (!remote.car.root.visible) continue;
+    const remoteBox = getRaceCarCollisionBox({
+      kind: "remote",
+      position: remote.car.root.position,
+      velocity: remote.target.velocity ?? scratchZeroVelocity,
+      headingRef: { heading: remote.car.root.rotation.y },
+      get heading() { return remote.car.root.rotation.y; },
+      profile: getCarProfileById(remote.carId ?? selectedCar),
+      root: remote.car.root,
+    });
+    const overlap = getOrientedBoxOverlap(playerBox, remoteBox);
+    if (!overlap) continue;
+    const normal = overlap.normal;
+    const intoRemoteSpeed = carState.velocity.dot(normal);
+    const correction = Math.min(overlap.depth + 0.02, 0.85);
+    carState.position.addScaledVector(normal, -correction * 0.72);
+    const remoteSpeedIntoPlayer = (remote.target.velocity ?? scratchZeroVelocity).dot(normal);
+    const impactSpeed = Math.max(0, intoRemoteSpeed - remoteSpeedIntoPlayer);
+    if (intoRemoteSpeed > 0) carState.velocity.addScaledVector(normal, -intoRemoteSpeed * 0.42);
+    const scrapeAxis = new THREE.Vector3(normal.z, 0, -normal.x);
+    const scrapeSpeed = carState.velocity.dot(scrapeAxis);
+    carState.velocity.addScaledVector(scrapeAxis, -scrapeSpeed * 0.035);
+    const yawKick = THREE.MathUtils.clamp(normal.x * Math.cos(carState.heading) - normal.z * Math.sin(carState.heading), -1, 1) * 0.08;
+    carState.yawRate += yawKick * dt;
+    spawnCollisionSmoke(carState.position, normal, Math.max(4, Math.abs(intoRemoteSpeed), impactSpeed));
+    sendOnlineCollisionNudge(playerId, normal, overlap.depth, impactSpeed, yawKick);
+  }
+  car.root.position.copy(carState.position);
+}
+
+function sendOnlineCollisionNudge(targetPlayerId, normal, depth, impactSpeed, yawKick) {
+  if (!targetPlayerId || onlineRoomState.collisionSendCooldowns.has(targetPlayerId)) return;
+  const impulse = THREE.MathUtils.clamp(depth * 1.8 + impactSpeed * 0.05, 0.08, 1.25);
+  onlineRoomState.collisionSendCooldowns.set(targetPlayerId, 0.18);
+  sendOnlineRoomEvent("car_collision", {
+    fromPlayerId: onlineRoomState.playerId,
+    targetPlayerId,
+    nx: roundOnlinePoseNumber(normal.x),
+    nz: roundOnlinePoseNumber(normal.z),
+    impulse: roundOnlinePoseNumber(impulse),
+    yaw: roundOnlinePoseNumber(yawKick),
+    t: performance.now(),
+  });
+}
+
+function receiveOnlineCarCollision(payload = {}) {
+  if (!isOnlineRaceGameMode() || !gameStarted || isMenuOpen() || onlineRoomState.localFinished) return;
+  if (payload.targetPlayerId !== onlineRoomState.playerId) return;
+  if (payload.fromPlayerId === onlineRoomState.playerId) return;
+  const normal = new THREE.Vector3(Number(payload.nx) || 0, 0, Number(payload.nz) || 0);
+  if (normal.lengthSq() < 0.0001) return;
+  normal.normalize();
+  const impulse = THREE.MathUtils.clamp(Number(payload.impulse) || 0, 0, 1.25);
+  carState.position.addScaledVector(normal, impulse * 0.58);
+  carState.velocity.addScaledVector(normal, impulse * 5.6);
+  carState.yawRate += THREE.MathUtils.clamp(Number(payload.yaw) || 0, -0.12, 0.12);
+  spawnCollisionSmoke(carState.position, normal, Math.max(4, impulse * 8));
+  car.root.position.copy(carState.position);
+}
+
 function updateOnlineRaceHud() {
   const visible = isOnlineRaceGameMode() && gameStarted && !isMenuOpen();
   if (quickRaceHudEl) quickRaceHudEl.hidden = !visible;
@@ -8380,12 +8887,19 @@ function updateOnlineRaceHud() {
   const playerIndex = entries.findIndex((entry) => entry.playerId === onlineRoomState.playerId);
   const playerProgress = onlineRoomState.progress.get(onlineRoomState.playerId) ?? { lap: 0 };
   const totalPlayers = Math.max(1, entries.length);
-  const totalLaps = Number(onlineRoomState.hostSettings?.laps ?? 3) || 3;
-  const currentLap = THREE.MathUtils.clamp((playerProgress.lap ?? 0) + 1, 1, totalLaps);
+  const totalLaps = getOnlineRaceLapCount();
+  const currentLap = getOnlineRaceCurrentLap();
   if (quickRacePositionEl) quickRacePositionEl.textContent = `${playerIndex >= 0 ? playerIndex + 1 : 1} / ${totalPlayers}`;
-  if (quickRaceLapEl) quickRaceLapEl.textContent = `Lap ${currentLap} / ${totalLaps}`;
-  if (quickRacePenaltyTimerEl) quickRacePenaltyTimerEl.hidden = true;
-  if (quickRacePenaltyMessageEl) quickRacePenaltyMessageEl.hidden = true;
+  if (quickRaceLapEl) quickRaceLapEl.textContent = onlineRoomState.localFinished ? `Finished - ${totalLaps} Laps` : `Lap ${currentLap} / ${totalLaps}`;
+  if (quickRacePenaltyTimerEl) {
+    quickRacePenaltyTimerEl.hidden = onlineRoomState.localPenaltyTime <= 0.05;
+    quickRacePenaltyTimerEl.textContent = `+${formatQuickRacePenaltyTime(onlineRoomState.localPenaltyTime)}`;
+  }
+  if (quickRacePenaltyMessageEl) {
+    quickRacePenaltyMessageEl.hidden = onlineRoomState.localPenaltyMessageTime <= 0 || !onlineRoomState.localPenaltyMessageText;
+    quickRacePenaltyMessageEl.textContent = onlineRoomState.localPenaltyMessageText;
+    quickRacePenaltyMessageEl.classList.toggle("is-serving", false);
+  }
 }
 
 function getOnlineRaceStandings() {
@@ -8401,10 +8915,60 @@ function getOnlineRaceStandings() {
       raceDistance: progress?.raceDistance ?? 0,
       lap: progress?.lap ?? 0,
       progress: progress?.progress ?? 0,
+      penaltyTime: progress?.penaltyTime ?? 0,
+      finished: progress?.finished ?? false,
+      finishTime: progress?.finishTime ?? null,
+      adjustedFinishTime: progress?.adjustedFinishTime ?? null,
+      player: onlineRoomState.players.get(playerId) ?? null,
     });
   }
-  standings.sort((a, b) => b.raceDistance - a.raceDistance);
+  for (const [aiId, progress] of onlineRoomState.aiProgress.entries()) {
+    standings.push({
+      playerId: aiId,
+      raceDistance: progress?.raceDistance ?? 0,
+      lap: progress?.lap ?? 0,
+      progress: progress?.progress ?? 0,
+      penaltyTime: 0,
+      finished: progress?.finished ?? false,
+      finishTime: progress?.finishTime ?? null,
+      adjustedFinishTime: progress?.adjustedFinishTime ?? null,
+      player: { driverName: progress?.label ?? "AI" },
+      isAi: true,
+    });
+  }
+  standings.sort((a, b) => {
+    if (a.finished && b.finished) return (a.adjustedFinishTime ?? Infinity) - (b.adjustedFinishTime ?? Infinity);
+    if (a.finished !== b.finished) return a.finished ? -1 : 1;
+    return b.raceDistance - a.raceDistance;
+  });
   return standings;
+}
+
+function showOnlineRaceResults() {
+  onlineRoomState.resultsShown = true;
+  renderOnlineRaceResults();
+  if (quickRaceResultsEl) quickRaceResultsEl.hidden = false;
+}
+
+function renderOnlineRaceResults() {
+  if (!quickRaceResultsListEl) return;
+  if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = true;
+  const ordered = getOnlineRaceStandings();
+  const totalPlayers = Math.max(1, ordered.length);
+  const playerIndex = ordered.findIndex((entry) => entry.playerId === onlineRoomState.playerId);
+  if (quickRaceResultsPositionEl) quickRaceResultsPositionEl.textContent = `${playerIndex >= 0 ? playerIndex + 1 : 1} / ${totalPlayers}`;
+  quickRaceResultsListEl.replaceChildren();
+  for (const [index, entry] of ordered.entries()) {
+    const row = document.createElement("li");
+    const player = entry.player ?? {};
+    const label = player.driverName || (entry.playerId === onlineRoomState.playerId ? "You" : "Driver");
+    const time = entry.finished
+      ? formatLapTime(entry.adjustedFinishTime ?? entry.finishTime ?? 0)
+      : `Lap ${Math.min(getOnlineRaceLapCount(), (entry.lap ?? 0) + 1)} / ${getOnlineRaceLapCount()}`;
+    const penalty = entry.penaltyTime > 0.05 ? ` +${formatQuickRacePenaltyTime(entry.penaltyTime)} penalties` : "";
+    row.innerHTML = `<span>${index + 1}</span><strong>${label}</strong><small>${time}${penalty}</small>`;
+    quickRaceResultsListEl.appendChild(row);
+  }
 }
 
 function removeOnlineRemoteCars() {
@@ -8412,6 +8976,7 @@ function removeOnlineRemoteCars() {
     scene.remove(remote.car.root);
   }
   onlineRoomState.remoteCars.clear();
+  onlineRoomState.collisionSendCooldowns.clear();
 }
 
 function renderOnlineRoom() {
@@ -8421,7 +8986,7 @@ function renderOnlineRoom() {
   if (onlineRoomSummaryEl) {
     const settings = onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload();
     onlineRoomSummaryEl.textContent = onlineRoomState.hostSettings || onlineRoomState.role === "host"
-      ? `${settings.trackName} / ${getCarClassLabel(settings.carClass)} / ${settings.carName}`
+      ? `${settings.trackName} / ${getCarClassLabel(settings.carClass)} / ${settings.carName} / ${settings.laps ?? 3} laps / ${settings.aiOpponentCount ?? 0} AI`
       : "Waiting for the host room.";
   }
   if (onlineRoomPlayersEl) {
@@ -8434,6 +8999,7 @@ function renderOnlineRoom() {
       onlineRoomPlayersEl.appendChild(row);
     }
   }
+  updateOnlineHostSettingsControls();
   if (onlineRoomReadyButton) {
     onlineRoomReadyButton.textContent = onlineRoomState.ready ? "Ready" : "Ready Up";
     onlineRoomReadyButton.hidden = onlineRoomState.role === "host";
@@ -8449,6 +9015,15 @@ function renderOnlineRoom() {
       "is-warning",
     );
   }
+}
+
+function updateOnlineHostSettingsControls() {
+  if (onlineHostSettingsEl) onlineHostSettingsEl.hidden = onlineRoomState.role !== "host";
+  if (onlineAiOpponentSlider) onlineAiOpponentSlider.value = String(selectedAiOpponentCount);
+  if (onlineAiOpponentReadout) onlineAiOpponentReadout.textContent = String(selectedAiOpponentCount);
+  if (onlineRaceLapSlider) onlineRaceLapSlider.value = String(selectedQuickRaceLapCount);
+  if (onlineRaceLapReadout) onlineRaceLapReadout.textContent = String(selectedQuickRaceLapCount);
+  if (onlineAiDifficultySelect) onlineAiDifficultySelect.value = selectedAiDifficulty;
 }
 
 function updateOnlineSessionRoomCodeHud() {
@@ -10473,10 +11048,10 @@ function getTrackForwardAtSample(index = 0) {
 function getQuickRaceGridPose(gridPosition = 1) {
   const startIndex = track.startSampleIndex ?? 0;
   const samples = track.samples ?? [];
-  const rowSpacing = 22.77;
+  const rowSpacing = 27.32;
   const laneOffset = 2.9;
   const gridStartBehindLine = 4;
-  const rightLaneAdvance = 11;
+  const rightLaneAdvance = 13.2;
   const safePosition = Math.max(1, Math.round(gridPosition));
   const row = Math.floor((safePosition - 1) / 2);
   const isRightLane = safePosition % 2 === 1;
@@ -10517,13 +11092,20 @@ function clearAiOpponents() {
 
 function setupQuickRaceOpponents() {
   clearAiOpponents();
-  if (selectedGameMode !== "quick-race" || !gameStarted) return;
-  const count = THREE.MathUtils.clamp(selectedAiOpponentCount, 1, 10);
+  if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !gameStarted) return;
+  const minAi = selectedGameMode === "quick-race" ? 1 : 0;
+  const count = THREE.MathUtils.clamp(selectedAiOpponentCount, minAi, 10);
+  if (count <= 0) return;
   const carIds = getQuickRaceAiCarIds();
-  const gridPositions = getAiGridPositions(count);
+  const gridPositions = isOnlineRaceGameMode()
+    ? Array.from({ length: count }, (_, index) => index + 1)
+    : getAiGridPositions(count);
+  const bossOpponentIndex = getAiBossOpponentIndex(gridPositions, count);
   const aiModel = getQuickRaceAiModelName();
   for (let i = 0; i < count; i += 1) {
-    const carId = carIds[i % carIds.length] ?? "mersedeez";
+    const carId = getAiOpponentCarId(i, carIds, bossOpponentIndex);
+    const displayName = getAiOpponentDisplayName(i, bossOpponentIndex);
+    const isBoss = i === bossOpponentIndex;
     const aiCar = createSelectedCar(carId);
     tuneAiCarLights(aiCar);
     const pose = getQuickRaceGridPose(gridPositions[i]);
@@ -10532,6 +11114,9 @@ function setupQuickRaceOpponents() {
     scene.add(aiCar.root);
     aiOpponents.push({
       id: `ai-${i}`,
+      displayName,
+      isBoss,
+      bossModeActive: false,
       aiModel,
       cyborg: aiModel === AI_CYBORG_MODEL_NAME ? createCyborgOpponentState(pose, i) : null,
       car: aiCar,
@@ -10601,6 +11186,7 @@ function resetQuickRaceState() {
   quickRaceState.penaltyMessageServing = false;
   quickRaceState.resultsShown = false;
   quickRaceState.playerJoyride = null;
+  resetBossModeState();
   if (quickRaceResultsEl) quickRaceResultsEl.hidden = true;
   if (!quickRaceState.active || !track.samples?.length) {
     updateQuickRaceHud();
@@ -10609,7 +11195,7 @@ function resetQuickRaceState() {
   quickRaceState.entries.push(createQuickRaceEntry("player", "Player", "player", null, carState.position));
   for (let i = 0; i < aiOpponents.length; i += 1) {
     const opponent = aiOpponents[i];
-    quickRaceState.entries.push(createQuickRaceEntry(`ai-${i}`, `AI ${i + 1}`, "ai", opponent, opponent.position));
+    quickRaceState.entries.push(createQuickRaceEntry(opponent.id ?? `ai-${i}`, opponent.displayName ?? `AI ${i + 1}`, "ai", opponent, opponent.position));
   }
   updateQuickRaceHud();
 }
@@ -10717,6 +11303,113 @@ function updateQuickRaceHud() {
   }
 }
 
+function updateRaceLeaderboard(dt) {
+  const visible = shouldShowRaceLeaderboard();
+  if (raceLeaderboardEl) raceLeaderboardEl.hidden = !visible;
+  if (!visible) {
+    raceLeaderboardState.updateTimer = 0;
+    return;
+  }
+
+  raceLeaderboardState.updateTimer += dt;
+  const needsInitialRows = !raceLeaderboardListEl?.children?.length;
+  if (raceLeaderboardState.updateTimer < 0.7 && !needsInitialRows) return;
+  raceLeaderboardState.updateTimer = 0;
+
+  const rows = getRaceLeaderboardRows();
+  const playerIndex = rows.findIndex((row) => row.isPlayer);
+  if (raceLeaderboardPositionEl) raceLeaderboardPositionEl.textContent = `${playerIndex >= 0 ? playerIndex + 1 : 1} / ${Math.max(1, rows.length)}`;
+  if (!raceLeaderboardListEl) return;
+  raceLeaderboardListEl.replaceChildren();
+
+  const playerRow = rows[playerIndex] ?? rows.find((row) => row.isPlayer);
+  for (const [index, row] of rows.entries()) {
+    const item = document.createElement("li");
+    item.className = row.isPlayer ? "is-player" : "";
+
+    const position = document.createElement("span");
+    position.textContent = `${index + 1}`;
+    const name = document.createElement("strong");
+    name.textContent = row.label;
+    const gap = document.createElement("small");
+    gap.textContent = getRaceLeaderboardGapText(row, playerRow);
+
+    item.append(position, name, gap);
+    raceLeaderboardListEl.appendChild(item);
+  }
+}
+
+function shouldShowRaceLeaderboard() {
+  if (!gameStarted || isMenuOpen()) return false;
+  if (selectedGameMode === "quick-race") return quickRaceState.active && quickRaceState.entries.length > 0 && !quickRaceState.resultsShown;
+  if (isOnlineRaceGameMode()) return onlineRoomState.raceStarted && !onlineRoomState.resultsShown;
+  return false;
+}
+
+function getRaceLeaderboardRows() {
+  if (selectedGameMode === "quick-race") return getQuickRaceLeaderboardRows();
+  if (isOnlineRaceGameMode()) return getOnlineRaceLeaderboardRows();
+  return [];
+}
+
+function getQuickRaceLeaderboardRows() {
+  const sampleSpacing = estimateAiSampleSpacing();
+  return getQuickRaceOrderedEntries().map((entry) => {
+    const isPlayer = entry.type === "player";
+    const speed = isPlayer ? carState.velocity.length() : entry.source?.speed ?? entry.source?.velocity?.length?.() ?? 0;
+    return {
+      id: entry.id,
+      label: isPlayer ? getDriverProfileDisplayName() : entry.label,
+      isPlayer,
+      finished: entry.finished,
+      raceMeters: entry.totalProgress * sampleSpacing,
+      speed,
+    };
+  });
+}
+
+function getOnlineRaceLeaderboardRows() {
+  const sampleSpacing = estimateAiSampleSpacing();
+  const lapDistance = Math.max(1, (track.samples?.length ?? 1) * sampleSpacing);
+  return getOnlineRaceStandings().map((entry) => {
+    const isPlayer = entry.playerId === onlineRoomState.playerId;
+    const remote = onlineRoomState.remoteCars.get(entry.playerId);
+    const aiOpponent = entry.isAi ? aiOpponents.find((opponent) => opponent.id === entry.playerId) : null;
+    const speed = isPlayer
+      ? carState.velocity.length()
+      : entry.isAi
+        ? aiOpponent?.speed ?? 0
+        : remote?.target?.velocity?.length?.() ?? 0;
+    return {
+      id: entry.playerId,
+      label: isPlayer ? getDriverProfileDisplayName() : entry.player?.driverName || (entry.isAi ? "AI" : "Driver"),
+      isPlayer,
+      finished: entry.finished,
+      raceMeters: (entry.raceDistance ?? 0) * lapDistance,
+      speed,
+    };
+  });
+}
+
+function getRaceLeaderboardGapText(row, playerRow) {
+  if (!playerRow || row.isPlayer) return "Driver";
+  if (row.finished && !playerRow.finished) return "Finished";
+  if (playerRow.finished && !row.finished) return "Running";
+  const gapMeters = row.raceMeters - playerRow.raceMeters;
+  const absGap = Math.abs(gapMeters);
+  if (absGap < 2.5) return "Even";
+  const speedReference = Math.max(16, (Math.max(row.speed ?? 0, 0) + Math.max(playerRow.speed ?? 0, 0)) * 0.5);
+  const seconds = absGap / speedReference;
+  return gapMeters > 0
+    ? `${seconds.toFixed(1)}s ahead`
+    : `${seconds.toFixed(1)}s behind`;
+}
+
+function getDriverProfileDisplayName() {
+  const name = String(driverProfile.driverName || "").trim();
+  return name || "Driver Name";
+}
+
 function updateQuickRacePenalties(dt, wheelSurface) {
   if (selectedGameMode !== "quick-race" || !gameStarted || !quickRaceState.active) return;
   quickRaceState.penaltyCooldown = Math.max(0, quickRaceState.penaltyCooldown - dt);
@@ -10751,6 +11444,26 @@ function showQuickRacePenaltyMessage(message, seconds = 2, serving = false) {
   quickRaceState.penaltyMessageText = message;
   quickRaceState.penaltyMessageTime = Math.max(quickRaceState.penaltyMessageTime, seconds);
   quickRaceState.penaltyMessageServing = serving;
+}
+
+function resetBossModeState() {
+  bossModeState.messageTime = 0;
+  bossModeState.messageText = "";
+  bossModeState.announcedIds.clear();
+  if (bossModeMessageEl) bossModeMessageEl.hidden = true;
+}
+
+function showBossModeMessage(message, seconds = 4) {
+  bossModeState.messageText = message;
+  bossModeState.messageTime = Math.max(bossModeState.messageTime, seconds);
+}
+
+function updateBossModeHud(dt) {
+  bossModeState.messageTime = Math.max(0, bossModeState.messageTime - dt);
+  const visible = gameStarted && !isMenuOpen() && bossModeState.messageTime > 0 && bossModeState.messageText;
+  if (!bossModeMessageEl) return;
+  bossModeMessageEl.hidden = !visible;
+  if (visible) bossModeMessageEl.textContent = bossModeState.messageText;
 }
 
 function getQuickRacePenaltyNotice(reason) {
@@ -10950,6 +11663,7 @@ function showQuickRaceResults() {
 
 function renderQuickRaceResults() {
   if (!quickRaceResultsListEl) return;
+  if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = false;
   const ordered = getQuickRaceOrderedEntries();
   const totalCars = Math.max(1, ordered.length);
   const playerIndex = ordered.findIndex((entry) => entry.type === "player");
@@ -10996,6 +11710,7 @@ function returnToMainMenuFromRace() {
   setPaused(false);
   keys.clear();
   clearAiOpponents();
+  removeOnlineRemoteCars();
   resetQuickRaceState();
   clearTimeTrialGhost();
   startMenu.classList.remove("is-hidden");
@@ -11044,8 +11759,152 @@ function isCyborgQuickRaceAvailable() {
 }
 
 function getCyborgBrakingLookaheadScale() {
-  const setting = AI_DIFFICULTY_SETTINGS[selectedAiDifficulty] ?? AI_DIFFICULTY_SETTINGS.standard;
+  const setting = getAiDifficultySetting();
   return CYBORG_BASE_BRAKING_LOOKAHEAD_SCALE * setting.cyborgBrakingLookaheadScale;
+}
+
+function getAiDifficultySetting() {
+  return AI_DIFFICULTY_SETTINGS[selectedAiDifficulty] ?? AI_DIFFICULTY_SETTINGS.standard;
+}
+
+function getCurrentRaceElapsed() {
+  if (selectedGameMode === "quick-race") return quickRaceState.elapsed ?? 0;
+  if (isOnlineRaceGameMode()) return onlineRoomState.elapsed ?? 0;
+  return 0;
+}
+
+function updateAiDifficultyModifiers(opponent, dt) {
+  const setting = getAiDifficultySetting();
+  updateAiBossModeState(opponent);
+  const rubberbandScale = getAiRubberbandAccelerationScale(opponent, setting);
+  const bossCatchupScale = getAiBossCatchupAccelerationScale(opponent);
+  const targetAccelerationScale = (setting.accelerationScale ?? 1) * rubberbandScale;
+  opponent.difficultyAccelerationScale = THREE.MathUtils.damp(
+    opponent.difficultyAccelerationScale ?? targetAccelerationScale * bossCatchupScale,
+    targetAccelerationScale * bossCatchupScale,
+    3.2,
+    dt,
+  );
+  opponent.difficultySafetyMarginScale = setting.safetyMarginScale ?? 1;
+  opponent.difficultyOvertakeIntentScale = (setting.overtakeIntentScale ?? 1) * (opponent.bossModeActive ? 1.4 : 1);
+  opponent.difficultyTopSpeedScale = (setting.topSpeedScale ?? 1) * getAiBossCatchupTopSpeedScale(opponent);
+}
+
+function getAiRubberbandAccelerationScale(opponent, setting) {
+  const gapSeconds = getAiHumanGapSeconds(opponent);
+  if (!Number.isFinite(gapSeconds)) return 1;
+  if (Number.isFinite(setting.rubberbandAheadSeconds) && gapSeconds > setting.rubberbandAheadSeconds) {
+    const aheadScale = setting.rubberbandAheadAccelerationScale ?? 1;
+    return opponent.bossModeActive ? THREE.MathUtils.lerp(1, aheadScale, 0.5) : aheadScale;
+  }
+  if (Number.isFinite(setting.rubberbandBehindSeconds) && gapSeconds < -setting.rubberbandBehindSeconds) {
+    return setting.rubberbandBehindAccelerationScale ?? 1;
+  }
+  return 1;
+}
+
+function updateAiBossModeState(opponent) {
+  if (!opponent?.isBoss) return;
+  const active = getAiRaceCompletionRatio(opponent) >= 0.5;
+  if (active && !opponent.bossModeActive) showBossModeMessage(`${opponent.displayName} is in boss mode`);
+  opponent.bossModeActive = active;
+}
+
+function getAiBossCatchupAccelerationScale(opponent) {
+  if (!opponent?.isBoss) return 1;
+  return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.05 : 1;
+}
+
+function getAiBossCatchupTopSpeedScale(opponent) {
+  if (!opponent?.isBoss) return 1;
+  return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.05 : 1;
+}
+
+function getAiRaceCompletionRatio(opponent) {
+  if (!track.samples?.length) return 0;
+  const sampleSpacing = estimateAiSampleSpacing();
+  const lapDistance = Math.max(1, track.samples.length * sampleSpacing);
+  const totalRaceDistance = lapDistance * (getCurrentRaceLapCount() + 1);
+  const raceDistance = getAiRaceDistanceMeters(opponent, sampleSpacing, lapDistance);
+  return THREE.MathUtils.clamp(raceDistance / Math.max(1, totalRaceDistance), 0, 1);
+}
+
+function getCurrentRaceLapCount() {
+  if (isOnlineRaceGameMode()) return getOnlineRaceLapCount();
+  return selectedQuickRaceLapCount;
+}
+
+function getAiBossGapToLeadHumanSeconds(opponent) {
+  if (!track.samples?.length) return 0;
+  const sampleSpacing = estimateAiSampleSpacing();
+  const lapDistance = Math.max(1, track.samples.length * sampleSpacing);
+  const aiDistance = getAiRaceDistanceMeters(opponent, sampleSpacing, lapDistance);
+  const humanDistances = getHumanRaceDistancesMeters(lapDistance, sampleSpacing);
+  if (!humanDistances.length || !Number.isFinite(aiDistance)) return 0;
+  const leadHumanDistance = Math.max(...humanDistances);
+  const speedReference = Math.max(22, opponent.speed ?? 0, carState.velocity?.length?.() ?? 0);
+  return (aiDistance - leadHumanDistance) / speedReference;
+}
+
+function getAiHumanGapSeconds(opponent) {
+  if (!track.samples?.length) return 0;
+  const sampleSpacing = estimateAiSampleSpacing();
+  const lapDistance = Math.max(1, track.samples.length * sampleSpacing);
+  const aiDistance = getAiRaceDistanceMeters(opponent, sampleSpacing, lapDistance);
+  const humanDistances = getHumanRaceDistancesMeters(lapDistance, sampleSpacing);
+  if (!humanDistances.length || !Number.isFinite(aiDistance)) return 0;
+  const fastestHumanDistance = Math.max(...humanDistances);
+  const slowestHumanDistance = Math.min(...humanDistances);
+  const rawGapMeters = aiDistance > fastestHumanDistance
+    ? aiDistance - fastestHumanDistance
+    : aiDistance < slowestHumanDistance
+      ? aiDistance - slowestHumanDistance
+      : 0;
+  const speedReference = Math.max(22, opponent.speed ?? 0, carState.velocity?.length?.() ?? 0);
+  return rawGapMeters / speedReference;
+}
+
+function getAiRaceDistanceMeters(opponent, sampleSpacing, lapDistance) {
+  if (selectedGameMode === "quick-race") {
+    const entry = quickRaceState.entries.find((candidate) => candidate.source === opponent || candidate.id === opponent.id);
+    if (!entry) return (opponent.sampleProgress ?? opponent.sampleIndex ?? 0) * sampleSpacing;
+    return (entry.completedLaps * track.samples.length + entry.totalProgress) * sampleSpacing;
+  }
+  if (isOnlineRaceGameMode()) {
+    const progress = onlineRoomState.aiProgress.get(opponent.id);
+    if (progress) return progress.raceDistance * lapDistance;
+  }
+  return (opponent.sampleProgress ?? opponent.sampleIndex ?? 0) * sampleSpacing;
+}
+
+function getHumanRaceDistancesMeters(lapDistance, sampleSpacing) {
+  if (selectedGameMode === "quick-race") {
+    const playerEntry = quickRaceState.entries.find((entry) => entry.type === "player");
+    if (playerEntry) return [(playerEntry.completedLaps * track.samples.length + playerEntry.totalProgress) * sampleSpacing];
+  }
+  if (isOnlineRaceGameMode()) {
+    const distances = [];
+    for (const progress of onlineRoomState.progress.values()) {
+      if (!progress?.isAi) distances.push((progress.raceDistance ?? 0) * lapDistance);
+    }
+    if (distances.length) return distances;
+    const localProgress = getOnlineRaceProgressForPosition(carState.position, onlineRoomState.playerId, onlineRoomState.progress);
+    return [(localProgress.raceDistance ?? 0) * lapDistance];
+  }
+  return [];
+}
+
+function estimateAiSampleSpacing() {
+  if (!track.samples?.length) return 1;
+  const samples = track.samples;
+  const step = Math.max(1, Math.floor(samples.length / 80));
+  let total = 0;
+  let count = 0;
+  for (let i = 0; i < samples.length; i += step) {
+    total += samples[i].distanceTo(samples[(i + step) % samples.length]) / step;
+    count += 1;
+  }
+  return count ? total / count : 1;
 }
 
 function createCyborgOpponentState(gridPose, opponentIndex = 0) {
@@ -11259,6 +12118,49 @@ function getQuickRaceAiCarIds() {
   return withoutPlayer.length ? withoutPlayer : pool;
 }
 
+function getAiOpponentCarId(index = 0, carIds = [], bossOpponentIndex = -1) {
+  const bossCarId = getAiBossCarIdForCurrentRace();
+  if (index === bossOpponentIndex && bossCarId) return bossCarId;
+  return carIds[index % carIds.length] ?? "mersedeez";
+}
+
+function getAiOpponentDisplayName(index = 0, bossOpponentIndex = -1) {
+  const bossName = getAiBossNameForCurrentRace();
+  if (index === bossOpponentIndex && bossName) return bossName;
+  return `AI ${index + 1}`;
+}
+
+function getAiBossOpponentIndex(gridPositions = [], aiCount = 0) {
+  if (!getAiBossNameForCurrentRace() || aiCount <= 0) return -1;
+  const humanCount = selectedGameMode === "quick-race"
+    ? 1
+    : Math.max(1, onlineRoomState.gridOrder.length || onlineRoomState.players.size || 1);
+  const totalGridCars = Math.max(1, aiCount + humanCount);
+  const frontCutoff = Math.max(1, Math.ceil(totalGridCars * 0.75));
+  const candidates = gridPositions
+    .map((gridPosition, index) => ({ gridPosition, index }))
+    .filter((candidate) => candidate.gridPosition <= frontCutoff);
+  const pool = candidates.length ? candidates : gridPositions.map((gridPosition, index) => ({ gridPosition, index }));
+  if (!pool.length) return -1;
+  return pool[Math.floor(Math.random() * pool.length)].index;
+}
+
+function getAiBossNameForCurrentRace() {
+  if (!(selectedAiDifficulty === "amateur" || selectedAiDifficulty === "professional")) return "";
+  const kind = getCarProfile().kind;
+  if (kind === "stock") return "Geoff Corden";
+  if (kind === "formula") return "Louisa Hampton";
+  return "";
+}
+
+function getAiBossCarIdForCurrentRace() {
+  if (!(selectedAiDifficulty === "amateur" || selectedAiDifficulty === "professional")) return "";
+  const kind = getCarProfile().kind;
+  if (kind === "stock") return "geoff-corden-stock";
+  if (kind === "formula") return "louisa-hampton-formula";
+  return "";
+}
+
 function getAiGridPositions(count) {
   const positions = [];
   const totalGridCars = count + 1;
@@ -11431,9 +12333,10 @@ function resetAiOpponentsToGrid() {
 }
 
 function updateAiOpponents(dt) {
-  if (selectedGameMode !== "quick-race" || !aiOpponents.length || !track.samples?.length) return;
+  if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !aiOpponents.length || !track.samples?.length) return;
   const samples = track.samples;
   for (const opponent of aiOpponents) {
+    updateAiDifficultyModifiers(opponent, dt);
     if (opponent.aiModel === AI_CYBORG_MODEL_NAME && opponent.cyborg) {
       updateCyborgAiOpponent(opponent, dt);
       continue;
@@ -11445,11 +12348,14 @@ function updateAiOpponents(dt) {
 
     const profile = opponent.profile ?? getCarProfileById(opponent.carId);
     const racing = getAiRacingIntent(opponent, nearestIndex, samples, profile);
+    const topSpeedScale = opponent.difficultyTopSpeedScale ?? 1;
+    racing.maxSpeed *= topSpeedScale;
+    racing.targetSpeed = Math.min(racing.targetSpeed * topSpeedScale, racing.maxSpeed);
     opponent.throttle = THREE.MathUtils.damp(opponent.throttle, racing.throttle, 4.2, dt);
     opponent.brake = THREE.MathUtils.damp(opponent.brake, racing.brake, 6.2, dt);
 
     const cornerAccelPenalty = 1 - racing.cornerSeverity * 0.14;
-    const acceleration = profile.engineForce * 1.42 * opponent.throttle * cornerAccelPenalty;
+    const acceleration = profile.engineForce * 1.42 * (opponent.difficultyAccelerationScale ?? 1) * opponent.throttle * cornerAccelPenalty;
     const braking = profile.brakeForce * 0.9 * opponent.brake;
     const drag = opponent.speed * opponent.speed * 0.0048 + 0.34;
     opponent.speed += (acceleration - braking - drag) * dt;
@@ -11539,7 +12445,8 @@ function updateCyborgAiOpponent(opponent, dt) {
   const launchOrientationBlend = cyborg.launchOrientationTimer > 0 ? 0.5 : 0;
   const trackTarget = getCyborgTrackTarget(forwardTarget, opponent.position, opponent.sampleIndex ?? 0, learnedTargetHeading, launchOrientationBlend);
   const throttlePose = getCyborgLinePose(line, cyborg.progress, effectiveLaneOffset);
-  const rawTargetSpeed = Math.max(9, lookPose.speed * (opponent.pace ?? 1));
+  const topSpeedScale = opponent.difficultyTopSpeedScale ?? 1;
+  const rawTargetSpeed = Math.max(9, lookPose.speed * (opponent.pace ?? 1) * topSpeedScale);
   const lineErrorSlowdown = THREE.MathUtils.clamp((laneErrorAbs - 0.2) / 6, 0, 1);
   const lineSpeedScale = THREE.MathUtils.lerp(1, 0.42, lineErrorSlowdown);
   const targetSpeed = rawTargetSpeed * lineSpeedScale;
@@ -11559,7 +12466,7 @@ function updateCyborgAiOpponent(opponent, dt) {
   const racing = {
     lookahead: metersToAiSamples(brakingLookaheadDistance),
     targetSpeed,
-    maxSpeed: profile.maxForwardSpeed * Math.max(0.9, opponent.pace ?? 1) * boostPowerScale,
+    maxSpeed: profile.maxForwardSpeed * Math.max(0.9, opponent.pace ?? 1) * topSpeedScale * boostPowerScale,
     cornerSeverity: THREE.MathUtils.clamp(Math.abs(angleDifference(headingPose.heading, learnedPose.heading)) / 0.55, 0, 1),
     throttle,
     brake,
@@ -11624,6 +12531,7 @@ function applyAiTrafficAwareness(opponent, targetPose, racing, dt = 1 / 60) {
   let bestOvertakeScore = 0;
   const lowSpeedAvoidanceScale = THREE.MathUtils.lerp(2.2, 1, THREE.MathUtils.smoothstep(opponent.speed ?? 0, 4, 24));
   const futureBox = getPredictedTrafficCollisionBox(opponent, 0.4, 0.32);
+  const raceElapsed = getCurrentRaceElapsed();
 
   for (const other of nearbyCars) {
     const delta = other.position.clone().sub(opponent.position);
@@ -11631,8 +12539,11 @@ function applyAiTrafficAwareness(opponent, targetPose, racing, dt = 1 / 60) {
     const lateral = delta.dot(right);
     const absLateral = Math.abs(lateral);
     const relativeClosing = opponent.velocity.clone().sub(other.velocity).dot(forward);
+    const otherForward = new THREE.Vector3(Math.sin(other.heading ?? 0), 0, Math.cos(other.heading ?? 0));
+    const similarDirection = forward.dot(otherForward) > 0.65;
+    const opponentHasTrackPosition = similarDirection && ahead < -0.55;
 
-    const followRange = quickRaceState.elapsed < 10 ? 5 : 14;
+    const followRange = raceElapsed < 10 ? 5 : 14;
     if (ahead > 0.2 && ahead < followRange && absLateral < 2.25 && relativeClosing > -2) {
       const followIntensity = (1 - ahead / followRange) * (1 - absLateral / 2.25);
       strongestFollowLift = Math.max(strongestFollowLift, followIntensity);
@@ -11653,8 +12564,9 @@ function applyAiTrafficAwareness(opponent, targetPose, racing, dt = 1 / 60) {
     if (ahead > -4.2 && ahead < 4.8 && absLateral > 0.75 && absLateral < 3.8) {
       const alongsideIntensity = (1 - Math.abs(ahead) / 4.8) * (1 - (absLateral - 0.75) / 3.05);
       const awaySign = lateral >= 0 ? -1 : 1;
-      headingBias += awaySign * THREE.MathUtils.clamp(alongsideIntensity, 0, 1) * 0.18;
-      if (alongsideIntensity > 0.35 && quickRaceState.elapsed >= 5) {
+      const trackPositionSteeringScale = opponentHasTrackPosition ? 0.42 : 1;
+      headingBias += awaySign * THREE.MathUtils.clamp(alongsideIntensity, 0, 1) * 0.18 * trackPositionSteeringScale;
+      if (!opponentHasTrackPosition && alongsideIntensity > 0.35 && raceElapsed >= 5) {
         racing.throttle *= THREE.MathUtils.lerp(1, 0.93, alongsideIntensity);
         racing.targetSpeed *= THREE.MathUtils.lerp(1, 0.95, alongsideIntensity);
       }
@@ -11667,20 +12579,22 @@ function applyAiTrafficAwareness(opponent, targetPose, racing, dt = 1 / 60) {
       const futureAhead = futureDelta.dot(forward);
       const futureLateral = futureDelta.dot(right);
       const awaySign = futureLateral >= 0 ? -1 : 1;
+      const opponentWillHaveTrackPosition = similarDirection && futureAhead < -0.55;
       const overlapRisk = THREE.MathUtils.clamp(futureOverlap.depth / 1.25, 0, 1);
       const closingRisk = THREE.MathUtils.clamp(relativeClosing / 16, 0.15, 1);
       const diagonalRisk = THREE.MathUtils.smoothstep(Math.abs(futureLateral), 0.25, 2.8);
       const risk = overlapRisk * THREE.MathUtils.lerp(1, 1.28, diagonalRisk) * closingRisk;
-      strongestCollisionRisk = Math.max(strongestCollisionRisk, risk);
-      const launchSteeringBoost = quickRaceState.elapsed < 5 ? 1.85 : 1;
-      headingBias += awaySign * risk * THREE.MathUtils.lerp(0.12, 0.22, lowSpeedAvoidanceScale - 1) * launchSteeringBoost;
-      if (futureAhead > -1.5 && quickRaceState.elapsed >= 5) strongestFollowLift = Math.max(strongestFollowLift, risk * 0.84);
+      if (!opponentWillHaveTrackPosition) strongestCollisionRisk = Math.max(strongestCollisionRisk, risk);
+      const launchSteeringBoost = raceElapsed < 5 ? 1.85 : 1;
+      const futureSteeringScale = opponentWillHaveTrackPosition ? 0.35 : 1;
+      headingBias += awaySign * risk * THREE.MathUtils.lerp(0.12, 0.22, lowSpeedAvoidanceScale - 1) * launchSteeringBoost * futureSteeringScale;
+      if (!opponentWillHaveTrackPosition && futureAhead > -1.5 && raceElapsed >= 5) strongestFollowLift = Math.max(strongestFollowLift, risk * 0.84);
     }
   }
 
   updateAiOvertakeIntent(opponent, bestOvertakeCandidate, bestOvertakeScore, getAiCenterlineOvertakeSide(opponent), dt);
 
-  const collisionThrottleBrakeRisk = quickRaceState.elapsed < 5 ? 0 : strongestCollisionRisk;
+  const collisionThrottleBrakeRisk = raceElapsed < 5 ? 0 : strongestCollisionRisk;
   if (strongestFollowLift > 0 || collisionThrottleBrakeRisk > 0) {
     const highSpeedFollowScale = THREE.MathUtils.lerp(1, 0.55, THREE.MathUtils.smoothstep(opponent.speed ?? 0, 28, 58));
     const followAvoidance = THREE.MathUtils.clamp(Math.max(strongestFollowLift * 2.4, collisionThrottleBrakeRisk * 2.85) * highSpeedFollowScale, 0, 1);
@@ -11696,17 +12610,18 @@ function applyAiTrafficAwareness(opponent, targetPose, racing, dt = 1 / 60) {
 }
 
 function updateAiOvertakeIntent(opponent, candidate, score, preferredSide, dt) {
+  const overtakeScale = opponent.difficultyOvertakeIntentScale ?? 1;
   if (!candidate || score <= 0.08) {
     opponent.overtakeWatchTime = Math.max(0, (opponent.overtakeWatchTime ?? 0) - dt * 1.8);
     opponent.overtakeHoldTime = Math.max(0, (opponent.overtakeHoldTime ?? 0) - dt);
     if ((opponent.overtakeWatchTime ?? 0) <= 0 && (opponent.overtakeHoldTime ?? 0) <= 0) opponent.overtakeIntent = null;
     return;
   }
-  opponent.overtakeWatchTime = Math.min(2, (opponent.overtakeWatchTime ?? 0) + dt);
-  if (opponent.overtakeWatchTime < 0.7) return;
+  opponent.overtakeWatchTime = Math.min(2, (opponent.overtakeWatchTime ?? 0) + dt * overtakeScale);
+  if (opponent.overtakeWatchTime < 0.7 / Math.max(0.45, overtakeScale)) return;
   const existingSide = opponent.overtakeIntent?.side;
   const side = existingSide || preferredSide || getAiFallbackOvertakeSide(opponent, candidate);
-  opponent.overtakeHoldTime = Math.max(opponent.overtakeHoldTime ?? 0, 2.2);
+  opponent.overtakeHoldTime = Math.max(opponent.overtakeHoldTime ?? 0, 2.2 * Math.min(1.25, Math.max(0.85, overtakeScale)));
   opponent.overtakeIntent = {
     active: true,
     side,
@@ -11948,7 +12863,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
     opponent.throttle = Math.min(opponent.throttle, THREE.MathUtils.lerp(0.62, 0.2, wheelRisk));
     opponent.brake = Math.max(opponent.brake, THREE.MathUtils.lerp(0.16, 0.42, wheelRisk));
   }
-  if (selectedGameMode === "quick-race" && quickRaceState.elapsed < 2 && (racing.collisionAvoidance ?? 0) <= 0.08) {
+  if ((selectedGameMode === "quick-race" || isOnlineRaceGameMode()) && getCurrentRaceElapsed() < 2 && (racing.collisionAvoidance ?? 0) <= 0.08) {
     opponent.throttle = 1;
     opponent.brake = 0;
     racing.throttle = 1;
@@ -11958,7 +12873,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   if (opponent.throttle > 0) {
     const powerFade = 1 - THREE.MathUtils.clamp(forwardSpeed / slipstreamMaxSpeed, 0, 1);
     const boostPowerScale = racing.boostActive ? (profile.boostPowerScale ?? 1.18) : 1;
-    forwardSpeed += profile.engineForce * 1.45 * offTrackScale * slipstreamPowerScale * boostPowerScale * opponent.throttle * Math.max(0.5, cornerAccelPenalty) * (0.45 + powerFade * 0.55) * dt;
+    forwardSpeed += profile.engineForce * 1.45 * (opponent.difficultyAccelerationScale ?? 1) * offTrackScale * slipstreamPowerScale * boostPowerScale * opponent.throttle * Math.max(0.5, cornerAccelPenalty) * (0.45 + powerFade * 0.55) * dt;
   }
   if (opponent.brake > 0) {
     forwardSpeed = moveToward(forwardSpeed, 0, profile.brakeForce * 0.92 * opponent.brake * dt);
@@ -12446,20 +13361,22 @@ function keepAiTargetOnTrack(opponent, pathPose, samples, targetProgress, racing
   if (!pathPose?.center || !pathPose?.normal) return;
   const unsafe = getAiTargetUnsafeAmount(opponent, pathPose.position);
   if (unsafe <= 0) return;
+  const safetyScale = opponent.difficultySafetyMarginScale ?? 1;
 
   const targetIndex = Math.floor(((targetProgress % samples.length) + samples.length) % samples.length);
   const currentHeading = getSampleHeading(samples, targetIndex);
   const futureHeading = getSampleHeading(samples, targetIndex + Math.max(10, Math.round((racing?.lookahead ?? 20) * 0.45)));
   const bendDirection = Math.sign(angleDifference(futureHeading, currentHeading)) || Math.sign(pathPose.position.clone().sub(pathPose.center).dot(pathPose.normal)) || 1;
   const currentOffset = pathPose.position.clone().sub(pathPose.center).dot(pathPose.normal);
-  const saferOffset = -bendDirection * Math.max(0, pathPose.width - 3.8) * 0.38;
-  const centeredOffset = THREE.MathUtils.lerp(currentOffset, saferOffset, THREE.MathUtils.clamp(unsafe * 0.82, 0, 1));
+  const saferOffset = -bendDirection * Math.max(0, pathPose.width - 3.8) * THREE.MathUtils.lerp(0.38, 0.18, THREE.MathUtils.clamp(safetyScale - 1, 0, 2) / 2);
+  const centeredOffset = THREE.MathUtils.lerp(currentOffset, saferOffset, THREE.MathUtils.clamp(unsafe * 0.82 * safetyScale, 0, 1));
   pathPose.position.copy(pathPose.center).addScaledVector(pathPose.normal, centeredOffset);
   pathPose.position.y = track.groundY;
   if (racing) {
-    racing.throttle = Math.min(racing.throttle, THREE.MathUtils.lerp(0.82, 0.45, unsafe));
-    racing.brake = Math.max(racing.brake, THREE.MathUtils.lerp(0.05, 0.28, unsafe));
-    racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(racing.maxSpeed * 0.78, 16, unsafe));
+    const caution = THREE.MathUtils.clamp(unsafe * THREE.MathUtils.lerp(1, 1.55, THREE.MathUtils.clamp(safetyScale - 1, 0, 2) / 2), 0, 1);
+    racing.throttle = Math.min(racing.throttle, THREE.MathUtils.lerp(0.82, 0.45, caution));
+    racing.brake = Math.max(racing.brake, THREE.MathUtils.lerp(0.05, 0.28, caution));
+    racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(racing.maxSpeed * 0.78, 16, caution));
   }
 }
 
@@ -12491,7 +13408,8 @@ function getAiTargetUnsafeAmount(opponent, to) {
 
 function isAiPointOffTrackLocal(opponent, point, margin = 0) {
   const { edgeState, offset } = getAiWheelTrackState(opponent, point);
-  return Math.abs(offset) > edgeState.halfWidth - margin;
+  const safetyScale = opponent.difficultySafetyMarginScale ?? 1;
+  return Math.abs(offset) > edgeState.halfWidth - margin * safetyScale;
 }
 
 function getSampleHeading(samples, index) {
