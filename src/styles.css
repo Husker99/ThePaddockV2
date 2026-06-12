@@ -247,6 +247,44 @@ h1 {
   border-color: rgba(255, 207, 74, 0.75);
 }
 
+.selection-card:disabled {
+  cursor: not-allowed;
+}
+
+.selection-card.is-coming-soon {
+  border-color: rgba(196, 204, 210, 0.26);
+  background:
+    linear-gradient(90deg, rgba(210, 218, 224, 0.08), rgba(210, 218, 224, 0.025)),
+    rgba(14, 17, 18, 0.58);
+  color: rgba(246, 242, 232, 0.42);
+  filter: grayscale(0.8);
+}
+
+.selection-card.is-coming-soon:hover {
+  transform: none;
+  border-color: rgba(196, 204, 210, 0.26);
+}
+
+.selection-card.is-coming-soon::before {
+  background: rgba(196, 204, 210, 0.34);
+}
+
+.selection-card.is-coming-soon::after {
+  content: "Coming Soon";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 8px;
+  border: 1px solid rgba(196, 204, 210, 0.32);
+  border-radius: 999px;
+  background: rgba(7, 12, 16, 0.58);
+  color: rgba(246, 242, 232, 0.72);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
 .selection-card.is-selected {
   background:
     linear-gradient(145deg, rgba(255, 207, 74, 0.2), rgba(228, 63, 63, 0.08)),
@@ -2063,6 +2101,7 @@ h1 {
 .time-trial-sector-delta[hidden],
 .time-trial-lap-card[hidden],
 .race-countdown[hidden],
+.race-grid-intro[hidden],
 .quick-race-hud[hidden],
 .quick-race-penalty-message[hidden],
 .boss-mode-message[hidden],
@@ -2277,22 +2316,23 @@ h1 {
 
 .race-countdown {
   position: fixed;
-  top: 22px;
+  top: 84px;
   left: 50%;
-  z-index: 5;
-  min-width: 138px;
-  padding: 12px 24px;
-  border: 1px solid rgba(255, 207, 74, 0.58);
-  border-radius: 7px;
-  background: rgba(8, 10, 8, 0.66);
+  z-index: 3;
+  min-width: 92px;
+  padding: 9px 18px 10px;
+  border: 1px solid rgba(255, 207, 74, 0.5);
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+  background: rgba(8, 10, 8, 0.74);
   color: #ffcf4a;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34), 0 0 28px rgba(255, 207, 74, 0.2);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32), 0 0 22px rgba(255, 207, 74, 0.16);
   font-family: Audiowide, Orbitron, sans-serif;
-  font-size: 54px;
+  font-size: 38px;
   line-height: 1;
   text-align: center;
   text-transform: uppercase;
-  transform: translateX(-50%) scale(1);
+  transform: translateX(-50%) translateY(-18px);
   pointer-events: none;
 }
 
@@ -2301,11 +2341,70 @@ h1 {
 }
 
 .race-countdown.is-go {
-  min-width: 190px;
+  min-width: 132px;
   color: #f6f2e8;
   background: rgba(18, 166, 106, 0.82);
   border-color: rgba(144, 255, 210, 0.78);
   box-shadow: 0 18px 56px rgba(18, 166, 106, 0.32), 0 0 34px rgba(144, 255, 210, 0.28);
+}
+
+.race-grid-intro {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  z-index: 5;
+  width: min(620px, calc(100vw - 40px));
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 207, 74, 0.52);
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, rgba(255, 207, 74, 0.16), rgba(127, 199, 255, 0.08)),
+    rgba(8, 10, 12, 0.74);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.34), 0 0 28px rgba(255, 207, 74, 0.14);
+  backdrop-filter: blur(12px);
+  color: #f6f2e8;
+  transform: translateX(-50%) translateY(8px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.race-grid-intro.is-ready {
+  animation: grid-intro-rise 420ms ease-out forwards;
+}
+
+.race-grid-intro > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #ffcf4a;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.race-grid-intro > strong {
+  display: block;
+  font-family: Audiowide, Orbitron, sans-serif;
+  font-size: 30px;
+  line-height: 1.08;
+  text-transform: uppercase;
+}
+
+.race-grid-intro div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.race-grid-intro div span {
+  padding: 6px 9px;
+  border: 1px solid rgba(127, 199, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(7, 12, 16, 0.46);
+  color: rgba(191, 230, 255, 0.82);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .quick-race-hud {
@@ -2617,11 +2716,25 @@ h1 {
 
 @keyframes countdown-pop {
   from {
-    transform: translateX(-50%) scale(1.16);
+    opacity: 0;
+    transform: translateX(-50%) translateY(-34px);
   }
 
   to {
-    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    transform: translateX(-50%) translateY(-18px);
+  }
+}
+
+@keyframes grid-intro-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 }
 

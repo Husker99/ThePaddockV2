@@ -8,11 +8,14 @@ import kataraStockCyborgTraining from "./ai-training/katara-speedway-stock-cybor
 import kataraFormulaCyborgTraining from "./ai-training/katara-speedway-formula-cyborg-training.json";
 import kataraLmpCyborgTraining from "./ai-training/katara-speedway-lmp-cyborg-training.json";
 import kyoshiStockCyborgTraining from "./ai-training/kyoshi-circuit-stock-cyborg-training.json";
+import kyoshiFormulaCyborgTraining from "./ai-training/kyoshi-circuit-formula-cyborg-training.json";
 import kyoshiLmpCyborgTraining from "./ai-training/kyoshi-circuit-lmp-cyborg-training.json";
 import makoStockCyborgTraining from "./ai-training/mako-city-stock-cyborg-training.json";
 import makoFormulaCyborgTraining from "./ai-training/mako-city-formula-cyborg-training.json";
+import makoLmpCyborgTraining from "./ai-training/mako-city-lmp-cyborg-training.json";
 import yueStockCyborgTraining from "./ai-training/yue-ring-stock-cyborg-training.json";
 import yueFormulaCyborgTraining from "./ai-training/yue-ring-formula-cyborg-training.json";
+import yueLmpCyborgTraining from "./ai-training/yue-ring-lmp-cyborg-training.json";
 
 const canvas = document.querySelector("#game");
 const startMenu = document.querySelector("#start-menu");
@@ -153,6 +156,12 @@ const timeTrialLapCardTimeEl = document.querySelector("#time-trial-lap-card-time
 const timeTrialLapCardDetailEl = document.querySelector("#time-trial-lap-card-detail");
 const timeTrialLocalBestEl = document.querySelector("#time-trial-local-best");
 const raceCountdownEl = document.querySelector("#race-countdown");
+const raceGridIntroEl = document.querySelector("#race-grid-intro");
+const raceGridIntroModeEl = document.querySelector("#race-grid-intro-mode");
+const raceGridIntroTrackEl = document.querySelector("#race-grid-intro-track");
+const raceGridIntroClassEl = document.querySelector("#race-grid-intro-class");
+const raceGridIntroLapsEl = document.querySelector("#race-grid-intro-laps");
+const raceGridIntroPositionEl = document.querySelector("#race-grid-intro-position");
 const quickRaceHudEl = document.querySelector("#quick-race-hud");
 const quickRacePositionEl = document.querySelector("#quick-race-position");
 const quickRaceLapEl = document.querySelector("#quick-race-lap");
@@ -567,6 +576,7 @@ const HOW_TO_PLAY_TOPICS = {
     title: "Difficulty",
     summary: "AI difficulty changes pace, caution, rubberbanding, and how willing the field is to fight for position.",
     bullets: [
+      "Greg is the gentlest mode: slower cars, very cautious margins, low overtake intent, and quarter-strength penalties.",
       "Beginner is slower, safer, and gets the strongest slowdown when ahead of human players.",
       "Standard is the balanced setting with cautious margins and sliding rubberbanding.",
       "Amateur is faster and can include boss drivers in Stock Car and Formula races.",
@@ -644,6 +654,19 @@ const HOW_TO_PLAY_TOPICS = {
 };
 
 const AI_DIFFICULTY_SETTINGS = {
+  greg: {
+    label: "Greg",
+    cyborgBrakingLookaheadScale: 4.5,
+    accelerationScale: 0.82,
+    topSpeedScale: 0.8,
+    safetyMarginScale: 5,
+    rubberbandAheadSeconds: 2,
+    rubberbandAheadAccelerationScale: 0.7,
+    rubberbandBehindSeconds: null,
+    rubberbandBehindAccelerationScale: 1,
+    overtakeIntentScale: 0.5,
+    penaltyScale: 0.25,
+  },
   beginner: {
     label: "Beginner",
     cyborgBrakingLookaheadScale: 3,
@@ -657,6 +680,7 @@ const AI_DIFFICULTY_SETTINGS = {
     rubberbandBehindMaxSeconds: 6,
     rubberbandBehindMaxAccelerationScale: 1.05,
     overtakeIntentScale: 0.75,
+    penaltyScale: 0.5,
   },
   standard: {
     label: "Standard",
@@ -748,6 +772,8 @@ const timeTrialGhost = {
 };
 const raceCountdownState = {
   active: false,
+  introActive: false,
+  introElapsed: 0,
   elapsed: 0,
   hideTime: 0,
   lastCue: "",
@@ -884,6 +910,7 @@ const quickRaceAiCarPools = {
   jeep: ["dune-jeep", "forest-jeep", "rescue-jeep", "storm-jeep"],
   corvette: ["vette-yellow", "vette-white", "vette-red", "vette-striped"],
 };
+const raceModeCarCategories = new Set(["formula", "lmp", "stock"]);
 const weeklyTimeTrialClassPool = ["formula", "lmp", "stock", "corvette"];
 const weeklyTimeTrialTrackPool = [
   KATARA_TRACK_ID,
@@ -1622,6 +1649,18 @@ const audioState = {
   brakeElement: null,
   lastGear: 0,
   shiftTimer: 0,
+  opponentEngines: [],
+  opponentEngineMaster: null,
+  tireNoise: null,
+  surfaceNoise: null,
+  kerbNoise: null,
+  tireGain: null,
+  surfaceGain: null,
+  kerbGain: null,
+  tireFilter: null,
+  surfaceFilter: null,
+  kerbFilter: null,
+  collisionCooldown: 0,
 };
 
 const menuAudio = {
@@ -1667,16 +1706,22 @@ const kataraLmpCyborgLines = createCyborgRacingLines(kataraLmpCyborgTraining);
 const kataraLmpCyborgLine = kataraLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kyoshiStockCyborgLines = createCyborgRacingLines(kyoshiStockCyborgTraining);
 const kyoshiStockCyborgLine = kyoshiStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const kyoshiFormulaCyborgLines = createCyborgRacingLines(kyoshiFormulaCyborgTraining);
+const kyoshiFormulaCyborgLine = kyoshiFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kyoshiLmpCyborgLines = createCyborgRacingLines(kyoshiLmpCyborgTraining);
 const kyoshiLmpCyborgLine = kyoshiLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const makoStockCyborgLines = createCyborgRacingLines(makoStockCyborgTraining);
 const makoStockCyborgLine = makoStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const makoFormulaCyborgLines = createCyborgRacingLines(makoFormulaCyborgTraining);
 const makoFormulaCyborgLine = makoFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const makoLmpCyborgLines = createCyborgRacingLines(makoLmpCyborgTraining);
+const makoLmpCyborgLine = makoLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const yueStockCyborgLines = createCyborgRacingLines(yueStockCyborgTraining);
 const yueStockCyborgLine = yueStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const yueFormulaCyborgLines = createCyborgRacingLines(yueFormulaCyborgTraining);
 const yueFormulaCyborgLine = yueFormulaCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+const yueLmpCyborgLines = createCyborgRacingLines(yueLmpCyborgTraining);
+const yueLmpCyborgLine = yueLmpCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const cyborgLineBanksByClass = {
   stock: {
     [KATARA_TRACK_ID]: { lines: kataraStockCyborgLines, fallback: kataraStockCyborgLine },
@@ -1686,12 +1731,15 @@ const cyborgLineBanksByClass = {
   },
   formula: {
     [KATARA_TRACK_ID]: { lines: kataraFormulaCyborgLines, fallback: kataraFormulaCyborgLine },
+    [KYOSHI_TRACK_ID]: { lines: kyoshiFormulaCyborgLines, fallback: kyoshiFormulaCyborgLine },
     [MAKO_TRACK_ID]: { lines: makoFormulaCyborgLines, fallback: makoFormulaCyborgLine },
     [YUE_TRACK_ID]: { lines: yueFormulaCyborgLines, fallback: yueFormulaCyborgLine },
   },
   lmp: {
     [KATARA_TRACK_ID]: { lines: kataraLmpCyborgLines, fallback: kataraLmpCyborgLine },
     [KYOSHI_TRACK_ID]: { lines: kyoshiLmpCyborgLines, fallback: kyoshiLmpCyborgLine },
+    [MAKO_TRACK_ID]: { lines: makoLmpCyborgLines, fallback: makoLmpCyborgLine },
+    [YUE_TRACK_ID]: { lines: yueLmpCyborgLines, fallback: yueLmpCyborgLine },
   },
 };
 let aiRacingLineDebug = null;
@@ -1741,6 +1789,8 @@ function update() {
   updateSkyObjects();
   updateSceneryVisibility();
   updateSceneryLights();
+  audioState.collisionCooldown = Math.max(0, (audioState.collisionCooldown ?? 0) - dt);
+  updateOpponentEngineAudio(dt);
   updateOnlineSessionRoomCodeHud();
   renderer.render(scene, camera);
 }
@@ -1820,11 +1870,13 @@ function resolveRaceCarPairCollision(a, b, dt) {
 
   const relativeVelocity = b.velocity.clone().sub(a.velocity);
   const closingSpeed = relativeVelocity.dot(normal);
+  const impactSpeed = Math.abs(closingSpeed);
   if (closingSpeed < 0) {
     const impulseStrength = -(1.05 * closingSpeed) / totalInvMass;
     a.velocity.addScaledVector(normal, -impulseStrength * boxA.invMass);
     b.velocity.addScaledVector(normal, impulseStrength * boxB.invMass);
   }
+  if (a.kind === "player" || b.kind === "player") playCollisionSound(impactSpeed, "car");
 
   const scrapeAxis = new THREE.Vector3(normal.z, 0, -normal.x);
   const scrapeSpeed = b.velocity.clone().sub(a.velocity).dot(scrapeAxis);
@@ -2276,6 +2328,15 @@ function updateCar(dt) {
   carState.rpm = getEngineRpm(forwardSpeed, throttle, carState.gear, profile);
   const hardBraking = false;
   updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking);
+  updateSurfaceAudio(dt, {
+    speedAbs,
+    brake,
+    handbrake,
+    lateralSpeed,
+    yawRate: carState.yawRate,
+    wheelSurface,
+    offTrackEnvironment,
+  });
   updateRearWing(dt, boostActive);
   updateCarLights(brake, boostActive, dt);
 
@@ -2316,6 +2377,7 @@ function resolveObstacleCollisions(speedAbs, dt) {
       spawnCollisionSmoke(contact, normal, impactSpeed);
       carState.collisionSmokeCooldown = 0.45;
     }
+    playCollisionSound(impactSpeed, obstacle.kind);
   }
 
   return collided;
@@ -2358,6 +2420,7 @@ function resolveWallCollision(wall, carRadius, speedAbs) {
     spawnCollisionSmoke(closest, normal, incomingSpeed);
     carState.collisionSmokeCooldown = 0.28;
   }
+  playCollisionSound(Math.max(incomingSpeed, speedAbs > 4 ? 7 : 0), "wall");
   registerTimeTrialWallContact();
   return true;
 }
@@ -4322,6 +4385,10 @@ function spawnCollisionSmoke(position, normal, speedAbs) {
 }
 
 function updateCamera(dt) {
+  if (isRaceGridIntroActive()) {
+    updateRaceGridIntroCamera(dt);
+    return;
+  }
   const profile = getCarProfile();
   const lookingBehind = gameStarted && !isMenuOpen() && !isPaused && pressed("KeyQ");
   scratchForward.set(Math.sin(carState.heading), 0, Math.cos(carState.heading));
@@ -4381,6 +4448,31 @@ function updateCamera(dt) {
     cameraPosition.lerp(desiredPosition, 1 - Math.exp(-dt * 5.2));
     cameraTarget.lerp(desiredTarget, 1 - Math.exp(-dt * 8.0));
   }
+  camera.position.copy(cameraPosition);
+  camera.lookAt(cameraTarget);
+}
+
+function updateRaceGridIntroCamera(dt) {
+  const polePose = getQuickRaceGridPose(1);
+  const rawProgress = THREE.MathUtils.clamp((raceCountdownState.introElapsed - 0.5) / 4.5, 0, 1);
+  const progress = THREE.MathUtils.smoothstep(rawProgress, 0, 1);
+  scratchForward.set(Math.sin(polePose.heading), 0, Math.cos(polePose.heading));
+  scratchRight.set(scratchForward.z, 0, -scratchForward.x);
+  const desiredPosition = polePose.position
+    .clone()
+    .addScaledVector(scratchForward, THREE.MathUtils.lerp(9.8, 8.4, progress))
+    .addScaledVector(scratchRight, THREE.MathUtils.lerp(-2.6, -5.8, progress))
+    .add(new THREE.Vector3(0, THREE.MathUtils.lerp(2.15, 5.4, progress), 0));
+  const gridTarget = polePose.position
+    .clone()
+    .addScaledVector(scratchForward, -8)
+    .add(new THREE.Vector3(0, 1.2, 0));
+  const playerTarget = carState.position
+    .clone()
+    .add(new THREE.Vector3(0, 1.35, 0));
+  const desiredTarget = gridTarget.lerp(playerTarget, progress * 0.72);
+  cameraPosition.lerp(desiredPosition, 1 - Math.exp(-dt * 6));
+  cameraTarget.lerp(desiredTarget, 1 - Math.exp(-dt * 7.5));
   camera.position.copy(cameraPosition);
   camera.lookAt(cameraTarget);
 }
@@ -8221,6 +8313,7 @@ function selectCar(carId) {
 }
 
 function selectCarCategory(category) {
+  if (isRaceModeCarCategoryRestricted() && !raceModeCarCategories.has(category)) return;
   const defaultCars = {
     formula: PROFILE_TEAM_CAR_IDS.formula,
     lmp: PROFILE_TEAM_CAR_IDS.lmp,
@@ -8239,6 +8332,21 @@ function selectCarCategory(category) {
   setMenuStep(category);
 }
 
+function isRaceModeCarCategoryRestricted() {
+  return selectedGameMode === "quick-race" || selectedGameMode === "online-host";
+}
+
+function updateCarCategoryAvailability() {
+  const restricted = isRaceModeCarCategoryRestricted();
+  for (const button of carCategoryButtons) {
+    const category = button.dataset.carCategory;
+    const unavailable = restricted && !raceModeCarCategories.has(category);
+    button.hidden = false;
+    button.disabled = unavailable;
+    button.classList.toggle("is-coming-soon", unavailable);
+  }
+}
+
 function startGameModeSelection(mode, backStep = "intro") {
   selectedGameMode = mode;
   selectedTimeTrialMode = "standard";
@@ -8249,6 +8357,7 @@ function startGameModeSelection(mode, backStep = "intro") {
   if (selectedGameMode !== "quick-race" && selectedGameMode !== "online-host") selectedAiOpponentCount = 0;
   else updateAiOpponentSelection();
   updateTimeTrialHud();
+  updateCarCategoryAvailability();
   setMenuStep("track");
 }
 
@@ -8764,17 +8873,18 @@ function updateOnlineRacePenalties(dt, wheelSurface) {
   onlineRoomState.localPenaltyMessageTime = Math.max(0, onlineRoomState.localPenaltyMessageTime - dt);
   if (onlineRoomState.localPenaltyCooldown > 0) return;
   if (wheelSurface?.grassCount === 4) {
-    addOnlineRacePenalty(3, "3 Second Penalty - Off Track");
+    addOnlineRacePenalty(3, "Off Track");
   } else if (wheelSurface?.frontGrassCount === 2 || wheelSurface?.rearGrassCount === 2) {
-    addOnlineRacePenalty(2, "2 Second Penalty - Track Limits");
+    addOnlineRacePenalty(2, "Track Limits");
   }
 }
 
 function addOnlineRacePenalty(seconds, reason) {
-  onlineRoomState.localPenaltyTime += seconds;
+  const scaledSeconds = getScaledRacePenaltySeconds(seconds);
+  onlineRoomState.localPenaltyTime += scaledSeconds;
   onlineRoomState.localPenaltyCooldown = 5;
   onlineRoomState.localPenaltyMessageTime = 5;
-  onlineRoomState.localPenaltyMessageText = `${getOnlineRacePositionLabel()} - Lap ${getOnlineRaceCurrentLap()}: ${reason}`;
+  onlineRoomState.localPenaltyMessageText = `${getOnlineRacePositionLabel()} - Lap ${getOnlineRaceCurrentLap()}: ${formatRacePenaltyNotice(scaledSeconds, reason)}`;
 }
 
 function getOnlineRacePositionLabel() {
@@ -8808,6 +8918,7 @@ function getOnlinePosePayload() {
     finishTime: onlineRoomState.localFinishTime,
     adjustedFinishTime: onlineRoomState.localFinishTime === null ? null : roundOnlinePoseNumber(onlineRoomState.localFinishTime + onlineRoomState.localPenaltyTime),
     boostActive: Boolean(carState.boostActive),
+    throttle: pressed("KeyW", "ArrowUp") ? 1 : 0,
     brake: pressed("KeyS", "ArrowDown") ? 1 : 0,
   };
 }
@@ -8850,6 +8961,7 @@ function receiveOnlinePlayerPose(payload = {}) {
   remote.target.steer = Number(payload.steer) || 0;
   remote.target.wheelSpin = Number(payload.wheelSpin) || remote.target.wheelSpin;
   remote.target.boostActive = Boolean(payload.boostActive);
+  remote.target.throttle = Number(payload.throttle) > 0.1 ? 1 : 0;
   remote.target.brake = Number(payload.brake) > 0.1;
   remote.car.root.visible = true;
 }
@@ -8874,6 +8986,7 @@ function createOnlineRemoteCar(payload = {}) {
       steer: 0,
       wheelSpin: 0,
       boostActive: false,
+      throttle: 0,
       brake: false,
     },
     lastSeen: performance.now(),
@@ -8966,6 +9079,7 @@ function resolveOnlineSoftRemoteCollisions(dt) {
     const yawKick = THREE.MathUtils.clamp(normal.x * Math.cos(carState.heading) - normal.z * Math.sin(carState.heading), -1, 1) * 0.08;
     carState.yawRate += yawKick * dt;
     spawnCollisionSmoke(carState.position, normal, Math.max(4, Math.abs(intoRemoteSpeed), impactSpeed));
+    playCollisionSound(Math.max(Math.abs(intoRemoteSpeed), impactSpeed), "car");
     sendOnlineCollisionNudge(playerId, normal, overlap.depth, impactSpeed, yawKick);
   }
   car.root.position.copy(carState.position);
@@ -9214,6 +9328,7 @@ function setMenuStep(step) {
     stepEl.classList.toggle("is-hidden", stepEl.dataset.menuStep !== menuStep);
   }
   if (menuStep === "how-to-play") renderHowToPlayTopic();
+  if (menuStep === "car-category") updateCarCategoryAvailability();
   if (menuStep === "driver-profile") updateDriverProfilePage();
   if (menuStep === "online-room") renderOnlineRoom();
   if (menuStep === "time-trial-setup") renderWeeklyTimeTrialCard();
@@ -10775,6 +10890,16 @@ function startEngineAudio() {
   const ersGain = context.createGain();
   const brakeGain = context.createGain();
   const master = context.createGain();
+  const opponentEngineMaster = context.createGain();
+  const tireNoise = createLoopingNoiseSource(context);
+  const surfaceNoise = createLoopingNoiseSource(context);
+  const kerbNoise = createLoopingNoiseSource(context);
+  const tireFilter = context.createBiquadFilter();
+  const surfaceFilter = context.createBiquadFilter();
+  const kerbFilter = context.createBiquadFilter();
+  const tireGain = context.createGain();
+  const surfaceGain = context.createGain();
+  const kerbGain = context.createGain();
   const shiftGain = context.createGain();
   const compressor = context.createDynamicsCompressor();
 
@@ -10783,6 +10908,14 @@ function startEngineAudio() {
   grumble.type = "sine";
   ers.type = "sawtooth";
   brake.type = "sawtooth";
+  tireFilter.type = "bandpass";
+  tireFilter.frequency.value = 950;
+  tireFilter.Q.value = 1.1;
+  surfaceFilter.type = "lowpass";
+  surfaceFilter.frequency.value = 650;
+  kerbFilter.type = "bandpass";
+  kerbFilter.frequency.value = 170;
+  kerbFilter.Q.value = 0.9;
   filter.type = "lowpass";
   filter.Q.value = 1.4;
   lowShelf.type = "lowshelf";
@@ -10793,6 +10926,10 @@ function startEngineAudio() {
   grumbleGain.gain.value = 0;
   ersGain.gain.value = 0;
   brakeGain.gain.value = 0;
+  opponentEngineMaster.gain.value = 0.42;
+  tireGain.gain.value = 0;
+  surfaceGain.gain.value = 0;
+  kerbGain.gain.value = 0;
   shiftGain.gain.value = 1;
   compressor.threshold.value = -18;
   compressor.knee.value = 18;
@@ -10811,6 +10948,16 @@ function startEngineAudio() {
   ersGain.connect(master);
   brake.connect(brakeGain);
   brakeGain.connect(master);
+  tireNoise.connect(tireFilter);
+  tireFilter.connect(tireGain);
+  tireGain.connect(master);
+  surfaceNoise.connect(surfaceFilter);
+  surfaceFilter.connect(surfaceGain);
+  surfaceGain.connect(master);
+  kerbNoise.connect(kerbFilter);
+  kerbFilter.connect(kerbGain);
+  kerbGain.connect(master);
+  opponentEngineMaster.connect(master);
   shiftGain.connect(master);
   master.connect(compressor);
   compressor.connect(context.destination);
@@ -10820,6 +10967,9 @@ function startEngineAudio() {
   grumble.start();
   ers.start();
   brake.start();
+  tireNoise.start();
+  surfaceNoise.start();
+  kerbNoise.start();
 
   audioState.context = context;
   audioState.engine = engine;
@@ -10832,6 +10982,16 @@ function startEngineAudio() {
   audioState.grumbleGain = grumbleGain;
   audioState.ersGain = ersGain;
   audioState.brakeGain = brakeGain;
+  audioState.opponentEngineMaster = opponentEngineMaster;
+  audioState.tireNoise = tireNoise;
+  audioState.surfaceNoise = surfaceNoise;
+  audioState.kerbNoise = kerbNoise;
+  audioState.tireGain = tireGain;
+  audioState.surfaceGain = surfaceGain;
+  audioState.kerbGain = kerbGain;
+  audioState.tireFilter = tireFilter;
+  audioState.surfaceFilter = surfaceFilter;
+  audioState.kerbFilter = kerbFilter;
   audioState.filter = filter;
   audioState.lowShelf = lowShelf;
   audioState.shiftGain = shiftGain;
@@ -10856,7 +11016,7 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
       audioState.ersElement.playbackRate = THREE.MathUtils.lerp(profile.kind === "corvette" ? 0.48 : 0.72, profile.kind === "corvette" ? 0.82 : 1.18, rpmRatio);
     }
     if (audioState.brakeElement) {
-      audioState.brakeElement.volume = THREE.MathUtils.damp(audioState.brakeElement.volume, hardBraking ? 0.24 : 0, hardBraking ? 10 : 4, dt);
+      audioState.brakeElement.volume = THREE.MathUtils.damp(audioState.brakeElement.volume, hardBraking ? 0.12 : 0, hardBraking ? 3.2 : 2.4, dt);
     }
     return;
   }
@@ -10889,9 +11049,9 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
   audioState.grumble.frequency.setTargetAtTime(Math.max(profile.kind === "formula" ? 34 : 28, v8Pulse * 0.55), now, 0.055);
   audioState.ers.frequency.setTargetAtTime(THREE.MathUtils.lerp(profile.kind === "corvette" ? 185 : 245, profile.kind === "corvette" ? 335 : 520, rpmRatio), now, 0.08);
   audioState.brake.frequency.setTargetAtTime(
-    hardBraking ? THREE.MathUtils.lerp(1400, 2600, rpmRatio) : THREE.MathUtils.lerp(92, 128, rpmRatio),
+    hardBraking ? THREE.MathUtils.lerp(460, 1080, rpmRatio) : THREE.MathUtils.lerp(74, 104, rpmRatio),
     now,
-    0.025,
+    hardBraking ? 0.13 : 0.18,
   );
   audioState.filter.frequency.setTargetAtTime(
     profile.kind === "jeep"
@@ -10940,9 +11100,9 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
     profile.kind === "corvette" ? (boostActive ? 0.55 : 0.65) : (boostActive ? 0.16 : 0.18),
   );
   audioState.brakeGain.gain.setTargetAtTime(
-    hardBraking ? 0.08 : jeepShiftCue ? 0.028 : 0.0001,
+    hardBraking ? 0.036 : jeepShiftCue ? 0.018 : 0.0001,
     now,
-    hardBraking ? 0.05 : 0.12,
+    hardBraking ? 0.18 : 0.26,
   );
 
   audioState.lastGear = carState.gear;
@@ -10950,6 +11110,288 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
   if (Math.abs(forwardSpeed) < 0.5 && !throttle) {
     audioState.engine.frequency.setTargetAtTime(82, now, 0.08);
   }
+}
+
+function createLoopingNoiseSource(context) {
+  const bufferSize = Math.floor(context.sampleRate * 1.2);
+  const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  let previous = 0;
+  for (let i = 0; i < bufferSize; i += 1) {
+    const white = Math.random() * 2 - 1;
+    previous = previous * 0.58 + white * 0.42;
+    data[i] = previous;
+  }
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  return source;
+}
+
+function updateSurfaceAudio(dt, state = {}) {
+  if (!audioState.context || audioState.element || !audioState.tireGain) return;
+  const now = audioState.context.currentTime;
+  if (!gameStarted || isPaused || isMenuOpen()) {
+    audioState.tireGain.gain.setTargetAtTime(0, now, 0.12);
+    audioState.surfaceGain.gain.setTargetAtTime(0, now, 0.12);
+    audioState.kerbGain.gain.setTargetAtTime(0, now, 0.12);
+    return;
+  }
+  const speed = state.speedAbs ?? 0;
+  const speedFactor = THREE.MathUtils.smoothstep(speed, 6, 52);
+  const brakeScrub = state.brake && speed > 16 ? THREE.MathUtils.smoothstep(speed, 16, 58) * 0.32 : 0;
+  const turnScrub = THREE.MathUtils.clamp(Math.abs(state.lateralSpeed ?? 0) / 12 + Math.abs(state.yawRate ?? 0) * 0.38, 0, 1);
+  const handbrakeScrub = state.handbrake ? 0.45 : 0;
+  const tireTarget = Math.min(0.065, (turnScrub * 0.0375 + brakeScrub * 0.09 + handbrakeScrub * 0.5) * speedFactor);
+  const wheelSurface = state.wheelSurface ?? {};
+  const offTrackRatio = wheelSurface.grassRatio ?? 0;
+  const surfaceTarget = Math.min(0.075, offTrackRatio * THREE.MathUtils.smoothstep(speed, 5, 38) * (state.offTrackEnvironment === "dirt" ? 0.09 : 0.0575));
+  const kerbRatio = Math.max(wheelSurface.kerbRatio ?? 0, wheelSurface.paintedKerbRatio ?? 0);
+  const sausageRatio = wheelSurface.sausageRatio ?? 0;
+  const kerbTarget = Math.min(0.09, (kerbRatio * 0.0525 + sausageRatio * 0.09) * THREE.MathUtils.smoothstep(speed, 5, 34));
+  audioState.tireFilter.frequency.setTargetAtTime(THREE.MathUtils.lerp(740, 1850, speedFactor), now, 0.08);
+  audioState.tireFilter.Q.setTargetAtTime(THREE.MathUtils.lerp(0.8, 2.1, turnScrub), now, 0.08);
+  audioState.surfaceFilter.frequency.setTargetAtTime(state.offTrackEnvironment === "tarmac" ? 980 : state.offTrackEnvironment === "dirt" ? 560 : 680, now, 0.12);
+  audioState.kerbFilter.frequency.setTargetAtTime(THREE.MathUtils.lerp(115, 340, THREE.MathUtils.clamp(speed / 44, 0, 1)), now, 0.05);
+  audioState.kerbFilter.Q.setTargetAtTime(THREE.MathUtils.lerp(0.7, 1.7, sausageRatio), now, 0.08);
+  audioState.tireGain.gain.setTargetAtTime(tireTarget, now, 0.075);
+  audioState.surfaceGain.gain.setTargetAtTime(surfaceTarget, now, 0.11);
+  audioState.kerbGain.gain.setTargetAtTime(kerbTarget, now, 0.045);
+}
+
+function ensureOpponentEngineVoices() {
+  if (!audioState.context || !audioState.opponentEngineMaster) return [];
+  if (audioState.opponentEngines.length) return audioState.opponentEngines;
+  for (let i = 0; i < 3; i += 1) {
+    const voice = createOpponentEngineVoice(audioState.context);
+    voice.output.connect(audioState.opponentEngineMaster);
+    audioState.opponentEngines.push(voice);
+  }
+  return audioState.opponentEngines;
+}
+
+function createOpponentEngineVoice(context) {
+  const engine = context.createOscillator();
+  const sub = context.createOscillator();
+  const filter = context.createBiquadFilter();
+  const engineGain = context.createGain();
+  const subGain = context.createGain();
+  const panner = context.createStereoPanner?.() ?? null;
+  const output = context.createGain();
+  engine.type = "sawtooth";
+  sub.type = "triangle";
+  filter.type = "lowpass";
+  filter.frequency.value = 900;
+  filter.Q.value = 0.7;
+  engineGain.gain.value = 0;
+  subGain.gain.value = 0;
+  output.gain.value = 0;
+  engine.connect(filter);
+  filter.connect(engineGain);
+  sub.connect(subGain);
+  engineGain.connect(panner ?? output);
+  subGain.connect(panner ?? output);
+  if (panner) panner.connect(output);
+  engine.start();
+  sub.start();
+  return {
+    engine,
+    sub,
+    filter,
+    engineGain,
+    subGain,
+    panner,
+    output,
+    assignedId: "",
+    lastFront: null,
+    passSwell: 0,
+  };
+}
+
+function updateOpponentEngineAudio(dt) {
+  if (audioState.element) return;
+  if (!gameStarted || isPaused || isMenuOpen() || !audioState.context || !audioState.opponentEngineMaster) {
+    fadeOpponentEngineVoices(dt);
+    return;
+  }
+  const candidates = getOpponentEngineCandidates();
+  const voices = ensureOpponentEngineVoices();
+  const now = audioState.context.currentTime;
+  for (let i = 0; i < voices.length; i += 1) {
+    const voice = voices[i];
+    const candidate = candidates[i];
+    if (!candidate) {
+      setOpponentEngineVoiceGain(voice, 0, now, dt);
+      voice.assignedId = "";
+      continue;
+    }
+    updateOpponentEngineVoice(voice, candidate, now, dt);
+  }
+}
+
+function fadeOpponentEngineVoices(dt) {
+  if (!audioState.opponentEngines?.length || !audioState.context) return;
+  const now = audioState.context.currentTime;
+  for (const voice of audioState.opponentEngines) setOpponentEngineVoiceGain(voice, 0, now, dt);
+}
+
+function getOpponentEngineCandidates() {
+  const candidates = [];
+  const forward = new THREE.Vector3(Math.sin(carState.heading), 0, Math.cos(carState.heading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  for (const opponent of aiOpponents) {
+    addOpponentEngineCandidate(candidates, {
+      id: opponent.id ?? `ai-${opponent.gridPosition ?? candidates.length}`,
+      position: opponent.position,
+      velocity: opponent.velocity,
+      speed: opponent.speed ?? opponent.velocity?.length?.() ?? 0,
+      throttle: opponent.throttle ?? 0,
+      profile: opponent.profile ?? getCarProfileById(opponent.carId),
+    }, forward, right);
+  }
+  for (const [playerId, remote] of onlineRoomState.remoteCars.entries()) {
+    if (!remote.car.root.visible) continue;
+    addOpponentEngineCandidate(candidates, {
+      id: `remote-${playerId}`,
+      position: remote.car.root.position,
+      velocity: remote.target.velocity,
+      speed: remote.target.velocity?.length?.() ?? 0,
+      throttle: remote.target.throttle ?? (remote.target.brake ? 0 : 0.45),
+      profile: getCarProfileById(remote.carId ?? selectedCar),
+    }, forward, right);
+  }
+  return candidates.sort((a, b) => a.score - b.score).slice(0, 3);
+}
+
+function addOpponentEngineCandidate(candidates, source, forward, right) {
+  const distance = source.position.distanceTo(carState.position);
+  if (distance > 86) return;
+  const offset = source.position.clone().sub(carState.position);
+  const side = THREE.MathUtils.clamp(offset.dot(right) / Math.max(distance, 1), -1, 1);
+  const front = THREE.MathUtils.clamp(offset.dot(forward) / Math.max(distance, 1), -1, 1);
+  const direction = offset.clone().multiplyScalar(1 / Math.max(distance, 0.001));
+  const relativeSpeed = Math.abs((source.velocity ?? scratchZeroVelocity).clone().sub(carState.velocity).dot(direction));
+  candidates.push({
+    ...source,
+    distance,
+    side,
+    front,
+    relativeSpeed,
+    score: distance - Math.max(0, front) * 8,
+  });
+}
+
+function updateOpponentEngineVoice(voice, candidate, now, dt) {
+  const { profile, distance, side, front, relativeSpeed } = candidate;
+  const speedRatio = THREE.MathUtils.clamp((candidate.speed ?? 0) / Math.max(profile.maxForwardSpeed ?? 1, 1), 0, 1.15);
+  const throttle = THREE.MathUtils.clamp(candidate.throttle ?? 0, 0, 1);
+  const classTone = getOpponentEngineTone(profile.kind);
+  const doppler = THREE.MathUtils.clamp(1 + getOpponentClosingSpeed(candidate) * 0.0024, 0.92, 1.08);
+  if (voice.engine.type !== classTone.wave) voice.engine.type = classTone.wave;
+  if (voice.sub.type !== classTone.subWave) voice.sub.type = classTone.subWave;
+  const isNewAssignment = voice.assignedId !== candidate.id;
+  if (isNewAssignment) {
+    voice.lastFront = front;
+    voice.passSwell = 0;
+  }
+  voice.assignedId = candidate.id;
+  const crossedClose = voice.lastFront !== null && Math.sign(voice.lastFront) !== Math.sign(front) && distance < 18 && relativeSpeed > 10;
+  const alongsideFast = distance < 10 && Math.abs(side) > 0.42 && Math.abs(front) < 0.58 && relativeSpeed > 6;
+  if (crossedClose || alongsideFast) voice.passSwell = Math.max(voice.passSwell ?? 0, crossedClose ? 1 : 0.55);
+  voice.lastFront = front;
+  voice.passSwell = Math.max(0, (voice.passSwell ?? 0) - dt * 1.85);
+  const passSwell = voice.passSwell ?? 0;
+  const baseFrequency = THREE.MathUtils.lerp(classTone.low, classTone.high, speedRatio) * doppler * (1 + passSwell * 0.035);
+  const distanceGain = Math.pow(THREE.MathUtils.clamp(1 - distance / 86, 0, 1), 1.55);
+  const frontGain = THREE.MathUtils.lerp(0.58, 1.08, (front + 1) * 0.5);
+  const throttleGain = THREE.MathUtils.lerp(0.38, 1, throttle);
+  const sideBySideBoost = distance < 12 && Math.abs(side) > 0.38 && Math.abs(front) < 0.65
+    ? THREE.MathUtils.lerp(1, 1.32, THREE.MathUtils.clamp((12 - distance) / 8, 0, 1))
+    : 1;
+  const startBoost = getCurrentRaceElapsed() < 7 ? 1.16 : 1;
+  const passBoost = 1 + passSwell * 0.45;
+  const behindSoftening = front < -0.35 ? 0.72 : 1;
+  const targetGain = Math.min(0.115, classTone.gain * distanceGain * frontGain * throttleGain * sideBySideBoost * startBoost * passBoost * behindSoftening);
+  voice.engine.frequency.setTargetAtTime(baseFrequency, now, 0.055);
+  voice.sub.frequency.setTargetAtTime(baseFrequency * classTone.subRatio, now, 0.07);
+  voice.filter.Q.setTargetAtTime(classTone.q + passSwell * 0.45, now, 0.08);
+  voice.filter.frequency.setTargetAtTime(THREE.MathUtils.lerp(classTone.filterLow, classTone.filterHigh, speedRatio) * (1 + passSwell * 0.22), now, 0.08);
+  voice.engineGain.gain.setTargetAtTime(targetGain * classTone.engineMix, now, 0.075);
+  voice.subGain.gain.setTargetAtTime(targetGain * classTone.subMix, now, 0.09);
+  setOpponentEngineVoiceGain(voice, 1, now, dt);
+  voice.panner?.pan.setTargetAtTime(THREE.MathUtils.clamp(side * 0.88, -0.88, 0.88), now, 0.08);
+}
+
+function setOpponentEngineVoiceGain(voice, gain, now, dt) {
+  voice.output.gain.setTargetAtTime(gain, now, gain > 0 ? 0.09 : Math.max(0.08, dt * 2));
+  if (gain <= 0) {
+    voice.engineGain.gain.setTargetAtTime(0, now, 0.12);
+    voice.subGain.gain.setTargetAtTime(0, now, 0.12);
+  }
+}
+
+function getOpponentEngineTone(kind = "formula") {
+  if (kind === "stock") return { low: 42, high: 182, subRatio: 0.46, filterLow: 310, filterHigh: 1150, gain: 0.14, engineMix: 0.6, subMix: 0.82, q: 0.58, wave: "triangle", subWave: "sine" };
+  if (kind === "lmp") return { low: 66, high: 285, subRatio: 0.55, filterLow: 560, filterHigh: 2050, gain: 0.116, engineMix: 0.84, subMix: 0.38, q: 0.82, wave: "sawtooth", subWave: "triangle" };
+  if (kind === "corvette") return { low: 52, high: 250, subRatio: 0.47, filterLow: 390, filterHigh: 1500, gain: 0.12, engineMix: 0.64, subMix: 0.72, q: 0.62, wave: "triangle", subWave: "sine" };
+  if (kind === "jeep") return { low: 34, high: 142, subRatio: 0.44, filterLow: 250, filterHigh: 820, gain: 0.104, engineMix: 0.55, subMix: 0.86, q: 0.5, wave: "triangle", subWave: "sine" };
+  return { low: 92, high: 435, subRatio: 0.48, filterLow: 760, filterHigh: 3150, gain: 0.096, engineMix: 0.94, subMix: 0.24, q: 1.05, wave: "sawtooth", subWave: "triangle" };
+}
+
+function getOpponentClosingSpeed(opponent) {
+  const toOpponent = opponent.position.clone().sub(carState.position);
+  const distance = Math.max(toOpponent.length(), 0.001);
+  toOpponent.multiplyScalar(1 / distance);
+  const relativeVelocity = (opponent.velocity ?? scratchZeroVelocity).clone().sub(carState.velocity);
+  return -relativeVelocity.dot(toOpponent);
+}
+
+function playCollisionSound(impactSpeed = 0, kind = "car") {
+  if (!audioState.context || audioState.element || isPaused || isMenuOpen()) return;
+  if ((audioState.collisionCooldown ?? 0) > 0 && impactSpeed < 18) return;
+  const now = audioState.context.currentTime;
+  const strength = THREE.MathUtils.clamp((impactSpeed - 2) / 32, 0, 1);
+  if (strength <= 0.02) return;
+  audioState.collisionCooldown = THREE.MathUtils.lerp(0.18, 0.07, strength);
+  const thud = audioState.context.createOscillator();
+  const scrape = createOneShotNoise(audioState.context, 0.16);
+  const thudGain = audioState.context.createGain();
+  const scrapeGain = audioState.context.createGain();
+  const scrapeFilter = audioState.context.createBiquadFilter();
+  thud.type = kind === "wall" ? "triangle" : "sine";
+  thud.frequency.setValueAtTime(kind === "wall" ? 72 : kind === "car" ? 92 : 58, now);
+  thud.frequency.exponentialRampToValueAtTime(kind === "wall" ? 34 : 42, now + 0.13);
+  scrapeFilter.type = kind === "car" ? "bandpass" : "lowpass";
+  scrapeFilter.frequency.setValueAtTime(kind === "car" ? 520 : kind === "wall" ? 290 : 220, now);
+  scrapeFilter.Q.value = kind === "car" ? 1.2 : 0.65;
+  thudGain.gain.setValueAtTime(0.001, now);
+  thudGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.1575, 1.08, strength), now + 0.012);
+  thudGain.gain.exponentialRampToValueAtTime(0.001, now + THREE.MathUtils.lerp(0.1, 0.24, strength));
+  scrapeGain.gain.setValueAtTime(0.001, now);
+  scrapeGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.099, 0.72, strength), now + 0.01);
+  scrapeGain.gain.exponentialRampToValueAtTime(0.001, now + THREE.MathUtils.lerp(0.07, 0.18, strength));
+  thud.connect(thudGain);
+  scrape.connect(scrapeFilter);
+  scrapeFilter.connect(scrapeGain);
+  thudGain.connect(audioState.context.destination);
+  scrapeGain.connect(audioState.context.destination);
+  thud.start(now);
+  scrape.start(now);
+  thud.stop(now + 0.28);
+  scrape.stop(now + 0.2);
+}
+
+function createOneShotNoise(context, seconds = 0.15) {
+  const bufferSize = Math.max(1, Math.floor(context.sampleRate * seconds));
+  const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i += 1) {
+    const envelope = 1 - i / bufferSize;
+    data[i] = (Math.random() * 2 - 1) * envelope;
+  }
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  return source;
 }
 
 function forceAudioProbe() {
@@ -11108,26 +11550,42 @@ function moveToward(value, target, amount) {
 }
 
 function startRaceCountdown() {
-  raceCountdownState.active = selectedGameMode === "quick-race" || isOnlineRaceGameMode();
+  const raceMode = selectedGameMode === "quick-race" || isOnlineRaceGameMode();
+  raceCountdownState.introActive = raceMode;
+  raceCountdownState.introElapsed = 0;
+  raceCountdownState.active = false;
   raceCountdownState.elapsed = 0;
   raceCountdownState.hideTime = 0;
   raceCountdownState.lastCue = "";
-  if (!raceCountdownEl) return;
-  if (!raceCountdownState.active) {
-    raceCountdownEl.hidden = true;
+  if (raceCountdownEl) raceCountdownEl.hidden = true;
+  if (!raceMode) {
+    hideRaceGridIntro();
     return;
   }
-  showRaceCountdownCue("3");
+  showRaceGridIntro();
 }
 
 function updateRaceCountdown(dt) {
   if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !gameStarted || isMenuOpen()) {
     if (raceCountdownEl) raceCountdownEl.hidden = true;
+    hideRaceGridIntro();
+    raceCountdownState.introActive = false;
     raceCountdownState.active = false;
     raceCountdownState.hideTime = 0;
     return false;
   }
   if (isPaused) return raceCountdownState.active;
+
+  if (raceCountdownState.introActive) {
+    raceCountdownState.introElapsed += dt;
+    if (raceCountdownState.introElapsed < 5) return true;
+    raceCountdownState.introActive = false;
+    raceCountdownState.active = true;
+    raceCountdownState.elapsed = 0;
+    hideRaceGridIntro();
+    showRaceCountdownCue("3");
+    return true;
+  }
 
   if (raceCountdownState.active) {
     raceCountdownState.elapsed += dt;
@@ -11146,6 +11604,31 @@ function updateRaceCountdown(dt) {
     if (raceCountdownState.hideTime === 0 && raceCountdownEl) raceCountdownEl.hidden = true;
   }
   return false;
+}
+
+function isRaceGridIntroActive() {
+  return raceCountdownState.introActive && gameStarted && !isMenuOpen() && !isPaused;
+}
+
+function showRaceGridIntro() {
+  if (!raceGridIntroEl) return;
+  const laps = isOnlineRaceGameMode() ? getOnlineRaceLapCount() : selectedQuickRaceLapCount;
+  const position = selectedGameMode === "quick-race"
+    ? selectedGridPosition
+    : getOnlineGridPositionForPlayer();
+  raceGridIntroEl.hidden = false;
+  raceGridIntroEl.classList.remove("is-ready");
+  void raceGridIntroEl.offsetWidth;
+  raceGridIntroEl.classList.add("is-ready");
+  if (raceGridIntroModeEl) raceGridIntroModeEl.textContent = isOnlineRaceGameMode() ? "Online Race" : "Quick Race";
+  if (raceGridIntroTrackEl) raceGridIntroTrackEl.textContent = getSelectedTrackLabel();
+  if (raceGridIntroClassEl) raceGridIntroClassEl.textContent = getCarClassLabel(getCarProfile().kind);
+  if (raceGridIntroLapsEl) raceGridIntroLapsEl.textContent = `${laps} ${laps === 1 ? "Lap" : "Laps"}`;
+  if (raceGridIntroPositionEl) raceGridIntroPositionEl.textContent = `Starting ${formatOrdinal(position)}`;
+}
+
+function hideRaceGridIntro() {
+  if (raceGridIntroEl) raceGridIntroEl.hidden = true;
 }
 
 function showRaceCountdownCue(label) {
@@ -11570,16 +12053,17 @@ function updateQuickRacePenalties(dt, wheelSurface) {
   }
   if (quickRaceState.penaltyCooldown > 0 || quickRaceState.servingPenaltyTime > 0) return;
   if (wheelSurface?.grassCount === 4) {
-    addQuickRacePenalty(3, "3 Second Penalty - Off Track");
+    addQuickRacePenalty(3, "Off Track");
   } else if (wheelSurface?.frontGrassCount === 2 || wheelSurface?.rearGrassCount === 2) {
-    addQuickRacePenalty(2, "2 Second Penalty - Track Limits");
+    addQuickRacePenalty(2, "Track Limits");
   }
 }
 
 function addQuickRacePenalty(seconds, reason) {
-  quickRaceState.pendingPenaltyTime += seconds;
+  const scaledSeconds = getScaledRacePenaltySeconds(seconds);
+  quickRaceState.pendingPenaltyTime += scaledSeconds;
   quickRaceState.penaltyCooldown = 5;
-  showQuickRacePenaltyMessage(getQuickRacePenaltyNotice(reason), 5, false);
+  showQuickRacePenaltyMessage(getQuickRacePenaltyNotice(formatRacePenaltyNotice(scaledSeconds, reason)), 5, false);
 }
 
 function startQuickRacePenaltyService() {
@@ -11621,6 +12105,16 @@ function getQuickRacePenaltyNotice(reason) {
     ? Math.min(selectedQuickRaceLapCount, playerEntry.completedLaps + 1)
     : 1;
   return `${quickRaceState.playerPosition} / ${quickRaceState.entries.length} - Lap ${lap}: ${reason}`;
+}
+
+function getScaledRacePenaltySeconds(seconds) {
+  return Math.max(0, seconds * (getAiDifficultySetting().penaltyScale ?? 1));
+}
+
+function formatRacePenaltyNotice(seconds, reason) {
+  const value = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  const unit = Math.abs(seconds - 1) < 0.001 ? "Second" : "Seconds";
+  return `${value} ${unit} Penalty - ${reason}`;
 }
 
 function isQuickRacePenaltyServing() {
