@@ -9,6 +9,7 @@
   <body>
     <canvas id="game"></canvas>
     <main id="start-menu" class="start-menu">
+      <button id="settings-button" class="driver-profile-button settings-button" type="button">Settings</button>
       <button id="how-to-play-button" class="driver-profile-button how-to-play-button" type="button">How to Play</button>
       <button id="driver-profile-button" class="driver-profile-button" type="button">Driver Profile</button>
       <section class="menu-shell">
@@ -26,6 +27,91 @@
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
               <button id="go-online-game" class="start-button go-online-button" type="button">Go Online</button>
             </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="settings">
+            <button class="profile-main-menu-button" type="button" data-menu-back="intro">Main Menu</button>
+            <section class="settings-layout" aria-label="Settings">
+              <section class="settings-section">
+                <h2>Graphics</h2>
+                <label class="settings-row">
+                  <span>Quality</span>
+                  <select id="settings-graphics-quality">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+              </section>
+              <section class="settings-section">
+                <h2>Race Defaults</h2>
+                <label class="settings-row">
+                  <span>AI Difficulty</span>
+                  <select id="settings-default-ai-difficulty">
+                    <option value="greg">Greg</option>
+                    <option value="beginner">Beginner</option>
+                    <option value="standard">Standard</option>
+                    <option value="amateur">Amateur</option>
+                    <option value="professional">Professional</option>
+                  </select>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Opponents</span>
+                  <input id="settings-default-opponents" type="range" min="1" max="10" step="1" />
+                  <strong id="settings-default-opponents-readout">4</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Laps</span>
+                  <input id="settings-default-laps" type="range" min="1" max="10" step="1" />
+                  <strong id="settings-default-laps-readout">3</strong>
+                </label>
+                <label class="settings-row">
+                  <span>Camera</span>
+                  <select id="settings-default-camera">
+                    <option value="chase">Chase</option>
+                    <option value="cockpit">Hood</option>
+                  </select>
+                </label>
+              </section>
+              <section class="settings-section">
+                <h2>Audio</h2>
+                <label class="settings-row settings-slider">
+                  <span>Player Engine</span>
+                  <input id="settings-player-engine-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-player-engine-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Opponent Engines</span>
+                  <input id="settings-opponent-engine-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-opponent-engine-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Wheels & Surface</span>
+                  <input id="settings-wheel-surface-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-wheel-surface-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Collisions</span>
+                  <input id="settings-collision-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-collision-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Crowd</span>
+                  <input id="settings-crowd-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-crowd-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Nature</span>
+                  <input id="settings-nature-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-nature-volume-readout">100%</strong>
+                </label>
+                <label class="settings-row settings-slider">
+                  <span>Music</span>
+                  <input id="settings-music-volume" type="range" min="0" max="110" step="5" />
+                  <strong id="settings-music-volume-readout">100%</strong>
+                </label>
+              </section>
+            </section>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="how-to-play">

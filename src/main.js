@@ -51,6 +51,28 @@ const onlineAiDifficultySelect = document.querySelector("#online-ai-difficulty-s
 const onlineRoomReadyButton = document.querySelector("#online-room-ready");
 const onlineRoomStartDriveButton = document.querySelector("#online-room-start-drive");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
+const settingsButton = document.querySelector("#settings-button");
+const graphicsQualitySelect = document.querySelector("#settings-graphics-quality");
+const defaultAiDifficultySelect = document.querySelector("#settings-default-ai-difficulty");
+const defaultOpponentsSlider = document.querySelector("#settings-default-opponents");
+const defaultOpponentsReadout = document.querySelector("#settings-default-opponents-readout");
+const defaultRaceLapsSlider = document.querySelector("#settings-default-laps");
+const defaultRaceLapsReadout = document.querySelector("#settings-default-laps-readout");
+const defaultCameraSelect = document.querySelector("#settings-default-camera");
+const playerEngineVolumeSlider = document.querySelector("#settings-player-engine-volume");
+const playerEngineVolumeReadout = document.querySelector("#settings-player-engine-volume-readout");
+const opponentEngineVolumeSlider = document.querySelector("#settings-opponent-engine-volume");
+const opponentEngineVolumeReadout = document.querySelector("#settings-opponent-engine-volume-readout");
+const wheelSurfaceVolumeSlider = document.querySelector("#settings-wheel-surface-volume");
+const wheelSurfaceVolumeReadout = document.querySelector("#settings-wheel-surface-volume-readout");
+const collisionVolumeSlider = document.querySelector("#settings-collision-volume");
+const collisionVolumeReadout = document.querySelector("#settings-collision-volume-readout");
+const crowdVolumeSlider = document.querySelector("#settings-crowd-volume");
+const crowdVolumeReadout = document.querySelector("#settings-crowd-volume-readout");
+const natureVolumeSlider = document.querySelector("#settings-nature-volume");
+const natureVolumeReadout = document.querySelector("#settings-nature-volume-readout");
+const musicVolumeSlider = document.querySelector("#settings-music-volume");
+const musicVolumeReadout = document.querySelector("#settings-music-volume-readout");
 const howToPlayButton = document.querySelector("#how-to-play-button");
 const howToPlayTopicButtons = [...document.querySelectorAll("[data-how-to-play-topic]")];
 const howToPlayTitleEl = document.querySelector("#how-to-play-title");
@@ -187,22 +209,141 @@ const aiDebugStatusEl = document.querySelector("#ai-debug-status");
 const aiDebugDetailEl = document.querySelector("#ai-debug-detail");
 const audioBasePath = `${import.meta.env.BASE_URL}audio/`;
 const MENU_THEME_SRC = `${audioBasePath}the-paddock-theme.mp3`;
+const CROWD_CHEER_SRC = `${audioBasePath}vishiv-crowd-cheering-in-stadium-435357.mp3`;
+const NATURE_AMBIENCE_SRCS = {
+  day: `${audioBasePath}freesound_community-butcher-bird-singing-16757.mp3`,
+  sunset: `${audioBasePath}freesound_community-birds-chirping-75156.mp3`,
+  night: `${audioBasePath}eryliaa-birds-crickets-and-crow-in-nature-ambience-432030.mp3`,
+};
+const RACE_INTRO_MUSIC_SRCS = {
+  day: `${audioBasePath}dariocoiro-intro-530690.mp3`,
+  sunset: `${audioBasePath}dariocoiro-intro-530690.mp3`,
+  night: `${audioBasePath}dariocoiro-podcast-intro-530686.mp3`,
+};
 const EDITOR_MUSIC_SRCS = [`${audioBasePath}track-editor-1.mp3`, `${audioBasePath}track-editor-2.mp3`];
 const TIME_TRIAL_RECORDS_KEY = "the-paddock:time-trial-records:v1";
 const SUPABASE_URL = "https://dvckkaqlbyphlxyogbif.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gADFEoFX4NeCNuUqPKtX3w_3r-JpBEH";
 const SUPABASE_TIME_TRIAL_RECORDS_URL = `${SUPABASE_URL}/rest/v1/time_trial_records`;
 const SUPABASE_REALTIME_URL = `${SUPABASE_URL.replace("https://", "wss://")}/realtime/v1/websocket?apikey=${SUPABASE_PUBLISHABLE_KEY}&vsn=1.0.0`;
+const GAME_SETTINGS_KEY = "the-paddock:settings:v1";
+
+function getDefaultGameSettings() {
+  return {
+    graphicsQuality: "medium",
+    defaultAiDifficulty: "standard",
+    defaultOpponents: 4,
+    defaultRaceLaps: 3,
+    defaultCamera: "chase",
+    playerEngineVolume: 100,
+    opponentEngineVolume: 100,
+    wheelSurfaceVolume: 100,
+    collisionVolume: 100,
+    crowdVolume: 100,
+    natureVolume: 100,
+    musicVolume: 100,
+  };
+}
+
+function normalizeGameSettings(settings = {}) {
+  const defaults = getDefaultGameSettings();
+  const normalized = { ...defaults, ...(settings ?? {}) };
+  normalized.graphicsQuality = ["low", "medium", "high"].includes(normalized.graphicsQuality) ? normalized.graphicsQuality : defaults.graphicsQuality;
+  normalized.defaultAiDifficulty = ["greg", "beginner", "standard", "amateur", "professional"].includes(normalized.defaultAiDifficulty) ? normalized.defaultAiDifficulty : defaults.defaultAiDifficulty;
+  normalized.defaultOpponents = THREE.MathUtils.clamp(Math.round(Number(normalized.defaultOpponents) || defaults.defaultOpponents), 1, 10);
+  normalized.defaultRaceLaps = THREE.MathUtils.clamp(Math.round(Number(normalized.defaultRaceLaps) || defaults.defaultRaceLaps), 1, 10);
+  normalized.defaultCamera = normalized.defaultCamera === "cockpit" ? "cockpit" : "chase";
+  for (const key of ["playerEngineVolume", "opponentEngineVolume", "wheelSurfaceVolume", "collisionVolume", "crowdVolume", "natureVolume", "musicVolume"]) {
+    normalized[key] = THREE.MathUtils.clamp(Math.round(Number(normalized[key]) || 0), 0, 110);
+  }
+  return normalized;
+}
+
+function loadGameSettings() {
+  try {
+    return normalizeGameSettings(JSON.parse(window.localStorage?.getItem(GAME_SETTINGS_KEY) ?? "null"));
+  } catch {
+    return getDefaultGameSettings();
+  }
+}
+
+let gameSettings = loadGameSettings();
+
+function saveGameSettings() {
+  try {
+    window.localStorage?.setItem(GAME_SETTINGS_KEY, JSON.stringify(gameSettings));
+  } catch {
+    // Settings still apply for the current session if storage is blocked.
+  }
+}
+
+function getGraphicsPixelRatio() {
+  const deviceRatio = window.devicePixelRatio || 1;
+  if (gameSettings.graphicsQuality === "low") return Math.min(deviceRatio, 0.85);
+  if (gameSettings.graphicsQuality === "high") return Math.min(deviceRatio, 2);
+  return Math.min(deviceRatio, 1.25);
+}
+
+function settingVolume(key) {
+  return THREE.MathUtils.clamp((gameSettings?.[key] ?? 100) / 100, 0, 1.1);
+}
+
+function getSceneryVisibilityMultiplier() {
+  if (gameSettings.graphicsQuality === "low") return 0.58;
+  if (gameSettings.graphicsQuality === "high") return 1.24;
+  return 1;
+}
+
+function getSceneryLightVisibilityMultiplier(role = "ambient") {
+  if (gameSettings.graphicsQuality === "low") return role === "lamp" ? 0.5 : 0.55;
+  if (gameSettings.graphicsQuality === "high") return role === "lamp" ? 2 : 1.22;
+  return 1;
+}
+
+function getEffectsDensityMultiplier() {
+  if (gameSettings.graphicsQuality === "low") return 0.48;
+  if (gameSettings.graphicsQuality === "high") return 1.12;
+  return 1;
+}
+
+function getCrashSparkDensityMultiplier() {
+  if (gameSettings.graphicsQuality === "low") return 0;
+  if (gameSettings.graphicsQuality === "medium") return 0.55;
+  return getEffectsDensityMultiplier();
+}
+
+function shouldUseOpponentHeadlightBeams() {
+  return gameSettings.graphicsQuality === "high" && shouldDefaultHeadlightsOn();
+}
+
+function getOpponentHeadlightMaxDistance() {
+  return 95;
+}
+
+function shouldShowOpponentHeadlightsAt(position) {
+  if (!shouldUseOpponentHeadlightBeams() || !position) return false;
+  return position.distanceToSquared(carState.position) <= getOpponentHeadlightMaxDistance() ** 2;
+}
+
+function getActiveAiHeadlightOpponents() {
+  if (!shouldUseOpponentHeadlightBeams() || !aiOpponents.length) return new Set();
+  return new Set(
+    aiOpponents
+      .filter((opponent) => shouldShowOpponentHeadlightsAt(opponent.position))
+      .sort((a, b) => a.position.distanceToSquared(carState.position) - b.position.distanceToSquared(carState.position))
+      .slice(0, MAX_ACTIVE_AI_HEADLIGHT_BEAMS),
+  );
+}
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(getGraphicsPixelRatio());
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const previewRenderer = new THREE.WebGLRenderer({ canvas: menuPreviewCanvas, antialias: true, alpha: true });
-previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-previewRenderer.shadowMap.enabled = true;
+previewRenderer.setPixelRatio(getGraphicsPixelRatio());
+previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
 previewRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const previewScene = new THREE.Scene();
@@ -388,17 +529,56 @@ function addSoftLightBand(parent, count, spacing, y, z, color, intensity, distan
   }
 }
 
-function registerSceneryLight(light, maxDistance = 125) {
-  light.userData.maxDistanceSq = maxDistance * maxDistance;
+function registerSceneryLight(light, maxDistance = 125, role = "ambient") {
+  light.userData.baseMaxDistance = maxDistance;
+  light.userData.lightRole = role;
   sceneryLights.push(light);
   return light;
 }
 
 function registerSceneryCullable(object, maxDistance = 520) {
-  object.userData.visibleDistanceSq = maxDistance * maxDistance;
-  object.userData.hiddenDistanceSq = (maxDistance * 1.16) ** 2;
+  object.userData.baseVisibleDistance = maxDistance;
+  object.userData.baseHiddenDistance = maxDistance * 1.16;
   sceneryCullables.push(object);
   return object;
+}
+
+function registerCrowdEmitter(object, { radius = 118, strength = 1 } = {}) {
+  crowdEmitters.push({ object, radius, strength });
+  return object;
+}
+
+function registerTreeAudioSource(x, z, type = "trees", weight = 1) {
+  treeAudioSources.push({ position: new THREE.Vector3(x, 0, z), type, weight });
+}
+
+function rebuildNatureEmitters() {
+  natureEmitters.length = 0;
+  const unused = new Set(treeAudioSources.map((_, index) => index));
+  for (let seedIndex = 0; seedIndex < treeAudioSources.length; seedIndex += 1) {
+    if (!unused.has(seedIndex)) continue;
+    const seed = treeAudioSources[seedIndex];
+    const clusterIndexes = [seedIndex];
+    unused.delete(seedIndex);
+    for (const candidateIndex of [...unused]) {
+      const candidate = treeAudioSources[candidateIndex];
+      if (candidate.position.distanceTo(seed.position) <= 48) {
+        clusterIndexes.push(candidateIndex);
+        unused.delete(candidateIndex);
+      }
+    }
+    const totalWeight = clusterIndexes.reduce((sum, index) => sum + (treeAudioSources[index].weight ?? 1), 0);
+    if (clusterIndexes.length < 3 && totalWeight < 3.2) continue;
+    if (Math.random() > 0.5) continue;
+    const center = new THREE.Vector3();
+    for (const index of clusterIndexes) center.addScaledVector(treeAudioSources[index].position, treeAudioSources[index].weight ?? 1);
+    center.multiplyScalar(1 / Math.max(totalWeight, 0.001));
+    natureEmitters.push({
+      position: center,
+      radius: THREE.MathUtils.clamp(92 + totalWeight * 8, 105, 155),
+      strength: THREE.MathUtils.clamp(totalWeight / 5, 0.6, 1.45),
+    });
+  }
 }
 
 let lampGroundGlowMaterial = null;
@@ -516,10 +696,10 @@ let gameStarted = false;
 let isPaused = false;
 let menuStep = "intro";
 let selectedGameMode = "drive";
-let selectedAiOpponentCount = 4;
-let selectedGridPosition = 5;
-let selectedQuickRaceLapCount = 3;
-let selectedAiDifficulty = "standard";
+let selectedAiOpponentCount = gameSettings.defaultOpponents;
+let selectedGridPosition = gameSettings.defaultOpponents + 1;
+let selectedQuickRaceLapCount = gameSettings.defaultRaceLaps;
+let selectedAiDifficulty = gameSettings.defaultAiDifficulty;
 let quickRacePaintStep = "formula";
 let timeTrialPaintStep = "stock";
 let selectedTimeTrialMode = "standard";
@@ -530,7 +710,7 @@ let selectedHowToPlayTopic = "quick-start";
 let selectedCar = "ferraro";
 let selectedTrack = "katara-speedway";
 let driverProfile = loadDriverProfile();
-let cameraMode = "chase";
+let cameraMode = gameSettings.defaultCamera;
 let editorTool = "select";
 let selectedEditorNode = 0;
 let selectedEditorSegment = 0;
@@ -895,6 +1075,9 @@ const TRACK_VERSION_BY_ID = {
 };
 const sceneryLights = [];
 const sceneryCullables = [];
+const crowdEmitters = [];
+const treeAudioSources = [];
+const natureEmitters = [];
 const chaseCamera = {
   dragging: false,
   lastX: 0,
@@ -1003,6 +1186,19 @@ onlineAiOpponentSlider?.addEventListener("input", updateOnlineAiOpponentSelectio
 onlineRaceLapSlider?.addEventListener("input", updateOnlineRaceLapSelection);
 onlineAiDifficultySelect?.addEventListener("change", updateOnlineAiDifficultySelection);
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
+settingsButton?.addEventListener("click", () => setMenuStep("settings"));
+graphicsQualitySelect?.addEventListener("change", updateGameSettingsFromInputs);
+defaultAiDifficultySelect?.addEventListener("change", updateGameSettingsFromInputs);
+defaultOpponentsSlider?.addEventListener("input", updateGameSettingsFromInputs);
+defaultRaceLapsSlider?.addEventListener("input", updateGameSettingsFromInputs);
+defaultCameraSelect?.addEventListener("change", updateGameSettingsFromInputs);
+playerEngineVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+opponentEngineVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+wheelSurfaceVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+collisionVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+crowdVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+natureVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
+musicVolumeSlider?.addEventListener("input", updateGameSettingsFromInputs);
 howToPlayButton?.addEventListener("click", () => setMenuStep("how-to-play"));
 for (const button of howToPlayTopicButtons) {
   button.addEventListener("click", () => selectHowToPlayTopic(button.dataset.howToPlayTopic));
@@ -1660,6 +1856,13 @@ const audioState = {
   tireFilter: null,
   surfaceFilter: null,
   kerbFilter: null,
+  crowdBuffer: null,
+  crowdLoading: false,
+  crowdVoices: [],
+  natureBuffers: {},
+  natureLoading: {},
+  natureVoices: [],
+  natureVoiceTimeOfDay: "",
   collisionCooldown: 0,
 };
 
@@ -1670,6 +1873,10 @@ const editorAudio = {
   element: null,
   playlist: [],
   index: 0,
+};
+const raceIntroAudio = {
+  element: null,
+  timeOfDay: "",
 };
 startMenuMusic();
 
@@ -1750,10 +1957,13 @@ const SHOW_AI_RACING_LINE_DEBUG = false;
 const AI_LAUNCH_LANE_LOCK_SECONDS = 3;
 const AI_LAUNCH_LANE_MERGE_SECONDS = 7;
 const AI_START_PACK_CAUTION_SECONDS = 12;
+const RACE_GRID_INTRO_SECONDS = 6;
+const MAX_ACTIVE_AI_HEADLIGHT_BEAMS = 4;
 const SLIPSTREAM_MIN_SPEED = 20;
 const SLIPSTREAM_START_DISTANCE = 0;
 const SLIPSTREAM_PEAK_DISTANCE = 35;
 const SLIPSTREAM_END_DISTANCE = 50;
+const CAR_VISUAL_RIDE_HEIGHT = 0.11;
 scene.add(dirtGroup);
 initDirtParticles();
 initCollisionSmokeParticles();
@@ -1790,6 +2000,8 @@ function update() {
   updateSceneryVisibility();
   updateSceneryLights();
   audioState.collisionCooldown = Math.max(0, (audioState.collisionCooldown ?? 0) - dt);
+  updateCrowdAudio(dt);
+  updateNatureAudio(dt);
   updateOpponentEngineAudio(dt);
   updateOnlineSessionRoomCodeHud();
   renderer.render(scene, camera);
@@ -1800,7 +2012,8 @@ function updateSceneryLights() {
   const reference = gameStarted ? carState.position : camera.position;
   for (const light of sceneryLights) {
     light.getWorldPosition(scratchLightPosition);
-    light.visible = scratchLightPosition.distanceToSquared(reference) < light.userData.maxDistanceSq;
+    const maxDistance = (light.userData.baseMaxDistance ?? 125) * getSceneryLightVisibilityMultiplier(light.userData.lightRole);
+    light.visible = scratchLightPosition.distanceToSquared(reference) < maxDistance * maxDistance;
   }
 }
 
@@ -1810,9 +2023,12 @@ function updateSceneryVisibility() {
   for (const object of sceneryCullables) {
     object.getWorldPosition(scratchLightPosition);
     const distanceSq = scratchLightPosition.distanceToSquared(reference);
+    const multiplier = getSceneryVisibilityMultiplier();
+    const visibleDistanceSq = ((object.userData.baseVisibleDistance ?? 520) * multiplier) ** 2;
+    const hiddenDistanceSq = ((object.userData.baseHiddenDistance ?? 603) * multiplier) ** 2;
     object.visible = object.visible
-      ? distanceSq < object.userData.hiddenDistanceSq
-      : distanceSq < object.userData.visibleDistanceSq;
+      ? distanceSq < hiddenDistanceSq
+      : distanceSq < visibleDistanceSq;
   }
 }
 
@@ -1846,13 +2062,19 @@ function resolveRaceCarCollisions(dt) {
     }
   }
 
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
   for (const opponent of aiOpponents) {
     opponent.speed = opponent.velocity.length();
-    opponent.car.root.position.copy(opponent.position);
+    syncCarVisualRoot(opponent.car.root, opponent.position);
     opponent.car.root.rotation.set(0, opponent.heading, 0);
   }
+}
+
+function syncCarVisualRoot(root, position) {
+  if (!root || !position) return;
+  root.position.copy(position);
+  root.position.y += CAR_VISUAL_RIDE_HEIGHT;
 }
 
 function resolveRaceCarPairCollision(a, b, dt) {
@@ -1871,12 +2093,14 @@ function resolveRaceCarPairCollision(a, b, dt) {
   const relativeVelocity = b.velocity.clone().sub(a.velocity);
   const closingSpeed = relativeVelocity.dot(normal);
   const impactSpeed = Math.abs(closingSpeed);
+  const contactPoint = a.position.clone().add(b.position).multiplyScalar(0.5);
   if (closingSpeed < 0) {
     const impulseStrength = -(1.05 * closingSpeed) / totalInvMass;
     a.velocity.addScaledVector(normal, -impulseStrength * boxA.invMass);
     b.velocity.addScaledVector(normal, impulseStrength * boxB.invMass);
   }
   if (a.kind === "player" || b.kind === "player") playCollisionSound(impactSpeed, "car");
+  if (impactSpeed > 13) spawnCrashSparks(contactPoint, normal, impactSpeed);
 
   const scrapeAxis = new THREE.Vector3(normal.z, 0, -normal.x);
   const scrapeSpeed = b.velocity.clone().sub(a.velocity).dot(scrapeAxis);
@@ -2179,6 +2403,7 @@ function updateCar(dt) {
     tuning.rollingResistance +
     coasting * tuning.coastRollingResistance;
   forwardSpeed -= forwardSpeed * Math.abs(forwardSpeed) * activeDrag * dt;
+  forwardSpeed = applyManualGearMismatchDrag(forwardSpeed, profile, dt);
   forwardSpeed = moveToward(forwardSpeed, 0, activeRollingResistance * dt);
   if (surface.kind === "grass" && forwardSpeed > maxForwardSpeed) {
     forwardSpeed = moveToward(forwardSpeed, maxForwardSpeed, profile.grassOverspeedBleed * offTrackSlowdownScale * dt);
@@ -2294,11 +2519,11 @@ function updateCar(dt) {
     carState.kerbJoltCooldown = 0.65;
   }
 
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
 
   const rollStrength = profile.kind === "jeep" ? 0.42 : 0.1;
-  const rollTarget = -carState.steer * THREE.MathUtils.clamp(speedAbs / (profile.kind === "jeep" ? 24 : 45), 0, 1) * rollStrength;
+  const rollTarget = carState.steer * THREE.MathUtils.clamp(speedAbs / (profile.kind === "jeep" ? 24 : 45), 0, 1) * rollStrength;
   const grassRockScale = profile.kind === "formula" ? 1.25 : profile.kind === "lmp" ? 0.9 : profile.kind === "stock" ? 0.65 : 0.85;
   const rockIntensity = grassBumpIntensity + kerbBumpIntensity * 0.92 + sausageBumpIntensity * 0.75;
   const grassRockRoll = rockIntensity * grassRockScale * 0.035 * Math.sin(clock.elapsedTime * 16 + forwardSpeed * 0.3);
@@ -3762,7 +3987,7 @@ function updateTimeTrialGhost(dt) {
     return;
   }
   timeTrialGhost.car.root.visible = true;
-  timeTrialGhost.car.root.position.set(pose.x, track.groundY + 0.08, pose.z);
+    timeTrialGhost.car.root.position.set(pose.x, track.groundY + CAR_VISUAL_RIDE_HEIGHT, pose.z);
   timeTrialGhost.car.root.rotation.set(0, pose.heading, 0);
   if (timeTrialGhost.car.wheels?.frontLeft) timeTrialGhost.car.wheels.frontLeft.rotation.y = pose.steer ?? 0;
   if (timeTrialGhost.car.wheels?.frontRight) timeTrialGhost.car.wheels.frontRight.rotation.y = pose.steer ?? 0;
@@ -4120,11 +4345,27 @@ function toggleHeadlights() {
   updateCarLights(false, false);
 }
 
+function applyHeadlightQuality(carModel, { isPlayer = false, forceVisible = null } = {}) {
+  if (!carModel?.lights) return;
+  const qualityRangeScale = isPlayer && gameSettings.graphicsQuality === "high" ? 1.2 : 1;
+  const qualityAngleScale = isPlayer && gameSettings.graphicsQuality === "high" ? 1.1 : 1;
+  for (const light of carModel.lights.headlights ?? []) {
+    const baseIntensity = light.userData.baseIntensity ?? light.intensity ?? 0;
+    const baseDistance = light.userData.baseDistance ?? light.distance ?? 0;
+    const baseAngle = light.userData.baseAngle ?? light.angle ?? 0.34;
+    light.intensity = baseIntensity;
+    light.distance = baseDistance * qualityRangeScale;
+    light.angle = baseAngle * qualityAngleScale;
+    if (forceVisible !== null) light.visible = forceVisible;
+  }
+}
+
 function updateCarLights(brake = false, boostActive = false, dt = 1 / 60) {
   if (!car?.lights) return;
   const nitrousFlameActive = getCarProfile().kind === "corvette" && boostActive;
   carState.nitrousFlameScale = THREE.MathUtils.damp(carState.nitrousFlameScale, nitrousFlameActive ? 1 : 0, nitrousFlameActive ? 3.1 : 5.4, dt);
   const headlightsOn = carState.headlightsOn;
+  applyHeadlightQuality(car, { isPlayer: true, forceVisible: headlightsOn });
   for (const light of car.lights.headlights ?? []) {
     light.visible = headlightsOn;
   }
@@ -4222,7 +4463,7 @@ function initSparkParticles() {
   const geometry = new THREE.SphereGeometry(0.16, 7, 5);
   const glowGeometry = new THREE.SphereGeometry(0.38, 8, 6);
 
-  for (let i = 0; i < 36; i += 1) {
+  for (let i = 0; i < 64; i += 1) {
     const particle = new THREE.Mesh(geometry, material);
     const glow = new THREE.Mesh(glowGeometry, glowMaterial.clone());
     particle.visible = false;
@@ -4269,7 +4510,7 @@ function updateDirtParticles(dt, surface, speedAbs) {
 
     const environment = track.environment ?? "grass";
     if (environment === "tarmac" && Math.random() < 0.5) continue;
-    const burstMultiplier = environment === "dirt" ? 2 : environment === "tarmac" ? 0.5 : 1;
+    const burstMultiplier = (environment === "dirt" ? 2 : environment === "tarmac" ? 0.5 : 1) * getEffectsDensityMultiplier();
     const baseBurstCount = dirtIntensity > 0.72 && (profile.kind === "stock" || wheelName.startsWith("rear")) ? 2 : 1;
     const burstCount = Math.max(1, Math.round(baseBurstCount * burstMultiplier));
     const particle = dirtParticles.find((item) => item.userData.life <= 0);
@@ -4315,7 +4556,7 @@ function updateSparkParticles(dt) {
 function spawnFormulaSparks(dt, profile, boostActive, forwardSpeed, speedAbs, source = null) {
   if (profile.kind !== "formula" || boostActive || forwardSpeed <= 0) return;
   if (speedAbs < profile.maxForwardSpeed * 0.98) return;
-  if (Math.random() > dt * 14.4) return;
+  if (Math.random() > dt * 14.4 * getEffectsDensityMultiplier()) return;
 
   const sourcePosition = source?.position ?? carState.position;
   const sourceForward = source?.forward ?? scratchForward;
@@ -4350,6 +4591,37 @@ function spawnFormulaSparks(dt, profile, boostActive, forwardSpeed, speedAbs, so
   }
 }
 
+function spawnCrashSparks(position, normal, impactSpeed = 0) {
+  const density = getCrashSparkDensityMultiplier();
+  if (density <= 0) return;
+  const strength = THREE.MathUtils.clamp((impactSpeed - 10) / 28, 0, 1);
+  if (strength <= 0) return;
+  const burstCount = Math.round(THREE.MathUtils.lerp(4, 15, strength) * density);
+  const tangent = new THREE.Vector3(normal.z, 0, -normal.x).normalize();
+  for (let i = 0; i < burstCount; i += 1) {
+    const particle = sparkParticles.find((item) => item.userData.life <= 0);
+    if (!particle) return;
+    const orangeSpark = Math.random() < 0.42;
+    particle.visible = true;
+    particle.position.copy(position);
+    particle.position.y = Math.max(position.y + 0.45, track.groundY + 0.58);
+    particle.position.addScaledVector(tangent, THREE.MathUtils.randFloatSpread(0.9));
+    particle.material.color.setHex(orangeSpark ? 0xffa332 : 0xfff05a);
+    particle.material.emissive.setHex(orangeSpark ? 0xff7a1f : 0xffdf2a);
+    particle.userData.glow.material.color.setHex(orangeSpark ? 0xff9a2a : 0xffe45c);
+    particle.userData.maxLife = THREE.MathUtils.randFloat(0.16, 0.38);
+    particle.userData.life = particle.userData.maxLife;
+    particle.userData.glow.material.opacity = 0.48;
+    particle.userData.glow.scale.setScalar(0.9 + strength * 0.8);
+    particle.userData.velocity
+      .copy(normal)
+      .multiplyScalar(THREE.MathUtils.randFloat(2.5, 7.5) * (0.7 + strength))
+      .addScaledVector(tangent, THREE.MathUtils.randFloatSpread(7.2) * (0.6 + strength))
+      .add(new THREE.Vector3(0, THREE.MathUtils.randFloat(4.5, 12) * (0.75 + strength), 0));
+    particle.scale.setScalar(THREE.MathUtils.lerp(0.34, 0.62, strength));
+  }
+}
+
 function updateCollisionSmokeParticles(dt) {
   for (const particle of smokeParticles) {
     if (particle.userData.life <= 0) {
@@ -4366,7 +4638,7 @@ function updateCollisionSmokeParticles(dt) {
 }
 
 function spawnCollisionSmoke(position, normal, speedAbs) {
-  const burstCount = Math.round(THREE.MathUtils.clamp(speedAbs / 4, 5, 12));
+  const burstCount = Math.round(THREE.MathUtils.clamp(speedAbs / 4, 5, 12) * getEffectsDensityMultiplier());
   for (let i = 0; i < burstCount; i += 1) {
     const particle = smokeParticles.find((item) => item.userData.life <= 0);
     if (!particle) return;
@@ -4454,7 +4726,7 @@ function updateCamera(dt) {
 
 function updateRaceGridIntroCamera(dt) {
   const polePose = getQuickRaceGridPose(1);
-  const rawProgress = THREE.MathUtils.clamp((raceCountdownState.introElapsed - 0.5) / 4.5, 0, 1);
+  const rawProgress = THREE.MathUtils.clamp((raceCountdownState.introElapsed - 0.5) / Math.max(1, RACE_GRID_INTRO_SECONDS - 0.5), 0, 1);
   const progress = THREE.MathUtils.smoothstep(rawProgress, 0, 1);
   scratchForward.set(Math.sin(polePose.heading), 0, Math.cos(polePose.heading));
   scratchRight.set(scratchForward.z, 0, -scratchForward.x);
@@ -4498,6 +4770,9 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   applyTimeOfDay(definition.timeOfDay ?? "day");
   sceneryLights.length = 0;
   sceneryCullables.length = 0;
+  crowdEmitters.length = 0;
+  treeAudioSources.length = 0;
+  natureEmitters.length = 0;
   const group = new THREE.Group();
   const halfWidth = definition.halfWidth ?? 7.2;
   const kerbWidth = definition.kerbWidth ?? 1.15;
@@ -4552,6 +4827,7 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   const extraTrackAreas = [];
   const obstacles = [];
   if (definition.extras) definition.extras(group, extraTrackAreas, samples, obstacles);
+  rebuildNatureEmitters();
   addCloudsAndSun(group, trackId === "generated");
 
   const start = pointFromPlan(...definition.start, planScale);
@@ -5154,6 +5430,7 @@ function addGrandstandAtTrack(group, samples, spec) {
 
   stand.position.copy(pose.position);
   stand.rotation.y = pose.angle + Math.PI / 2;
+  registerCrowdEmitter(stand, { radius: 125, strength: Math.max(0.75, (spec.length ?? 36) / 56) });
   group.add(stand);
 }
 
@@ -6301,6 +6578,9 @@ function addUniversalHeadlights(car, kind = "formula") {
   realBeam.intensity = headlightIntensity;
   realBeam.distance = headlightDistance;
   realBeam.angle = headlightAngle;
+  realBeam.userData.baseIntensity = headlightIntensity;
+  realBeam.userData.baseDistance = headlightDistance;
+  realBeam.userData.baseAngle = headlightAngle;
   realBeam.penumbra = 0.62;
   realBeam.decay = 1.12;
   realBeam.castShadow = false;
@@ -7017,6 +7297,16 @@ function getManualPowerScale(forwardSpeed, profile = getCarProfile()) {
       ? THREE.MathUtils.lerp(0.92, highRevFloor, THREE.MathUtils.clamp((gearProgress - 0.9) / 0.3, 0, 1))
       : 1;
   return torque * launchAssist * revCurve;
+}
+
+function applyManualGearMismatchDrag(forwardSpeed, profile = getCarProfile(), dt = 1 / 60) {
+  if (profile.kind !== "jeep" || profile.transmission !== "manual" || carState.gear <= 0 || forwardSpeed <= 0) return forwardSpeed;
+  const { end: bandEnd } = getManualGearBand(carState.gear, profile);
+  const overspeed = forwardSpeed - bandEnd;
+  if (overspeed <= 0) return forwardSpeed;
+  const mismatch = THREE.MathUtils.clamp(overspeed / Math.max(3, bandEnd), 0, 2.2);
+  const engineBrake = THREE.MathUtils.lerp(8, 34, THREE.MathUtils.clamp(mismatch / 1.6, 0, 1));
+  return moveToward(forwardSpeed, bandEnd, engineBrake * mismatch * dt);
 }
 
 function shiftManualGear(direction) {
@@ -8355,7 +8645,7 @@ function startGameModeSelection(mode, backStep = "intro") {
   updateTimeTrialModeSelection();
   clearAiOpponents();
   if (selectedGameMode !== "quick-race" && selectedGameMode !== "online-host") selectedAiOpponentCount = 0;
-  else updateAiOpponentSelection();
+  else applyRaceDefaultsFromSettings();
   updateTimeTrialHud();
   updateCarCategoryAvailability();
   setMenuStep("track");
@@ -8410,9 +8700,7 @@ function renderWeeklyTimeTrialCard() {
 function startOnlineHostFlow() {
   selectedGameMode = "online-host";
   clearAiOpponents();
-  selectedAiOpponentCount = 4;
-  selectedQuickRaceLapCount = 3;
-  selectedAiDifficulty = "standard";
+  applyRaceDefaultsFromSettings();
   const roomCode = generateOnlineRoomCode();
   connectOnlineRoom(roomCode, "host");
   startGameModeSelection("online-host", "go-online");
@@ -8951,7 +9239,7 @@ function receiveOnlinePlayerPose(payload = {}) {
     onlineRoomState.remoteCars.set(payload.playerId, remote);
   }
   remote.lastSeen = performance.now();
-  remote.target.position.set(Number(payload.x) || 0, track.groundY + 0.04, Number(payload.z) || 0);
+        remote.target.position.set(Number(payload.x) || 0, track.groundY + CAR_VISUAL_RIDE_HEIGHT, Number(payload.z) || 0);
   remote.target.heading = Number(payload.heading) || 0;
   remote.target.velocity.set(
     Math.sin(remote.target.heading) * (Number(payload.speed) || 0),
@@ -8997,6 +9285,7 @@ function applyOnlineGhostMaterial(root) {
   root.traverse((object) => {
     if (object.isLight) {
       object.visible = false;
+      object.intensity = 0;
       return;
     }
     object.castShadow = false;
@@ -9029,6 +9318,12 @@ function updateOnlineRemoteCars(dt, visible) {
       if (wheel) wheel.rotation.x = remote.target.wheelSpin;
     }
     updateRearWing(dt, remote.target.boostActive, remote.car);
+    const remoteHeadlightsOn = shouldShowOpponentHeadlightsAt(remote.car.root.position);
+    applyHeadlightQuality(remote.car, { isPlayer: false, forceVisible: remoteHeadlightsOn });
+    for (const light of remote.car.lights?.headlights ?? []) {
+      light.visible = remoteHeadlightsOn;
+      light.intensity = remoteHeadlightsOn ? (light.userData.baseIntensity ?? 16) * 0.45 : 0;
+    }
     for (const brakeLight of remote.car.lights?.brakeLights ?? []) {
       if (!brakeLight.material?.emissive) continue;
       brakeLight.material.emissiveIntensity = remote.target.brake ? 2.4 : 0.18;
@@ -9079,10 +9374,11 @@ function resolveOnlineSoftRemoteCollisions(dt) {
     const yawKick = THREE.MathUtils.clamp(normal.x * Math.cos(carState.heading) - normal.z * Math.sin(carState.heading), -1, 1) * 0.08;
     carState.yawRate += yawKick * dt;
     spawnCollisionSmoke(carState.position, normal, Math.max(4, Math.abs(intoRemoteSpeed), impactSpeed));
+    if (impactSpeed > 13) spawnCrashSparks(carState.position.clone().add(remote.car.root.position).multiplyScalar(0.5), normal, impactSpeed);
     playCollisionSound(Math.max(Math.abs(intoRemoteSpeed), impactSpeed), "car");
     sendOnlineCollisionNudge(playerId, normal, overlap.depth, impactSpeed, yawKick);
   }
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
 }
 
 function sendOnlineCollisionNudge(targetPlayerId, normal, depth, impactSpeed, yawKick) {
@@ -9112,7 +9408,7 @@ function receiveOnlineCarCollision(payload = {}) {
   carState.velocity.addScaledVector(normal, impulse * 5.6);
   carState.yawRate += THREE.MathUtils.clamp(Number(payload.yaw) || 0, -0.12, 0.12);
   spawnCollisionSmoke(carState.position, normal, Math.max(4, impulse * 8));
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
 }
 
 function updateOnlineRaceHud() {
@@ -9304,6 +9600,7 @@ function setMenuStep(step) {
   startMenu.dataset.menuStep = menuStep;
   const titles = {
     intro: "The Paddock",
+    settings: "Settings",
     "how-to-play": "How to Play",
     "driver-profile": "Driver Profile",
     "go-online": "Go Online",
@@ -9327,12 +9624,102 @@ function setMenuStep(step) {
   for (const stepEl of menuSteps) {
     stepEl.classList.toggle("is-hidden", stepEl.dataset.menuStep !== menuStep);
   }
+  if (menuStep === "settings") renderSettingsMenu();
   if (menuStep === "how-to-play") renderHowToPlayTopic();
   if (menuStep === "car-category") updateCarCategoryAvailability();
   if (menuStep === "driver-profile") updateDriverProfilePage();
   if (menuStep === "online-room") renderOnlineRoom();
   if (menuStep === "time-trial-setup") renderWeeklyTimeTrialCard();
   updateMenuVisual();
+}
+
+function renderSettingsMenu() {
+  gameSettings = normalizeGameSettings(gameSettings);
+  if (graphicsQualitySelect) graphicsQualitySelect.value = gameSettings.graphicsQuality;
+  if (defaultAiDifficultySelect) defaultAiDifficultySelect.value = gameSettings.defaultAiDifficulty;
+  setSliderWithReadout(defaultOpponentsSlider, defaultOpponentsReadout, gameSettings.defaultOpponents);
+  setSliderWithReadout(defaultRaceLapsSlider, defaultRaceLapsReadout, gameSettings.defaultRaceLaps);
+  if (defaultCameraSelect) defaultCameraSelect.value = gameSettings.defaultCamera;
+  setSliderWithReadout(playerEngineVolumeSlider, playerEngineVolumeReadout, gameSettings.playerEngineVolume, "%");
+  setSliderWithReadout(opponentEngineVolumeSlider, opponentEngineVolumeReadout, gameSettings.opponentEngineVolume, "%");
+  setSliderWithReadout(wheelSurfaceVolumeSlider, wheelSurfaceVolumeReadout, gameSettings.wheelSurfaceVolume, "%");
+  setSliderWithReadout(collisionVolumeSlider, collisionVolumeReadout, gameSettings.collisionVolume, "%");
+  setSliderWithReadout(crowdVolumeSlider, crowdVolumeReadout, gameSettings.crowdVolume, "%");
+  setSliderWithReadout(natureVolumeSlider, natureVolumeReadout, gameSettings.natureVolume, "%");
+  setSliderWithReadout(musicVolumeSlider, musicVolumeReadout, gameSettings.musicVolume, "%");
+}
+
+function setSliderWithReadout(slider, readout, value, suffix = "") {
+  if (slider) slider.value = String(value);
+  if (readout) readout.textContent = `${value}${suffix}`;
+}
+
+function updateGameSettingsFromInputs() {
+  gameSettings = normalizeGameSettings({
+    ...gameSettings,
+    graphicsQuality: graphicsQualitySelect?.value,
+    defaultAiDifficulty: defaultAiDifficultySelect?.value,
+    defaultOpponents: defaultOpponentsSlider?.value,
+    defaultRaceLaps: defaultRaceLapsSlider?.value,
+    defaultCamera: defaultCameraSelect?.value,
+    playerEngineVolume: playerEngineVolumeSlider?.value,
+    opponentEngineVolume: opponentEngineVolumeSlider?.value,
+    wheelSurfaceVolume: wheelSurfaceVolumeSlider?.value,
+    collisionVolume: collisionVolumeSlider?.value,
+    crowdVolume: crowdVolumeSlider?.value,
+    natureVolume: natureVolumeSlider?.value,
+    musicVolume: musicVolumeSlider?.value,
+  });
+  saveGameSettings();
+  renderSettingsMenu();
+  applyGraphicsSettings();
+  applyMenuAudioVolume();
+  applyRaceDefaultsFromSettings();
+}
+
+function applyGraphicsSettings() {
+  renderer.setPixelRatio(getGraphicsPixelRatio());
+  previewRenderer.setPixelRatio(getGraphicsPixelRatio());
+  renderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
+  previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
+  sun.castShadow = gameSettings.graphicsQuality !== "low";
+  previewKeyLight.castShadow = gameSettings.graphicsQuality !== "low";
+  applyHeadlightQuality(car, { isPlayer: true, forceVisible: carState.headlightsOn });
+  const activeAiHeadlights = getActiveAiHeadlightOpponents();
+  for (const opponent of aiOpponents) tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+  for (const remote of onlineRoomState.remoteCars.values()) {
+    const headlightsOn = shouldShowOpponentHeadlightsAt(remote.car.root.position);
+    applyHeadlightQuality(remote.car, { isPlayer: false, forceVisible: headlightsOn });
+    for (const light of remote.car.lights?.headlights ?? []) {
+      light.visible = headlightsOn;
+      light.intensity = headlightsOn ? (light.userData.baseIntensity ?? 16) * 0.45 : 0;
+    }
+  }
+}
+
+function applyMenuAudioVolume() {
+  if (menuAudio.element) menuAudio.element.volume = 0.35 * settingVolume("musicVolume");
+  if (editorAudio.element) editorAudio.element.volume = 0.3 * settingVolume("musicVolume");
+  if (raceIntroAudio.element) raceIntroAudio.element.volume = 0.58 * settingVolume("musicVolume");
+}
+
+function applyRaceDefaultsFromSettings() {
+  selectedAiOpponentCount = gameSettings.defaultOpponents;
+  selectedGridPosition = selectedAiOpponentCount + 1;
+  selectedQuickRaceLapCount = gameSettings.defaultRaceLaps;
+  selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[gameSettings.defaultAiDifficulty] ? gameSettings.defaultAiDifficulty : "standard";
+  if (aiOpponentSlider) aiOpponentSlider.value = String(selectedAiOpponentCount);
+  if (quickRaceLapSlider) quickRaceLapSlider.value = String(selectedQuickRaceLapCount);
+  if (aiDifficultySelect) aiDifficultySelect.value = selectedAiDifficulty;
+  if (onlineAiOpponentSlider) onlineAiOpponentSlider.value = String(selectedAiOpponentCount);
+  if (onlineRaceLapSlider) onlineRaceLapSlider.value = String(selectedQuickRaceLapCount);
+  if (onlineAiDifficultySelect) onlineAiDifficultySelect.value = selectedAiDifficulty;
+  updateAiOpponentSelection();
+  updateQuickRaceLapSelection();
+  updateAiDifficultySelection();
+  updateOnlineAiOpponentSelection();
+  updateOnlineRaceLapSelection();
+  updateOnlineAiDifficultySelection();
 }
 
 function selectHowToPlayTopic(topic) {
@@ -9676,7 +10063,7 @@ function isPaintMenuStep() {
 }
 
 function updateMenuVisual() {
-  const visual = menuStep === "intro" || menuStep === "how-to-play" || menuStep === "go-online" || menuStep === "online-join" || menuStep === "online-room"
+  const visual = menuStep === "intro" || menuStep === "settings" || menuStep === "how-to-play" || menuStep === "go-online" || menuStep === "online-join" || menuStep === "online-room"
     ? "intro"
     : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track")
       ? "track"
@@ -9697,6 +10084,7 @@ function updateMenuVisual() {
 
   const labels = {
     intro: ["Ready to Roll", "Just Drive"],
+    settings: ["Race Setup", "Settings"],
     "how-to-play": ["Driver Guide", "How to Play"],
     "driver-profile": ["Driver Profile", "My Garage"],
     "go-online": ["Online Racing", "Go Online"],
@@ -10248,12 +10636,16 @@ function addEditorSceneryObjects(group, obstacles = [], sourceTrack = editorTrac
     const position = editorPointToWorld(item);
     if (item.type === "trees") {
       addEditorTreeCluster(group, position.x, position.z, item.rotation ?? 0, obstacles);
+      registerTreeAudioSource(position.x, position.z, item.type, 1.4);
     } else if (item.type === "cherry-trees") {
       addEditorCherryTreeCluster(group, position.x, position.z, item.rotation ?? 0, obstacles);
+      registerTreeAudioSource(position.x, position.z, item.type, 1.35);
     } else if (item.type === "douglas-pines") {
       addEditorDouglasPines(group, position.x, position.z, item.rotation ?? 0, obstacles);
+      registerTreeAudioSource(position.x, position.z, item.type, 1.8);
     } else if (item.type === "maple-tree") {
       addEditorMapleTree(group, position.x, position.z, item.rotation ?? 0, obstacles);
+      registerTreeAudioSource(position.x, position.z, item.type, 1.65);
     } else if (item.type === "boulder-cluster") {
       addEditorBoulderCluster(group, position.x, position.z, item.rotation ?? 0, obstacles);
     } else if (item.type.startsWith("building")) {
@@ -10629,6 +11021,7 @@ function addEditorGrandstand(group, x, z, rotation = 0) {
   stand.position.set(x, 0, z);
   stand.rotation.y = editorRotationToWorld(rotation);
   registerSceneryCullable(stand, 650);
+  registerCrowdEmitter(stand, { radius: 132, strength: 1.15 });
   group.add(stand);
 }
 
@@ -10697,7 +11090,7 @@ function addEditorLamp(group, x, z, rotation = 0) {
   groundGlow.position.set(0, 0.035, 13.5);
   const glow = new THREE.PointLight(0xffc45c, sceneryLightIntensity(11.5, "lamp"), sceneryLightDistance(31, "lamp"), 1.7);
   glow.position.set(0, 15.4, 5.55);
-  registerSceneryLight(glow, 82);
+  registerSceneryLight(glow, 82, "lamp");
   pole.receiveShadow = true;
   arm.receiveShadow = true;
   lamp.add(groundGlow, pole, arm, light, glow);
@@ -10755,6 +11148,7 @@ function togglePause() {
 
 function openCarSelectionMenu() {
   setPaused(true);
+  stopRaceIntroMusic();
   setMenuStep("car-category");
   startMenu.classList.remove("is-hidden");
   pauseBadge.hidden = true;
@@ -10763,6 +11157,7 @@ function openCarSelectionMenu() {
 
 function openWeeklyTimeTrialMenu() {
   setPaused(true);
+  stopRaceIntroMusic();
   selectedTimeTrialMode = "standard";
   selectedTimeTrialGhostMode = "online";
   selectedOnlineGhostFilter = selectedOnlineGhostFilter === "mine" ? "mine" : "week";
@@ -10783,6 +11178,7 @@ function startGame() {
   stopMenuMusic();
   startEngineAudio();
   forceAudioProbe();
+  cameraMode = gameSettings.defaultCamera;
   resetCar();
   setupQuickRaceOpponents();
   resetQuickRaceState();
@@ -10809,7 +11205,7 @@ function playNextEditorMusicTrack() {
   const audio = new Audio(src);
   editorAudio.element = audio;
   audio.preload = "auto";
-  audio.volume = 0.3;
+  audio.volume = 0.3 * settingVolume("musicVolume");
   audio.addEventListener("ended", playNextEditorMusicTrack, { once: true });
   audio.addEventListener("error", () => {
     if (editorAudio.element === audio) {
@@ -10833,8 +11229,9 @@ function startMenuMusic() {
     menuAudio.element = new Audio(MENU_THEME_SRC);
     menuAudio.element.loop = true;
     menuAudio.element.preload = "auto";
-    menuAudio.element.volume = 0.35;
+    menuAudio.element.volume = 0.35 * settingVolume("musicVolume");
   }
+  menuAudio.element.volume = 0.35 * settingVolume("musicVolume");
   menuAudio.element.play().catch(() => {});
 }
 
@@ -10845,6 +11242,33 @@ function stopMenuMusic() {
     menuAudio.element = null;
   }
 
+}
+
+function startRaceIntroMusic() {
+  const src = RACE_INTRO_MUSIC_SRCS[activeTimeOfDay];
+  if (!src) {
+    stopRaceIntroMusic();
+    return;
+  }
+  if (raceIntroAudio.element && raceIntroAudio.timeOfDay === activeTimeOfDay) {
+    raceIntroAudio.element.currentTime = 0;
+  } else {
+    stopRaceIntroMusic();
+    raceIntroAudio.element = new Audio(src);
+    raceIntroAudio.element.preload = "auto";
+    raceIntroAudio.element.loop = false;
+    raceIntroAudio.timeOfDay = activeTimeOfDay;
+  }
+  raceIntroAudio.element.volume = 0.58 * settingVolume("musicVolume");
+  raceIntroAudio.element.play().catch(() => {});
+}
+
+function stopRaceIntroMusic() {
+  if (!raceIntroAudio.element) return;
+  raceIntroAudio.element.pause();
+  raceIntroAudio.element.currentTime = 0;
+  raceIntroAudio.element = null;
+  raceIntroAudio.timeOfDay = "";
 }
 
 function startEngineAudio() {
@@ -10865,7 +11289,7 @@ function startEngineAudio() {
     audioState.element = createLoopAudio("engine");
     audioState.ersElement = createLoopAudio("ers");
     audioState.brakeElement = createLoopAudio("brake");
-    audioState.element.volume = 0.34;
+    audioState.element.volume = 0.34 * settingVolume("playerEngineVolume");
     audioState.element.playbackRate = 0.8;
     audioState.ersElement.volume = 0;
     audioState.ersElement.playbackRate = 1;
@@ -10926,7 +11350,7 @@ function startEngineAudio() {
   grumbleGain.gain.value = 0;
   ersGain.gain.value = 0;
   brakeGain.gain.value = 0;
-  opponentEngineMaster.gain.value = 0.42;
+  opponentEngineMaster.gain.value = 0.42 * settingVolume("opponentEngineVolume");
   tireGain.gain.value = 0;
   surfaceGain.gain.value = 0;
   kerbGain.gain.value = 0;
@@ -10998,6 +11422,7 @@ function startEngineAudio() {
 }
 
 function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking = false) {
+  const playerVolume = settingVolume("playerEngineVolume");
   if (audioState.element) {
     const isCorvette = profile.kind === "corvette";
     const rpmRatio = profile.kind === "stock" || profile.kind === "lmp"
@@ -11008,15 +11433,15 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
       : profile.kind === "stock" || profile.kind === "lmp"
       ? THREE.MathUtils.lerp(0.58, 1.25, rpmRatio)
       : THREE.MathUtils.lerp(0.72, 1.85, rpmRatio);
-    audioState.element.volume = THREE.MathUtils.lerp(0.08, profile.kind === "formula" ? 0.72 : isCorvette ? 0.74 : 0.62, throttle ? 1 : 0.2);
+    audioState.element.volume = THREE.MathUtils.lerp(0.08, profile.kind === "formula" ? 0.72 : isCorvette ? 0.74 : 0.62, throttle ? 1 : 0.2) * playerVolume;
     if (audioState.ersElement) {
-      const ersTargetVolume = boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.12 : 0.082) : 0;
+      const ersTargetVolume = boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.12 : 0.082) * playerVolume : 0;
       const boostFade = profile.kind === "corvette" ? (boostActive ? 2.5 : 1.5) : (boostActive ? 8 : 3.2);
       audioState.ersElement.volume = THREE.MathUtils.damp(audioState.ersElement.volume, ersTargetVolume, boostFade, dt);
       audioState.ersElement.playbackRate = THREE.MathUtils.lerp(profile.kind === "corvette" ? 0.48 : 0.72, profile.kind === "corvette" ? 0.82 : 1.18, rpmRatio);
     }
     if (audioState.brakeElement) {
-      audioState.brakeElement.volume = THREE.MathUtils.damp(audioState.brakeElement.volume, hardBraking ? 0.12 : 0, hardBraking ? 3.2 : 2.4, dt);
+      audioState.brakeElement.volume = THREE.MathUtils.damp(audioState.brakeElement.volume, hardBraking ? 0.12 * playerVolume : 0, hardBraking ? 3.2 : 2.4, dt);
     }
     return;
   }
@@ -11068,39 +11493,39 @@ function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, har
   );
   audioState.lowShelf.gain.setTargetAtTime(profile.kind === "jeep" ? 15 : isCorvette ? THREE.MathUtils.lerp(12, 5, rpmRatio) : profile.kind === "formula" ? THREE.MathUtils.lerp(10, 4, rpmRatio) : 10, now, 0.08);
   audioState.engineGain.gain.setTargetAtTime(
-    profile.kind === "formula" || isCorvette
+    (profile.kind === "formula" || isCorvette
       ? 0.05 + rpmRatio * 0.15 * throttleLift
       : profile.kind === "jeep"
         ? 0.096 + rpmRatio * 0.18 * throttleLift
-        : 0.045 + rpmRatio * 0.12 * throttleLift,
+        : 0.045 + rpmRatio * 0.12 * throttleLift) * playerVolume,
     now,
     0.04,
   );
   audioState.subGain.gain.setTargetAtTime(
-    profile.kind === "formula" || isCorvette
+    (profile.kind === "formula" || isCorvette
       ? 0.055 + (1 - rpmRatio) * 0.04 + throttle * 0.085
       : profile.kind === "jeep"
         ? 0.192 + throttle * 0.192
-        : 0.08 + throttle * 0.11,
+        : 0.08 + throttle * 0.11) * playerVolume,
     now,
     0.06,
   );
   audioState.grumbleGain.gain.setTargetAtTime(
-    profile.kind === "formula" || isCorvette
+    (profile.kind === "formula" || isCorvette
       ? 0.018 + throttle * 0.11 + (1 - rpmRatio) * 0.012
       : profile.kind === "jeep"
         ? 0.108 + throttle * 0.24 + (1 - rpmRatio) * 0.06
-        : 0.055 + throttle * 0.14 + (1 - rpmRatio) * 0.025,
+        : 0.055 + throttle * 0.14 + (1 - rpmRatio) * 0.025) * playerVolume,
     now,
     0.08,
   );
   audioState.ersGain.gain.setTargetAtTime(
-    boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.04 : 0.025) : 0.0001,
+    boostActive && profile.hasErs ? (profile.kind === "corvette" ? 0.04 : 0.025) * playerVolume : 0.0001,
     now,
     profile.kind === "corvette" ? (boostActive ? 0.55 : 0.65) : (boostActive ? 0.16 : 0.18),
   );
   audioState.brakeGain.gain.setTargetAtTime(
-    hardBraking ? 0.036 : jeepShiftCue ? 0.018 : 0.0001,
+    hardBraking ? 0.036 * playerVolume : jeepShiftCue ? 0.018 * playerVolume : 0.0001,
     now,
     hardBraking ? 0.18 : 0.26,
   );
@@ -11142,13 +11567,14 @@ function updateSurfaceAudio(dt, state = {}) {
   const brakeScrub = state.brake && speed > 16 ? THREE.MathUtils.smoothstep(speed, 16, 58) * 0.32 : 0;
   const turnScrub = THREE.MathUtils.clamp(Math.abs(state.lateralSpeed ?? 0) / 12 + Math.abs(state.yawRate ?? 0) * 0.38, 0, 1);
   const handbrakeScrub = state.handbrake ? 0.45 : 0;
-  const tireTarget = Math.min(0.065, (turnScrub * 0.0375 + brakeScrub * 0.09 + handbrakeScrub * 0.5) * speedFactor);
+  const surfaceVolume = settingVolume("wheelSurfaceVolume");
+  const tireTarget = Math.min(0.065, (turnScrub * 0.0375 + brakeScrub * 0.09 + handbrakeScrub * 0.5) * speedFactor) * surfaceVolume;
   const wheelSurface = state.wheelSurface ?? {};
   const offTrackRatio = wheelSurface.grassRatio ?? 0;
-  const surfaceTarget = Math.min(0.075, offTrackRatio * THREE.MathUtils.smoothstep(speed, 5, 38) * (state.offTrackEnvironment === "dirt" ? 0.09 : 0.0575));
+  const surfaceTarget = Math.min(0.075, offTrackRatio * THREE.MathUtils.smoothstep(speed, 5, 38) * (state.offTrackEnvironment === "dirt" ? 0.09 : 0.0575)) * surfaceVolume;
   const kerbRatio = Math.max(wheelSurface.kerbRatio ?? 0, wheelSurface.paintedKerbRatio ?? 0);
   const sausageRatio = wheelSurface.sausageRatio ?? 0;
-  const kerbTarget = Math.min(0.09, (kerbRatio * 0.0525 + sausageRatio * 0.09) * THREE.MathUtils.smoothstep(speed, 5, 34));
+  const kerbTarget = Math.min(0.09, (kerbRatio * 0.0525 + sausageRatio * 0.09) * THREE.MathUtils.smoothstep(speed, 5, 34)) * surfaceVolume;
   audioState.tireFilter.frequency.setTargetAtTime(THREE.MathUtils.lerp(740, 1850, speedFactor), now, 0.08);
   audioState.tireFilter.Q.setTargetAtTime(THREE.MathUtils.lerp(0.8, 2.1, turnScrub), now, 0.08);
   audioState.surfaceFilter.frequency.setTargetAtTime(state.offTrackEnvironment === "tarmac" ? 980 : state.offTrackEnvironment === "dirt" ? 560 : 680, now, 0.12);
@@ -11210,6 +11636,7 @@ function createOpponentEngineVoice(context) {
 
 function updateOpponentEngineAudio(dt) {
   if (audioState.element) return;
+  if (audioState.opponentEngineMaster) audioState.opponentEngineMaster.gain.setTargetAtTime(0.42 * settingVolume("opponentEngineVolume"), audioState.context.currentTime, 0.12);
   if (!gameStarted || isPaused || isMenuOpen() || !audioState.context || !audioState.opponentEngineMaster) {
     fadeOpponentEngineVoices(dt);
     return;
@@ -11227,6 +11654,230 @@ function updateOpponentEngineAudio(dt) {
     }
     updateOpponentEngineVoice(voice, candidate, now, dt);
   }
+}
+
+function updateCrowdAudio(dt) {
+  if (audioState.element) return;
+  if (!gameStarted || isPaused || isMenuOpen() || !audioState.context || !crowdEmitters.length || settingVolume("crowdVolume") <= 0) {
+    fadeCrowdVoices(dt);
+    return;
+  }
+  ensureCrowdAudio();
+  if (!audioState.crowdBuffer || !audioState.crowdVoices.length) return;
+
+  const candidates = getCrowdAudioCandidates();
+  const now = audioState.context.currentTime;
+  for (let i = 0; i < audioState.crowdVoices.length; i += 1) {
+    const voice = audioState.crowdVoices[i];
+    const candidate = candidates[i];
+    if (!candidate) {
+      voice.output.gain.setTargetAtTime(0, now, Math.max(0.18, dt * 3));
+      continue;
+    }
+    voice.output.gain.setTargetAtTime(candidate.gain, now, 0.32);
+    voice.panner?.pan.setTargetAtTime(candidate.pan, now, 0.2);
+  }
+}
+
+function ensureCrowdAudio() {
+  if (!audioState.context || audioState.element || audioState.crowdLoading) return;
+  if (!audioState.crowdBuffer) {
+    audioState.crowdLoading = true;
+    fetch(CROWD_CHEER_SRC)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => audioState.context.decodeAudioData(buffer))
+      .then((decoded) => {
+        audioState.crowdBuffer = decoded;
+        audioState.crowdLoading = false;
+        createCrowdVoices();
+      })
+      .catch(() => {
+        audioState.crowdLoading = false;
+      });
+    return;
+  }
+  if (!audioState.crowdVoices.length) createCrowdVoices();
+}
+
+function createCrowdVoices() {
+  if (!audioState.context || !audioState.crowdBuffer || audioState.crowdVoices.length) return;
+  const voiceCount = 4;
+  for (let i = 0; i < voiceCount; i += 1) {
+    const source = audioState.context.createBufferSource();
+    const filter = audioState.context.createBiquadFilter();
+    const output = audioState.context.createGain();
+    const panner = audioState.context.createStereoPanner?.() ?? null;
+    source.buffer = audioState.crowdBuffer;
+    source.loop = true;
+    source.playbackRate.value = 0.96 + i * 0.025;
+    filter.type = "lowpass";
+    filter.frequency.value = 2100;
+    output.gain.value = 0;
+    source.connect(filter);
+    filter.connect(panner ?? output);
+    if (panner) panner.connect(output);
+    output.connect(audioState.context.destination);
+    const offset = audioState.crowdBuffer.duration ? (i * 7.3) % audioState.crowdBuffer.duration : 0;
+    source.start(0, offset);
+    audioState.crowdVoices.push({ source, filter, output, panner });
+  }
+}
+
+function fadeCrowdVoices(dt) {
+  if (!audioState.context || !audioState.crowdVoices.length) return;
+  const now = audioState.context.currentTime;
+  for (const voice of audioState.crowdVoices) voice.output.gain.setTargetAtTime(0, now, Math.max(0.16, dt * 3));
+}
+
+function getCrowdAudioCandidates() {
+  const forward = new THREE.Vector3(Math.sin(carState.heading), 0, Math.cos(carState.heading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const raceEnergy = selectedGameMode === "quick-race" || isOnlineRaceGameMode()
+    ? 1
+    : isTimeTrialGameMode()
+      ? 0.42
+      : 0.32;
+  const qualityScale = gameSettings.graphicsQuality === "low" ? 0.72 : gameSettings.graphicsQuality === "high" ? 1.08 : 1;
+  const candidates = [];
+  for (const emitter of crowdEmitters) {
+    if (!emitter.object?.visible) continue;
+    emitter.object.getWorldPosition(scratchLightPosition);
+    const distance = scratchLightPosition.distanceTo(carState.position);
+    const radius = (emitter.radius ?? 118) * qualityScale;
+    if (distance > radius) continue;
+    const falloff = 1 - distance / radius;
+    const offset = scratchLightPosition.clone().sub(carState.position);
+    const side = THREE.MathUtils.clamp(offset.dot(right) / Math.max(distance, 1), -1, 1);
+    const front = THREE.MathUtils.clamp(offset.dot(forward) / Math.max(distance, 1), -1, 1);
+    const directionalGain = THREE.MathUtils.lerp(0.74, 1.08, (front + 1) * 0.5);
+    const gain = Math.min(0.19, falloff * falloff * directionalGain * (emitter.strength ?? 1) * raceEnergy * settingVolume("crowdVolume"));
+    if (gain <= 0.002) continue;
+    candidates.push({ gain, pan: side * 0.78, score: distance });
+  }
+  return candidates.sort((a, b) => b.gain - a.gain || a.score - b.score).slice(0, 4);
+}
+
+function updateNatureAudio(dt) {
+  const src = NATURE_AMBIENCE_SRCS[activeTimeOfDay];
+  if (audioState.element) return;
+  if (!src || !gameStarted || isPaused || isMenuOpen() || !audioState.context || !natureEmitters.length || settingVolume("natureVolume") <= 0) {
+    fadeNatureVoices(dt);
+    return;
+  }
+  ensureNatureAudio(activeTimeOfDay, src);
+  const buffer = audioState.natureBuffers[activeTimeOfDay];
+  if (!buffer || !audioState.natureVoices.length) return;
+
+  const candidates = getNatureAudioCandidates();
+  const now = audioState.context.currentTime;
+  for (let i = 0; i < audioState.natureVoices.length; i += 1) {
+    const voice = audioState.natureVoices[i];
+    const candidate = candidates[i];
+    if (!candidate) {
+      voice.output.gain.setTargetAtTime(0, now, Math.max(0.2, dt * 3));
+      continue;
+    }
+    voice.output.gain.setTargetAtTime(candidate.gain, now, 0.46);
+    voice.panner?.pan.setTargetAtTime(candidate.pan, now, 0.28);
+  }
+}
+
+function ensureNatureAudio(timeOfDay, src) {
+  if (!audioState.context || audioState.element || audioState.natureLoading[timeOfDay]) return;
+  if (!audioState.natureBuffers[timeOfDay]) {
+    audioState.natureLoading[timeOfDay] = true;
+    fetch(src)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => audioState.context.decodeAudioData(buffer))
+      .then((decoded) => {
+        audioState.natureBuffers[timeOfDay] = decoded;
+        audioState.natureLoading[timeOfDay] = false;
+        createNatureVoices(timeOfDay);
+      })
+      .catch(() => {
+        audioState.natureLoading[timeOfDay] = false;
+      });
+    return;
+  }
+  if (audioState.natureVoiceTimeOfDay !== timeOfDay) stopNatureVoices();
+  if (!audioState.natureVoices.length) createNatureVoices(timeOfDay);
+}
+
+function createNatureVoices(timeOfDay) {
+  if (!audioState.context || !audioState.natureBuffers[timeOfDay] || audioState.natureVoices.length) return;
+  const buffer = audioState.natureBuffers[timeOfDay];
+  audioState.natureVoiceTimeOfDay = timeOfDay;
+  for (let i = 0; i < 3; i += 1) {
+    const source = audioState.context.createBufferSource();
+    const filter = audioState.context.createBiquadFilter();
+    const output = audioState.context.createGain();
+    const panner = audioState.context.createStereoPanner?.() ?? null;
+    source.buffer = buffer;
+    source.loop = true;
+    source.playbackRate.value = 0.98 + i * 0.018;
+    filter.type = "lowpass";
+    filter.frequency.value = 3200;
+    output.gain.value = 0;
+    source.connect(filter);
+    filter.connect(panner ?? output);
+    if (panner) panner.connect(output);
+    output.connect(audioState.context.destination);
+    const offset = buffer.duration ? (i * 9.7) % buffer.duration : 0;
+    source.start(0, offset);
+    audioState.natureVoices.push({ source, filter, output, panner });
+  }
+}
+
+function stopNatureVoices() {
+  for (const voice of audioState.natureVoices) {
+    try {
+      voice.source.stop();
+    } catch {
+      // The loop may already be stopped during a time-of-day switch.
+    }
+  }
+  audioState.natureVoices.length = 0;
+  audioState.natureVoiceTimeOfDay = "";
+}
+
+function fadeNatureVoices(dt) {
+  if (!audioState.context || !audioState.natureVoices.length) return;
+  const now = audioState.context.currentTime;
+  for (const voice of audioState.natureVoices) voice.output.gain.setTargetAtTime(0, now, Math.max(0.18, dt * 3));
+}
+
+function getNatureAudioCandidates() {
+  const forward = new THREE.Vector3(Math.sin(carState.heading), 0, Math.cos(carState.heading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const crowdSuppression = getNatureCrowdSuppression();
+  const qualityScale = gameSettings.graphicsQuality === "low" ? 0.78 : gameSettings.graphicsQuality === "high" ? 1.08 : 1;
+  const candidates = [];
+  for (const emitter of natureEmitters) {
+    const distance = emitter.position.distanceTo(carState.position);
+    const radius = (emitter.radius ?? 120) * qualityScale;
+    if (distance > radius) continue;
+    const falloff = 1 - distance / radius;
+    const offset = emitter.position.clone().sub(carState.position);
+    const side = THREE.MathUtils.clamp(offset.dot(right) / Math.max(distance, 1), -1, 1);
+    const front = THREE.MathUtils.clamp(offset.dot(forward) / Math.max(distance, 1), -1, 1);
+    const directionalGain = THREE.MathUtils.lerp(0.82, 1.08, (front + 1) * 0.5);
+    const gain = Math.min(0.096, falloff * falloff * directionalGain * (emitter.strength ?? 1) * crowdSuppression * settingVolume("natureVolume") * 0.8);
+    if (gain <= 0.002) continue;
+    candidates.push({ gain, pan: side * 0.68, score: distance });
+  }
+  return candidates.sort((a, b) => b.gain - a.gain || a.score - b.score).slice(0, 3);
+}
+
+function getNatureCrowdSuppression() {
+  let strongest = 0;
+  for (const emitter of crowdEmitters) {
+    if (!emitter.object) continue;
+    emitter.object.getWorldPosition(scratchLightPosition);
+    const distance = scratchLightPosition.distanceTo(carState.position);
+    if (distance > 95) continue;
+    strongest = Math.max(strongest, 1 - distance / 95);
+  }
+  return THREE.MathUtils.lerp(1, 0.12, strongest);
 }
 
 function fadeOpponentEngineVoices(dt) {
@@ -11350,6 +12001,7 @@ function playCollisionSound(impactSpeed = 0, kind = "car") {
   if (!audioState.context || audioState.element || isPaused || isMenuOpen()) return;
   if ((audioState.collisionCooldown ?? 0) > 0 && impactSpeed < 18) return;
   const now = audioState.context.currentTime;
+  const collisionVolume = settingVolume("collisionVolume");
   const strength = THREE.MathUtils.clamp((impactSpeed - 2) / 32, 0, 1);
   if (strength <= 0.02) return;
   audioState.collisionCooldown = THREE.MathUtils.lerp(0.18, 0.07, strength);
@@ -11365,10 +12017,10 @@ function playCollisionSound(impactSpeed = 0, kind = "car") {
   scrapeFilter.frequency.setValueAtTime(kind === "car" ? 520 : kind === "wall" ? 290 : 220, now);
   scrapeFilter.Q.value = kind === "car" ? 1.2 : 0.65;
   thudGain.gain.setValueAtTime(0.001, now);
-  thudGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.1575, 1.08, strength), now + 0.012);
+  thudGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.1575, 1.08, strength) * collisionVolume, now + 0.012);
   thudGain.gain.exponentialRampToValueAtTime(0.001, now + THREE.MathUtils.lerp(0.1, 0.24, strength));
   scrapeGain.gain.setValueAtTime(0.001, now);
-  scrapeGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.099, 0.72, strength), now + 0.01);
+  scrapeGain.gain.exponentialRampToValueAtTime(THREE.MathUtils.lerp(0.099, 0.72, strength) * collisionVolume, now + 0.01);
   scrapeGain.gain.exponentialRampToValueAtTime(0.001, now + THREE.MathUtils.lerp(0.07, 0.18, strength));
   thud.connect(thudGain);
   scrape.connect(scrapeFilter);
@@ -11560,15 +12212,18 @@ function startRaceCountdown() {
   if (raceCountdownEl) raceCountdownEl.hidden = true;
   if (!raceMode) {
     hideRaceGridIntro();
+    stopRaceIntroMusic();
     return;
   }
   showRaceGridIntro();
+  startRaceIntroMusic();
 }
 
 function updateRaceCountdown(dt) {
   if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !gameStarted || isMenuOpen()) {
     if (raceCountdownEl) raceCountdownEl.hidden = true;
     hideRaceGridIntro();
+    stopRaceIntroMusic();
     raceCountdownState.introActive = false;
     raceCountdownState.active = false;
     raceCountdownState.hideTime = 0;
@@ -11578,11 +12233,12 @@ function updateRaceCountdown(dt) {
 
   if (raceCountdownState.introActive) {
     raceCountdownState.introElapsed += dt;
-    if (raceCountdownState.introElapsed < 5) return true;
+    if (raceCountdownState.introElapsed < RACE_GRID_INTRO_SECONDS) return true;
     raceCountdownState.introActive = false;
     raceCountdownState.active = true;
     raceCountdownState.elapsed = 0;
     hideRaceGridIntro();
+    stopRaceIntroMusic();
     showRaceCountdownCue("3");
     return true;
   }
@@ -11738,10 +12394,10 @@ function setupQuickRaceOpponents() {
     const displayName = getAiOpponentDisplayName(i, bossOpponentIndex);
     const isBoss = i === bossOpponentIndex;
     const aiCar = createSelectedCar(carId);
-    tuneAiCarLights(aiCar);
     const pose = getQuickRaceGridPose(gridPositions[i]);
-    aiCar.root.position.set(pose.position.x, track.groundY, pose.position.z);
+    syncCarVisualRoot(aiCar.root, new THREE.Vector3(pose.position.x, track.groundY, pose.position.z));
     aiCar.root.rotation.set(0, pose.heading, 0);
+    tuneAiCarLights(aiCar, aiCar.root.position, false);
     scene.add(aiCar.root);
     aiOpponents.push({
       id: `ai-${i}`,
@@ -12239,7 +12895,7 @@ function syncPostRacePlayerCarFromJoyride(joyride, profile, dt) {
   carState.gear = getAutoGear(forwardSpeed, profile, joyride.throttle, joyride.brake);
   carState.rpm = getEngineRpm(forwardSpeed, joyride.throttle > 0.1, carState.gear, profile);
   updateEngineAudio(dt, forwardSpeed, joyride.throttle, false, profile, false);
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
   car.body.rotation.x = THREE.MathUtils.damp(car.body.rotation.x, 0, 5, dt);
   car.body.rotation.z = THREE.MathUtils.damp(car.body.rotation.z, 0, 5, dt);
@@ -12351,6 +13007,7 @@ function restartQuickRaceFromResults() {
 function returnToMainMenuFromRace() {
   gameStarted = false;
   setPaused(false);
+  stopRaceIntroMusic();
   keys.clear();
   clearAiOpponents();
   removeOnlineRemoteCars();
@@ -12978,10 +13635,12 @@ function getAiDebugIntentColor(intent, target = new THREE.Color()) {
   return target.setHex(0xffd34a);
 }
 
-function tuneAiCarLights(aiCar) {
+function tuneAiCarLights(aiCar, position = null, allowBeam = true) {
+  const headlightsOn = allowBeam && shouldShowOpponentHeadlightsAt(position ?? aiCar?.root?.position);
+  applyHeadlightQuality(aiCar, { isPlayer: false, forceVisible: headlightsOn });
   for (const light of aiCar.lights?.headlights ?? []) {
-    light.visible = false;
-    light.intensity = 0;
+    light.visible = headlightsOn;
+    light.intensity = headlightsOn ? (light.userData.baseIntensity ?? 16) * 0.55 : 0;
   }
   for (const mesh of aiCar.lights?.headlightMeshes ?? []) {
     if (mesh.material?.emissiveIntensity !== undefined) {
@@ -13020,7 +13679,7 @@ function resetAiOpponentsToGrid() {
     if (opponent.aiModel === AI_CYBORG_MODEL_NAME) {
       opponent.cyborg = createCyborgOpponentState(pose, i);
     }
-    opponent.car.root.position.copy(opponent.position);
+    syncCarVisualRoot(opponent.car.root, opponent.position);
     opponent.car.root.rotation.set(0, opponent.heading, 0);
     updateRearWing(1, false, opponent.car);
     for (const wheelPivot of Object.values(opponent.car.wheels ?? {})) {
@@ -13037,10 +13696,11 @@ function resetAiOpponentsToGrid() {
 function updateAiOpponents(dt) {
   if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !aiOpponents.length || !track.samples?.length) return;
   const samples = track.samples;
+  const activeAiHeadlights = getActiveAiHeadlightOpponents();
   for (const opponent of aiOpponents) {
     updateAiDifficultyModifiers(opponent, dt);
     if (opponent.aiModel === AI_CYBORG_MODEL_NAME && opponent.cyborg) {
-      updateCyborgAiOpponent(opponent, dt);
+      updateCyborgAiOpponent(opponent, dt, activeAiHeadlights);
       continue;
     }
     let nearestIndex = getNearestAiSampleIndex(opponent.position, samples, opponent.sampleIndex ?? 0);
@@ -13090,10 +13750,11 @@ function updateAiOpponents(dt) {
     applyAiRecoveryAndAvoidance(opponent, pathPose, racing, currentSurface);
     applyAiTrafficAwareness(opponent, pathPose, racing, dt);
     updateAiDrivenCar(opponent, pathPose, racing, profile, dt);
-    opponent.car.root.position.copy(opponent.position);
+    syncCarVisualRoot(opponent.car.root, opponent.position);
     opponent.car.root.rotation.set(0, opponent.heading, 0);
+    tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
     updateRearWing(dt, false, opponent.car);
-    opponent.car.body.rotation.z = -opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.18;
+    opponent.car.body.rotation.z = opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.18;
     opponent.car.body.rotation.x = opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.035;
     opponent.wheelSpin -= opponent.speed * dt * 1.25;
     for (const wheel of opponent.car.wheelMeshes ?? []) {
@@ -13110,7 +13771,7 @@ function updateAiOpponents(dt) {
   updateAiDebugStats();
 }
 
-function updateCyborgAiOpponent(opponent, dt) {
+function updateCyborgAiOpponent(opponent, dt, activeAiHeadlights = getActiveAiHeadlightOpponents()) {
   const cyborg = opponent.cyborg;
   const line = cyborg.line;
   if (!line?.samples?.length || !line.totalDistance) return;
@@ -13180,7 +13841,7 @@ function updateCyborgAiOpponent(opponent, dt) {
     brake,
     boostActive,
     allowOffTrack: true,
-    ignoreWalls: true,
+    ignoreWalls: false,
     ignoreEdgePressure: true,
     softenGrassEmergencySlowdown: true,
   };
@@ -13205,10 +13866,11 @@ function updateCyborgAiOpponent(opponent, dt) {
     cyborg.lapDistance += opponent.speed * dt;
   }
 
-  opponent.car.root.position.copy(opponent.position);
+  syncCarVisualRoot(opponent.car.root, opponent.position);
   opponent.car.root.rotation.set(0, opponent.heading, 0);
+  tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
   updateRearWing(dt, opponent.boostActive, opponent.car);
-  opponent.car.body.rotation.z = -opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.14;
+  opponent.car.body.rotation.z = opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.14;
   opponent.car.body.rotation.x = opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.032;
   opponent.wheelSpin -= opponent.speed * dt * 1.25;
   for (const wheel of opponent.car.wheelMeshes ?? []) {
@@ -13498,6 +14160,63 @@ function applyAiRecoveryAndAvoidance(opponent, targetPose, racing, surface) {
   racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(18, 7, wallAvoidance.intensity));
 }
 
+function applyAiWallPrediction(opponent, targetPose, racing) {
+  const danger = getAiPredictedWallDanger(opponent, 0.2);
+  if (!danger) return;
+  opponent.debug.wallDangerFrames += 1;
+  const intensity = danger.intensity;
+  targetPose.position.addScaledVector(danger.normal, THREE.MathUtils.lerp(2.5, 10, intensity));
+  targetPose.trafficHeadingBias = THREE.MathUtils.clamp(
+    (targetPose.trafficHeadingBias ?? 0) + danger.turnAway * THREE.MathUtils.lerp(0.12, 0.34, intensity),
+    -0.42,
+    0.42,
+  );
+  racing.brake = Math.max(racing.brake, THREE.MathUtils.lerp(0.18, 0.92, intensity));
+  racing.throttle *= THREE.MathUtils.lerp(0.72, 0.04, intensity);
+  racing.targetSpeed = Math.min(racing.targetSpeed, THREE.MathUtils.lerp(22, 7, intensity));
+  opponent.brake = Math.max(opponent.brake ?? 0, racing.brake);
+  opponent.throttle = Math.min(opponent.throttle ?? 1, racing.throttle);
+}
+
+function getAiPredictedWallDanger(opponent, lookaheadSeconds = 0.2) {
+  if (!track.obstacles?.length) return null;
+  const predictedPosition = opponent.position.clone().addScaledVector(opponent.velocity ?? scratchZeroVelocity, lookaheadSeconds);
+  const predictedHeading = opponent.heading + (opponent.yawRate ?? 0) * lookaheadSeconds;
+  const forward = new THREE.Vector3(Math.sin(predictedHeading), 0, Math.cos(predictedHeading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const dims = getRaceCarCollisionDimensions((opponent.profile ?? getCarProfileById(opponent.carId))?.kind);
+  const checkPoints = [
+    predictedPosition.clone().addScaledVector(forward, dims.halfLength).addScaledVector(right, dims.halfWidth),
+    predictedPosition.clone().addScaledVector(forward, dims.halfLength).addScaledVector(right, -dims.halfWidth),
+    predictedPosition.clone().addScaledVector(forward, dims.halfLength * 0.35).addScaledVector(right, dims.halfWidth),
+    predictedPosition.clone().addScaledVector(forward, dims.halfLength * 0.35).addScaledVector(right, -dims.halfWidth),
+    predictedPosition.clone(),
+  ];
+  let best = null;
+  for (const obstacle of track.obstacles) {
+    if (obstacle.kind !== "wall") continue;
+    for (const point of checkPoints) {
+      const closest = closestPointOnSegmentVector(point, obstacle.a, obstacle.b);
+      const away = point.clone().sub(closest);
+      let distance = away.length();
+      const dangerDistance = (obstacle.halfWidth ?? 0.45) + 1.65;
+      if (distance > dangerDistance) continue;
+      const wallDirection = obstacle.b.clone().sub(obstacle.a).normalize();
+      if (distance < 0.001) {
+        away.set(wallDirection.z, 0, -wallDirection.x);
+        distance = 1;
+      } else {
+        away.multiplyScalar(1 / distance);
+      }
+      const intensity = THREE.MathUtils.clamp(1 - distance / dangerDistance, 0, 1);
+      const awayHeading = Math.atan2(away.x, away.z);
+      const turnAway = THREE.MathUtils.clamp(angleDifference(awayHeading, opponent.heading), -1, 1);
+      if (!best || intensity > best.intensity) best = { normal: away, intensity, turnAway };
+    }
+  }
+  return best;
+}
+
 function getAiWallAvoidance(opponent) {
   if (!track.obstacles?.length) return null;
   const forward = new THREE.Vector3(Math.sin(opponent.heading), 0, Math.cos(opponent.heading));
@@ -13532,6 +14251,7 @@ function getAiWallAvoidance(opponent) {
 
 function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   opponent.velocity ??= new THREE.Vector3();
+  if (!racing.ignoreWalls) applyAiWallPrediction(opponent, targetPose, racing);
   const toTarget = targetPose.position.clone().sub(opponent.position);
   const pointHeading = Math.atan2(toTarget.x, toTarget.z);
   const currentTrack = targetPose.currentTrack;
@@ -13939,30 +14659,50 @@ function keepAiWheelsInsideTrack(opponent) {
 
 function resolveAiWallSafety(opponent) {
   if (!track.obstacles?.length) return;
-  const collisionRadius = AI_HALF_WIDTH + 0.25;
+  const profile = opponent.profile ?? getCarProfileById(opponent.carId);
+  const dims = getRaceCarCollisionDimensions(profile.kind);
+  const forward = new THREE.Vector3(Math.sin(opponent.heading), 0, Math.cos(opponent.heading));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const collisionPoints = [
+    opponent.position.clone().addScaledVector(forward, dims.halfLength).addScaledVector(right, dims.halfWidth),
+    opponent.position.clone().addScaledVector(forward, dims.halfLength).addScaledVector(right, -dims.halfWidth),
+    opponent.position.clone().addScaledVector(forward, -dims.halfLength).addScaledVector(right, dims.halfWidth),
+    opponent.position.clone().addScaledVector(forward, -dims.halfLength).addScaledVector(right, -dims.halfWidth),
+    opponent.position.clone().addScaledVector(forward, dims.halfLength * 0.35).addScaledVector(right, dims.halfWidth),
+    opponent.position.clone().addScaledVector(forward, dims.halfLength * 0.35).addScaledVector(right, -dims.halfWidth),
+  ];
   for (const obstacle of track.obstacles) {
     if (obstacle.kind !== "wall") continue;
-    const closest = closestPointOnSegmentVector(opponent.position, obstacle.a, obstacle.b);
-    const away = opponent.position.clone().sub(closest);
-    let distance = away.length();
-    const safeDistance = collisionRadius + (obstacle.halfWidth ?? 0.45) + 0.35;
-    if (distance > safeDistance) continue;
-    if (distance < 0.001) {
+    for (const point of collisionPoints) {
+      const closest = closestPointOnSegmentVector(point, obstacle.a, obstacle.b);
+      const away = point.clone().sub(closest);
+      let distance = away.length();
+      const safeDistance = (obstacle.halfWidth ?? 0.45) + 0.28;
+      if (distance > safeDistance) continue;
       const wallDirection = obstacle.b.clone().sub(obstacle.a).normalize();
-      away.set(wallDirection.z, 0, -wallDirection.x);
-      distance = 1;
+      if (distance < 0.001) {
+        away.set(wallDirection.z, 0, -wallDirection.x);
+        distance = 1;
+      }
+      const normal = away.multiplyScalar(1 / distance);
+      const penetration = safeDistance - distance;
+      opponent.position.addScaledVector(normal, penetration + 0.08);
+      const incomingSpeed = -opponent.velocity.dot(normal);
+      let tangentSpeed = opponent.velocity.dot(wallDirection);
+      if (tangentSpeed < 0) wallDirection.multiplyScalar(-1);
+      tangentSpeed = Math.abs(tangentSpeed);
+      const scrapeSeverity = THREE.MathUtils.clamp(incomingSpeed / Math.max(opponent.speed ?? opponent.velocity.length(), 0.001), 0, 1);
+      opponent.velocity
+        .copy(wallDirection)
+        .multiplyScalar(tangentSpeed * THREE.MathUtils.lerp(0.84, 0.28, scrapeSeverity))
+        .addScaledVector(normal, incomingSpeed > 0 ? Math.min(incomingSpeed * 0.08, 0.65) : 0.22);
+      opponent.heading = angleLerp(opponent.heading, Math.atan2(wallDirection.x, wallDirection.z), THREE.MathUtils.lerp(0.18, 0.44, scrapeSeverity));
+      opponent.yawRate *= THREE.MathUtils.lerp(0.7, 0.24, scrapeSeverity);
+      opponent.speed = opponent.velocity.length();
+      opponent.recoveryTimer = Math.max(opponent.recoveryTimer ?? 0, 0.75);
+      opponent.debug.wallCorrectionFrames += 1;
+      return;
     }
-    const normal = away.multiplyScalar(1 / distance);
-    opponent.position.addScaledVector(normal, safeDistance - distance);
-    const wallDirection = obstacle.b.clone().sub(obstacle.a).normalize();
-    let tangentSpeed = opponent.velocity.dot(wallDirection);
-    if (tangentSpeed < 0) wallDirection.multiplyScalar(-1);
-    tangentSpeed = Math.abs(tangentSpeed);
-    opponent.velocity.copy(wallDirection).multiplyScalar(tangentSpeed * 0.72).addScaledVector(normal, 0.65);
-    opponent.heading = angleLerp(opponent.heading, Math.atan2(wallDirection.x, wallDirection.z), 0.32);
-    opponent.yawRate *= 0.45;
-    opponent.speed = opponent.velocity.length();
-    opponent.debug.wallCorrectionFrames += 1;
   }
 }
 
@@ -14187,7 +14927,7 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
   carState.boostActive = false;
   carState.nitrousFlameScale = 0;
   carState.headlightsOn = shouldDefaultHeadlightsOn();
-  car.root.position.copy(carState.position);
+  syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
   car.body.rotation.set(0, 0, 0);
   for (const wheelPivot of Object.values(car.wheels)) {
