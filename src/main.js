@@ -36,6 +36,9 @@ const onlineJoinGameButton = document.querySelector("#online-join-game");
 const onlineJoinRoomButton = document.querySelector("#online-join-room");
 const onlineRoomCodeInput = document.querySelector("#online-room-code-input");
 const onlineJoinStatusEl = document.querySelector("#online-join-status");
+const onlineLobbyBrowserStatusEl = document.querySelector("#online-lobby-browser-status");
+const onlineLobbyRefreshButton = document.querySelector("#online-lobby-refresh");
+const onlineLobbyListEl = document.querySelector("#online-lobby-list");
 const onlineRoomModeEl = document.querySelector("#online-room-mode");
 const onlineRoomCodeEl = document.querySelector("#online-room-code");
 const onlineSessionRoomCodeEl = document.querySelector("#online-session-room-code");
@@ -48,6 +51,7 @@ const onlineAiOpponentReadout = document.querySelector("#online-ai-opponent-read
 const onlineRaceLapSlider = document.querySelector("#online-race-lap-slider");
 const onlineRaceLapReadout = document.querySelector("#online-race-lap-readout");
 const onlineAiDifficultySelect = document.querySelector("#online-ai-difficulty-select");
+const onlineLobbyPrivacySelect = document.querySelector("#online-lobby-privacy");
 const onlineRoomReadyButton = document.querySelector("#online-room-ready");
 const onlineRoomStartDriveButton = document.querySelector("#online-room-start-drive");
 const openTrackEditorButton = document.querySelector("#open-track-editor");
@@ -157,12 +161,23 @@ const trackButtons = [...document.querySelectorAll("[data-track]")];
 const speedEl = document.querySelector("#speed");
 const gearEl = document.querySelector("#gear");
 const surfaceEl = document.querySelector("#surface");
+const draftCueEl = document.querySelector("#draft-cue");
+const sessionMenuButton = document.querySelector("#session-menu-button");
 const ersPanelEl = document.querySelector(".ers-panel");
 const ersControlHintEl = document.querySelector("#ers-control-hint");
 const ersLabelEl = document.querySelector("#ers-label");
 const ersFillEl = document.querySelector("#ers-fill");
 const ersReadoutEl = document.querySelector("#ers-readout");
 const pauseBadge = document.querySelector("#pause-badge");
+const pauseMenuEl = document.querySelector("#pause-menu");
+const pauseMenuModeEl = document.querySelector("#pause-menu-mode");
+const pauseMenuTitleEl = document.querySelector("#pause-menu-title");
+const pauseMenuDetailEl = document.querySelector("#pause-menu-detail");
+const pauseMenuResumeButton = document.querySelector("#pause-menu-resume");
+const pauseMenuResetButton = document.querySelector("#pause-menu-reset");
+const pauseMenuRestartButton = document.querySelector("#pause-menu-restart");
+const pauseMenuSettingsButton = document.querySelector("#pause-menu-settings");
+const pauseMenuQuitButton = document.querySelector("#pause-menu-quit");
 const revMeterEl = document.querySelector("#rev-meter");
 const revFillEl = document.querySelector("#rev-fill");
 const manualGearEl = document.querySelector("#manual-gear");
@@ -208,7 +223,12 @@ const aiDebugPanelEl = document.querySelector("#ai-debug-panel");
 const aiDebugStatusEl = document.querySelector("#ai-debug-status");
 const aiDebugDetailEl = document.querySelector("#ai-debug-detail");
 const audioBasePath = `${import.meta.env.BASE_URL}audio/`;
-const MENU_THEME_SRC = `${audioBasePath}the-paddock-theme.mp3`;
+const MENU_THEME_SRCS = [
+  `${audioBasePath}the-paddock-theme.mp3`,
+  `${audioBasePath}music-for-videos-night-drive-90s-synthwave-stargirl-180569.mp3`,
+  `${audioBasePath}alex_kizenkov-drive-sport-rock-141945.mp3`,
+];
+const MENU_THEME_SRC = MENU_THEME_SRCS[Math.floor(Math.random() * MENU_THEME_SRCS.length)];
 const CROWD_CHEER_SRC = `${audioBasePath}vishiv-crowd-cheering-in-stadium-435357.mp3`;
 const NATURE_AMBIENCE_SRCS = {
   day: `${audioBasePath}freesound_community-butcher-bird-singing-16757.mp3`,
@@ -226,12 +246,13 @@ const SUPABASE_URL = "https://dvckkaqlbyphlxyogbif.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gADFEoFX4NeCNuUqPKtX3w_3r-JpBEH";
 const SUPABASE_TIME_TRIAL_RECORDS_URL = `${SUPABASE_URL}/rest/v1/time_trial_records`;
 const SUPABASE_REALTIME_URL = `${SUPABASE_URL.replace("https://", "wss://")}/realtime/v1/websocket?apikey=${SUPABASE_PUBLISHABLE_KEY}&vsn=1.0.0`;
+const ONLINE_LOBBY_TOPIC = "realtime:paddock-public-lobbies";
 const GAME_SETTINGS_KEY = "the-paddock:settings:v1";
 
 function getDefaultGameSettings() {
   return {
     graphicsQuality: "medium",
-    defaultAiDifficulty: "standard",
+    defaultAiDifficulty: "beginner",
     defaultOpponents: 4,
     defaultRaceLaps: 3,
     defaultCamera: "chase",
@@ -279,7 +300,7 @@ function saveGameSettings() {
 
 function getGraphicsPixelRatio() {
   const deviceRatio = window.devicePixelRatio || 1;
-  if (gameSettings.graphicsQuality === "low") return Math.min(deviceRatio, 0.85);
+  if (gameSettings.graphicsQuality === "low") return Math.min(deviceRatio, 0.65);
   if (gameSettings.graphicsQuality === "high") return Math.min(deviceRatio, 2);
   return Math.min(deviceRatio, 1.25);
 }
@@ -289,7 +310,7 @@ function settingVolume(key) {
 }
 
 function getSceneryVisibilityMultiplier() {
-  if (gameSettings.graphicsQuality === "low") return 0.58;
+  if (gameSettings.graphicsQuality === "low") return 0.38;
   if (gameSettings.graphicsQuality === "high") return 1.24;
   return 1;
 }
@@ -301,7 +322,7 @@ function getSceneryLightVisibilityMultiplier(role = "ambient") {
 }
 
 function getEffectsDensityMultiplier() {
-  if (gameSettings.graphicsQuality === "low") return 0.48;
+  if (gameSettings.graphicsQuality === "low") return 0.34;
   if (gameSettings.graphicsQuality === "high") return 1.12;
   return 1;
 }
@@ -322,11 +343,13 @@ function getOpponentHeadlightMaxDistance() {
 
 function shouldShowOpponentHeadlightsAt(position) {
   if (!shouldUseOpponentHeadlightBeams() || !position) return false;
+  if (isRaceGridIntroActive()) return true;
   return position.distanceToSquared(carState.position) <= getOpponentHeadlightMaxDistance() ** 2;
 }
 
 function getActiveAiHeadlightOpponents() {
   if (!shouldUseOpponentHeadlightBeams() || !aiOpponents.length) return new Set();
+  if (isRaceGridIntroActive()) return new Set(aiOpponents);
   return new Set(
     aiOpponents
       .filter((opponent) => shouldShowOpponentHeadlightsAt(opponent.position))
@@ -435,15 +458,17 @@ scene.add(hemiLight);
 
 const sun = new THREE.DirectionalLight(0xfff1c8, 3.7);
 sun.position.set(-60, 95, 42);
-sun.castShadow = true;
+sun.castShadow = gameSettings.graphicsQuality !== "low";
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -140;
-sun.shadow.camera.right = 140;
-sun.shadow.camera.top = 140;
-sun.shadow.camera.bottom = -140;
-sun.shadow.camera.near = 10;
-sun.shadow.camera.far = 220;
-scene.add(sun);
+sun.shadow.camera.left = -95;
+sun.shadow.camera.right = 95;
+sun.shadow.camera.top = 95;
+sun.shadow.camera.bottom = -95;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 280;
+sun.target.position.set(0, 0, 0);
+scene.add(sun, sun.target);
+const sunShadowFocus = new THREE.Vector3();
 
 const TIME_OF_DAY_SETTINGS = {
   day: {
@@ -503,6 +528,8 @@ function applyTimeOfDay(timeOfDay = "day") {
   sun.color.setHex(setting.sunColor);
   sun.intensity = setting.sunIntensity;
   sun.position.set(...setting.sunPosition);
+  sun.userData.timeOfDayOffset = new THREE.Vector3(...setting.sunPosition);
+  updateSunShadowFocus(true);
 }
 
 function sceneryLightIntensity(baseIntensity, role = "ambient") {
@@ -677,6 +704,28 @@ function updateSkyObjects() {
   skyDome.position.copy(camera.position);
   moonGroup.position.copy(camera.position).add(new THREE.Vector3(-145, 118, -210));
   moonGroup.lookAt(camera.position);
+  updateSunShadowFocus();
+}
+
+function updateSunShadowFocus(force = false) {
+  if (!sun.castShadow) return;
+  const focus = gameStarted ? carState.position : camera.position;
+  const snappedFocus = sunShadowFocus.copy(focus);
+  snappedFocus.x = Math.round(snappedFocus.x / 8) * 8;
+  snappedFocus.y = 0.14;
+  snappedFocus.z = Math.round(snappedFocus.z / 8) * 8;
+  const sunOffset = sun.userData.timeOfDayOffset ?? new THREE.Vector3(-60, 95, 42);
+  const targetPosition = snappedFocus;
+  const lightPosition = snappedFocus.clone().add(sunOffset);
+  if (force) {
+    sun.target.position.copy(targetPosition);
+    sun.position.copy(lightPosition);
+  } else {
+    sun.target.position.lerp(targetPosition, 0.18);
+    sun.position.lerp(lightPosition, 0.18);
+  }
+  sun.target.updateMatrixWorld();
+  sun.shadow.camera.updateProjectionMatrix();
 }
 
 function randomBuildingVariant(type) {
@@ -694,6 +743,8 @@ function buildingVariantColor(type, variantId) {
 const keys = new Set();
 let gameStarted = false;
 let isPaused = false;
+let pauseMenuOpen = false;
+let pauseSettingsOpen = false;
 let menuStep = "intro";
 let selectedGameMode = "drive";
 let selectedAiOpponentCount = gameSettings.defaultOpponents;
@@ -983,6 +1034,7 @@ const bossModeState = {
 const onlineRoomState = {
   role: "none",
   roomCode: "",
+  privacy: "public",
   topic: "",
   socket: null,
   heartbeatId: null,
@@ -1009,6 +1061,17 @@ const onlineRoomState = {
   localFinishTime: null,
   resultsShown: false,
   lastError: "",
+};
+const onlineLobbyState = {
+  socket: null,
+  connected: false,
+  heartbeatId: null,
+  ref: 1,
+  joinRef: "",
+  lobbies: new Map(),
+  announceId: null,
+  cleanupId: null,
+  lastRefreshTime: 0,
 };
 const EDITOR_GRANDSTAND_FRONT_EDGE = 8.8;
 const EDITOR_GRANDSTAND_WALL_GAP = 1.1;
@@ -1116,20 +1179,23 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+  if (pauseMenuOpen && event.code !== "Escape" && event.code !== "KeyP") {
+    event.preventDefault();
+    return;
+  }
   keys.add(event.code);
   if (event.code === "Escape" && gameStarted && !event.repeat) {
-    if (selectedGameMode === "weekly-time-trial") openWeeklyTimeTrialMenu();
-    else openCarSelectionMenu();
+    togglePauseMenu();
     return;
   }
   if (event.code === "KeyP" && gameStarted && !isMenuOpen() && !event.repeat) {
-    togglePause();
+    togglePauseMenu();
     return;
   }
-  if (gameStarted && !isPaused) startEngineAudio();
-  if (event.code === "KeyR" && !isPaused) resetCar({ keepTimeTrialLaps: true });
-  if (event.code === "KeyH" && gameStarted && !event.repeat) toggleHeadlights();
-  if (event.code === "Space" && gameStarted && !event.repeat) toggleCameraMode();
+  if (gameStarted && !isPaused && !pauseMenuOpen) startEngineAudio();
+  if (event.code === "KeyR" && !isPaused && !pauseMenuOpen) resetCar({ keepTimeTrialLaps: true });
+  if (event.code === "KeyH" && gameStarted && !event.repeat && !pauseMenuOpen) toggleHeadlights();
+  if (event.code === "Space" && gameStarted && !event.repeat && !pauseMenuOpen) toggleCameraMode();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.code));
 canvas.addEventListener("pointerdown", (event) => {
@@ -1170,9 +1236,12 @@ onlineWeeklyTimeTrialButton?.addEventListener("click", startWeeklyOnlineTimeTria
 onlineHostGameButton?.addEventListener("click", startOnlineHostFlow);
 onlineJoinGameButton?.addEventListener("click", () => {
   setOnlineJoinStatus("");
+  startOnlineLobbyBrowser();
   setMenuStep("online-join");
 });
 onlineJoinRoomButton?.addEventListener("click", joinOnlineRoomFromInput);
+onlineLobbyRefreshButton?.addEventListener("click", refreshOnlineLobbyBrowser);
+onlineLobbyListEl?.addEventListener("click", handleOnlineLobbyListClick);
 onlineRoomCodeInput?.addEventListener("input", () => {
   onlineRoomCodeInput.value = normalizeOnlineRoomCode(onlineRoomCodeInput.value);
   setOnlineJoinStatus("");
@@ -1185,6 +1254,7 @@ onlineRoomStartDriveButton?.addEventListener("click", startOnlineRaceFromLobby);
 onlineAiOpponentSlider?.addEventListener("input", updateOnlineAiOpponentSelection);
 onlineRaceLapSlider?.addEventListener("input", updateOnlineRaceLapSelection);
 onlineAiDifficultySelect?.addEventListener("change", updateOnlineAiDifficultySelection);
+onlineLobbyPrivacySelect?.addEventListener("change", updateOnlineLobbyPrivacySelection);
 openTrackEditorButton.addEventListener("click", () => setMenuStep("editor-choice"));
 settingsButton?.addEventListener("click", () => setMenuStep("settings"));
 graphicsQualitySelect?.addEventListener("change", updateGameSettingsFromInputs);
@@ -1272,6 +1342,18 @@ quickRaceStartButton?.addEventListener("pointerenter", startMenuMusic);
 quickRaceStartButton?.addEventListener("click", startGame);
 quickRaceResultsRestartButton?.addEventListener("click", restartQuickRaceFromResults);
 quickRaceResultsMenuButton?.addEventListener("click", returnToMainMenuFromRace);
+sessionMenuButton?.addEventListener("click", () => openPauseMenu());
+pauseMenuResumeButton?.addEventListener("click", () => closePauseMenu());
+pauseMenuResetButton?.addEventListener("click", () => {
+  resetCar({ keepTimeTrialLaps: true });
+  closePauseMenu();
+});
+pauseMenuRestartButton?.addEventListener("click", () => restartCurrentSessionFromPauseMenu());
+pauseMenuSettingsButton?.addEventListener("click", () => openSettingsFromPauseMenu());
+pauseMenuQuitButton?.addEventListener("click", () => {
+  closePauseMenu({ restorePause: false });
+  returnToMainMenuFromRace();
+});
 timeTrialStandardButton?.addEventListener("click", () => selectTimeTrialMode("standard"));
 timeTrialRecordLineButton?.addEventListener("click", () => selectTimeTrialMode("record-line"));
 timeTrialGhostSelect?.addEventListener("change", updateTimeTrialGhostSelection);
@@ -1296,7 +1378,15 @@ for (const button of carCategoryButtons) {
   button.addEventListener("click", () => selectCarCategory(button.dataset.carCategory));
 }
 for (const button of backButtons) {
-  button.addEventListener("click", () => setMenuStep(button.dataset.menuBack));
+  button.addEventListener("click", () => {
+    if (pauseSettingsOpen && button.closest("[data-menu-step=\"settings\"]")) {
+      pauseSettingsOpen = false;
+      startMenu.classList.add("is-hidden");
+      openPauseMenu();
+      return;
+    }
+    setMenuStep(button.dataset.menuBack);
+  });
 }
 for (const button of trackButtons) {
   button.addEventListener("click", () => selectTrack(button.dataset.track));
@@ -1799,6 +1889,8 @@ const carState = {
   kerbKickRollTarget: 0,
   kerbKickPitchTarget: 0,
   collisionSmokeCooldown: 0,
+  collisionGripTimer: 0,
+  collisionGripLoss: 0,
   gear: 0,
   rpm: 2400,
   ers: 100,
@@ -1959,10 +2051,14 @@ const AI_LAUNCH_LANE_MERGE_SECONDS = 7;
 const AI_START_PACK_CAUTION_SECONDS = 12;
 const RACE_GRID_INTRO_SECONDS = 6;
 const MAX_ACTIVE_AI_HEADLIGHT_BEAMS = 4;
+const LOW_GRAPHICS_SIMPLE_CAR_DISTANCE = 140;
+const ONLINE_REMOTE_INTERPOLATION_DELAY_MS = 180;
+const ONLINE_REMOTE_MAX_PREDICTION_MS = 260;
+const ONLINE_REMOTE_MAX_SNAP_DISTANCE = 18;
 const SLIPSTREAM_MIN_SPEED = 20;
 const SLIPSTREAM_START_DISTANCE = 0;
-const SLIPSTREAM_PEAK_DISTANCE = 35;
-const SLIPSTREAM_END_DISTANCE = 50;
+const SLIPSTREAM_PEAK_DISTANCE = 38.5;
+const SLIPSTREAM_END_DISTANCE = 55;
 const CAR_VISUAL_RIDE_HEIGHT = 0.11;
 scene.add(dirtGroup);
 initDirtParticles();
@@ -1999,11 +2095,13 @@ function update() {
   updateSkyObjects();
   updateSceneryVisibility();
   updateSceneryLights();
+  updateSessionMenuButton();
   audioState.collisionCooldown = Math.max(0, (audioState.collisionCooldown ?? 0) - dt);
   updateCrowdAudio(dt);
   updateNatureAudio(dt);
   updateOpponentEngineAudio(dt);
   updateOnlineSessionRoomCodeHud();
+  if (!gameStarted || isPaused || isMenuOpen() || raceStartBlocked) updateDraftCue(0);
   renderer.render(scene, camera);
 }
 
@@ -2084,6 +2182,11 @@ function resolveRaceCarPairCollision(a, b, dt) {
   if (!overlap) return;
 
   const normal = overlap.normal;
+  const contactPoint = a.position.clone().add(b.position).multiplyScalar(0.5);
+  const contactSeverityA = getCollisionContactSeverity(a, normal);
+  const contactSeverityB = getCollisionContactSeverity(b, normal.clone().multiplyScalar(-1));
+  const impactBias = Math.max(contactSeverityA.frontRear, contactSeverityB.frontRear);
+  const scrapeBias = Math.max(contactSeverityA.side, contactSeverityB.side);
   const correction = overlap.depth + 0.015;
   const totalInvMass = boxA.invMass + boxB.invMass;
   if (totalInvMass <= 0) return;
@@ -2093,9 +2196,9 @@ function resolveRaceCarPairCollision(a, b, dt) {
   const relativeVelocity = b.velocity.clone().sub(a.velocity);
   const closingSpeed = relativeVelocity.dot(normal);
   const impactSpeed = Math.abs(closingSpeed);
-  const contactPoint = a.position.clone().add(b.position).multiplyScalar(0.5);
   if (closingSpeed < 0) {
-    const impulseStrength = -(1.05 * closingSpeed) / totalInvMass;
+    const restitution = THREE.MathUtils.lerp(0.16, 0.86, impactBias);
+    const impulseStrength = -((1 + restitution) * closingSpeed) / totalInvMass;
     a.velocity.addScaledVector(normal, -impulseStrength * boxA.invMass);
     b.velocity.addScaledVector(normal, impulseStrength * boxB.invMass);
   }
@@ -2104,12 +2207,29 @@ function resolveRaceCarPairCollision(a, b, dt) {
 
   const scrapeAxis = new THREE.Vector3(normal.z, 0, -normal.x);
   const scrapeSpeed = b.velocity.clone().sub(a.velocity).dot(scrapeAxis);
-  a.velocity.addScaledVector(scrapeAxis, scrapeSpeed * 0.025);
-  b.velocity.addScaledVector(scrapeAxis, -scrapeSpeed * 0.025);
+  const scrapeDrag = THREE.MathUtils.lerp(0.018, 0.085, scrapeBias) * THREE.MathUtils.clamp(Math.abs(scrapeSpeed) / 24, 0.35, 1.25);
+  a.velocity.addScaledVector(scrapeAxis, scrapeSpeed * scrapeDrag);
+  b.velocity.addScaledVector(scrapeAxis, -scrapeSpeed * scrapeDrag);
 
-  const yawKick = THREE.MathUtils.clamp(normal.x * Math.cos(a.heading) - normal.z * Math.sin(a.heading), -1, 1) * 0.012;
+  const yawKick = THREE.MathUtils.clamp(normal.x * Math.cos(a.heading) - normal.z * Math.sin(a.heading), -1, 1) * THREE.MathUtils.lerp(0.006, 0.026, impactBias);
   a.headingRef.heading -= yawKick;
   b.headingRef.heading += yawKick;
+  if (a.kind === "player") applyCollisionGripLoss(impactSpeed, scrapeBias);
+  if (b.kind === "player") applyCollisionGripLoss(impactSpeed, scrapeBias);
+}
+
+function getCollisionContactSeverity(body, normal) {
+  const forward = new THREE.Vector3(Math.sin(body.heading), 0, Math.cos(body.heading));
+  const frontRear = Math.abs(normal.dot(forward));
+  const side = 1 - frontRear;
+  return { frontRear, side };
+}
+
+function applyCollisionGripLoss(impactSpeed, scrapeBias = 0) {
+  const severity = THREE.MathUtils.clamp((impactSpeed - 7) / 26, 0, 1);
+  if (severity <= 0) return;
+  carState.collisionGripLoss = Math.max(carState.collisionGripLoss, THREE.MathUtils.lerp(0.12, 0.42, severity) * THREE.MathUtils.lerp(0.78, 1, 1 - scrapeBias));
+  carState.collisionGripTimer = Math.max(carState.collisionGripTimer, THREE.MathUtils.lerp(0.3, 0.85, severity));
 }
 
 function getRaceCarCollisionBox(body) {
@@ -2128,11 +2248,11 @@ function getRaceCarCollisionBox(body) {
 }
 
 function getRaceCarCollisionDimensions(kind = "formula") {
-  if (kind === "stock") return { halfLength: 2.78, halfWidth: 1.42, mass: 1.22 };
-  if (kind === "lmp") return { halfLength: 2.85, halfWidth: 1.36, mass: 1.08 };
-  if (kind === "jeep") return { halfLength: 2.35, halfWidth: 1.34, mass: 1.3 };
-  if (kind === "corvette") return { halfLength: 2.72, halfWidth: 1.32, mass: 1.12 };
-  return { halfLength: 2.95, halfWidth: 1.34, mass: 0.92 };
+  if (kind === "stock") return { halfLength: 2.64, halfWidth: 1.31, mass: 1.22 };
+  if (kind === "lmp") return { halfLength: 2.72, halfWidth: 1.23, mass: 1.08 };
+  if (kind === "jeep") return { halfLength: 2.26, halfWidth: 1.23, mass: 1.3 };
+  if (kind === "corvette") return { halfLength: 2.58, halfWidth: 1.19, mass: 1.12 };
+  return { halfLength: 2.76, halfWidth: 1.18, mass: 0.92 };
 }
 
 function getOrientedBoxOverlap(a, b) {
@@ -2216,6 +2336,15 @@ function getSlipstreamStrength(trailingBody) {
     best = Math.max(best, speedFactor * distanceFactor * lateralFactor * alignmentFactor);
   }
   return THREE.MathUtils.clamp(best, 0, 1);
+}
+
+function updateDraftCue(strength = 0) {
+  const active = gameStarted && !isMenuOpen() && strength > 0.08;
+  if (draftCueEl) {
+    draftCueEl.hidden = !active;
+    draftCueEl.style.opacity = active ? String(THREE.MathUtils.lerp(0.72, 1, THREE.MathUtils.clamp(strength, 0, 1))) : "0";
+  }
+  speedEl?.parentElement?.classList.toggle("is-drafting", active);
 }
 
 function getLeadSlipstreamActivity(leadBody, bodies) {
@@ -2311,7 +2440,11 @@ function updateCar(dt) {
   let lateralSpeed = carState.velocity.dot(scratchRight);
   const speedAbs = carState.velocity.length();
   const slipstreamStrength = getSlipstreamStrength(getPlayerSlipstreamBody());
+  updateDraftCue(slipstreamStrength);
   const topSpeedRatio = THREE.MathUtils.clamp(speedAbs / profile.maxForwardSpeed, 0, 1);
+  carState.collisionGripTimer = Math.max(0, carState.collisionGripTimer - dt);
+  if (carState.collisionGripTimer <= 0) carState.collisionGripLoss = THREE.MathUtils.damp(carState.collisionGripLoss, 0, 3.5, dt);
+  const collisionGripScale = 1 - THREE.MathUtils.clamp(carState.collisionGripLoss, 0, 0.42);
   const coasting = throttle === 0 && brake === 0 ? 1 : 0;
   const lmpCoastTurnBoost = profile.kind === "lmp" && coasting
     ? THREE.MathUtils.lerp(1.38, 1.18, topSpeedRatio)
@@ -2327,9 +2460,9 @@ function updateCar(dt) {
     (surface.kind === "grass" ? profile.grassAccelerationScale / offTrackSlowdownScale : surface.kind === "sausage" ? 0.78 : surface.kind === "kerb" ? 0.88 : 1) * paintedKerbPowerScale;
   const surfaceTopSpeedScale =
     surface.kind === "grass" ? profile.grassTopSpeedScale / offTrackSlowdownScale : surface.kind === "sausage" ? 0.84 : surface.kind === "kerb" ? 0.92 : 1;
-  const slipstreamTopSpeedScale = 1 + slipstreamStrength * 0.045;
-  const slipstreamPowerScale = 1 + slipstreamStrength * 0.08;
-  const slipstreamDragScale = 1 - slipstreamStrength * 0.22;
+  const slipstreamTopSpeedScale = 1 + slipstreamStrength * 0.0585;
+  const slipstreamPowerScale = 1 + slipstreamStrength * 0.104;
+  const slipstreamDragScale = 1 - slipstreamStrength * 0.286;
   const maxForwardSpeed = profile.maxForwardSpeed * surfaceTopSpeedScale * (boostActive ? boostPowerScale : 1) * slipstreamTopSpeedScale;
   updateErs(dt, boostActive, brake, profile);
   const maxSteer = THREE.MathUtils.lerp(
@@ -2359,7 +2492,7 @@ function updateCar(dt) {
         : profile.baseGrip;
   const downforceGrip = 1 + speedAbs * speedAbs * profile.downforce;
   const coastRotationBoost = 1 + coasting * THREE.MathUtils.lerp(0.08, 0.02, topSpeedRatio);
-  const grip = surfaceGrip * downforceGrip * coastRotationBoost * (handbrake ? tuning.handbrakeGrip : 1);
+  const grip = surfaceGrip * downforceGrip * coastRotationBoost * (handbrake ? tuning.handbrakeGrip : 1) * collisionGripScale;
 
   if (throttle) {
     const powerFade = 1 - THREE.MathUtils.clamp(forwardSpeed / maxForwardSpeed, 0, 1);
@@ -2538,8 +2671,11 @@ function updateCar(dt) {
   carState.kerbKickPitchTarget = THREE.MathUtils.damp(carState.kerbKickPitchTarget, 0, 1.15, dt);
   carState.kerbKickRoll = THREE.MathUtils.damp(carState.kerbKickRoll, carState.kerbKickRollTarget, 2.9, dt);
   carState.kerbKickPitch = THREE.MathUtils.damp(carState.kerbKickPitch, carState.kerbKickPitchTarget, 2.9, dt);
-  car.body.rotation.z = carState.visualRoll + grassRockRoll + kerbWheelRoll + carState.kerbKickRoll;
-  car.body.rotation.x = grassRockPitch + kerbWheelPitch + carState.kerbKickPitch;
+  setCarBodyLean(
+    car,
+    grassRockPitch + kerbWheelPitch + carState.kerbKickPitch,
+    carState.visualRoll + grassRockRoll + kerbWheelRoll + carState.kerbKickRoll,
+  );
 
   if (car.wheels.frontLeft) car.wheels.frontLeft.rotation.y = carState.steer;
   if (car.wheels.frontRight) car.wheels.frontRight.rotation.y = carState.steer;
@@ -2630,16 +2766,19 @@ function resolveWallCollision(wall, carRadius, speedAbs) {
   const wallDirection = wall.b.clone().sub(wall.a).normalize();
   const tangentSpeed = velocity.dot(wallDirection);
   const hitRatio = THREE.MathUtils.clamp(incomingSpeed / Math.max(speedAbs, 0.001), 0, 1);
-  const scrapeSeverity = Math.pow(hitRatio, 1.65);
-  const scrapeScale = THREE.MathUtils.lerp(0.96, 0.08, scrapeSeverity);
-  const bounce = incomingSpeed > 0 ? Math.min(incomingSpeed * 0.045, 0.45) : 0;
+  const impactSeverity = Math.pow(hitRatio, 1.55);
+  const scrapeSeverity = 1 - impactSeverity;
+  const scrapeScale = THREE.MathUtils.lerp(0.92, 0.16, impactSeverity);
+  const bounce = incomingSpeed > 0 ? Math.min(incomingSpeed * THREE.MathUtils.lerp(0.018, 0.13, impactSeverity), 1.05) : 0;
 
   carState.velocity
     .copy(wallDirection)
     .multiplyScalar(tangentSpeed * scrapeScale)
     .addScaledVector(normal, bounce);
-  carState.yawRate *= THREE.MathUtils.lerp(0.95, 0.22, scrapeSeverity);
-  if (hitRatio > 0.45) carState.heading += THREE.MathUtils.clamp(normal.x * scratchForward.z - normal.z * scratchForward.x, -1, 1) * 0.065;
+  carState.yawRate *= THREE.MathUtils.lerp(0.88, 0.2, impactSeverity);
+  const cornerKick = THREE.MathUtils.clamp(normal.x * scratchForward.z - normal.z * scratchForward.x, -1, 1);
+  if (hitRatio > 0.28) carState.heading += cornerKick * THREE.MathUtils.lerp(0.026, 0.095, impactSeverity);
+  applyCollisionGripLoss(Math.max(incomingSpeed, speedAbs * impactSeverity), scrapeSeverity);
 
   if (incomingSpeed > 3.5 && carState.collisionSmokeCooldown <= 0) {
     spawnCollisionSmoke(closest, normal, incomingSpeed);
@@ -3699,13 +3838,15 @@ async function downloadOnlineTimeTrialGhostsForSelection() {
   setTimeTrialOnlineStatus("Loading online ghosts...");
   try {
     const query = {
-      select: "record",
+      select: "record,created_at",
       track_id: `eq.${selectedTrack}`,
-      track_version: `eq.${trackVersion}`,
       car_class: `eq.${carClass}`,
       order: "lap_time.asc",
       limit: "10",
     };
+    if (selectedOnlineGhostFilter !== "week") {
+      query.track_version = `eq.${trackVersion}`;
+    }
     if (selectedOnlineGhostFilter === "week") {
       query.created_at = `gte.${getMostRecentSundayFivePacificIso()}`;
     }
@@ -3717,12 +3858,19 @@ async function downloadOnlineTimeTrialGhostsForSelection() {
     if (!response.ok) throw new Error(await response.text());
     const rows = await response.json();
     const onlineRecords = rows
-      .map((row) => normalizeImportedTimeTrialRecord(row.record))
+      .map((row) => {
+        const record = normalizeImportedTimeTrialRecord(row.record);
+        return record ? {
+          ...record,
+          source: "online",
+          uploadedAt: row.created_at ?? record.uploadedAt,
+          downloadedAt: new Date().toISOString(),
+        } : null;
+      })
       .filter(Boolean)
       .map((record) => ({
         ...record,
         source: "online",
-        downloadedAt: new Date().toISOString(),
       }));
     if (!onlineRecords.length) {
       selectedOnlineGhostRecordId = "";
@@ -3912,9 +4060,11 @@ function getMatchingOnlineTimeTrialGhostRecords() {
       : record.source === "online" || record.downloadedAt)
     .filter((record) => record.ghost?.samples?.length >= 2)
     .filter((record) => record.track?.id === selectedTrack)
-    .filter((record) => (record.track?.version ?? "local-v1") === (trackDefinitions[selectedTrack]?.version ?? "local-v1"))
+    .filter((record) => selectedOnlineGhostFilter === "week" ||
+      (record.track?.version ?? "local-v1") === (trackDefinitions[selectedTrack]?.version ?? "local-v1"))
     .filter((record) => record.car?.class === getCarProfile().kind)
-    .filter((record) => selectedOnlineGhostFilter !== "week" || new Date(record.createdAt) >= new Date(getMostRecentSundayFivePacificIso()))
+    .filter((record) => selectedOnlineGhostFilter !== "week" ||
+      new Date(record.uploadedAt ?? record.downloadedAt ?? record.createdAt) >= new Date(getMostRecentSundayFivePacificIso()))
     .sort((a, b) => a.lap.lapTime - b.lap.lapTime);
 }
 
@@ -6486,12 +6636,37 @@ function addGeoffCordenStockDetails(body, { red, navy, yellow, black }) {
   body.add(deckStripe);
 }
 
+function setupCarSuspensionBody(carModel) {
+  if (!carModel?.body || carModel.suspensionBody) return carModel;
+  const wheelPivots = new Set(Object.values(carModel.wheels ?? {}).filter(Boolean));
+  const suspensionBody = new THREE.Group();
+  suspensionBody.name = "SuspensionBody";
+  carModel.body.add(suspensionBody);
+  for (const child of [...carModel.body.children]) {
+    if (child === suspensionBody || wheelPivots.has(child)) continue;
+    suspensionBody.add(child);
+  }
+  carModel.suspensionBody = suspensionBody;
+  return carModel;
+}
+
+function getCarSuspensionBody(carModel) {
+  return carModel?.suspensionBody ?? carModel?.body ?? null;
+}
+
+function setCarBodyLean(carModel, pitch = 0, roll = 0) {
+  const suspensionBody = getCarSuspensionBody(carModel);
+  if (!suspensionBody) return;
+  suspensionBody.rotation.set(pitch, 0, roll);
+  if (carModel.body && carModel.body !== suspensionBody) carModel.body.rotation.set(0, 0, 0);
+}
+
 function createSelectedCar(carId) {
-  if (corvettePaintSchemes[carId]) return addUniversalHeadlights(createCorvette(carId), "corvette");
-  if (lmpPaintSchemes[carId]) return addUniversalHeadlights(createLeMansPrototype(carId), "lmp");
-  if (stockPaintSchemes[carId]) return addUniversalHeadlights(createStockCar(carId), "stock");
-  if (jeepPaintSchemes[carId]) return addUniversalHeadlights(createJeep(carId), "jeep");
-  return addUniversalHeadlights(createFormulaCar(carId), "formula");
+  if (corvettePaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createCorvette(carId), "corvette"));
+  if (lmpPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createLeMansPrototype(carId), "lmp"));
+  if (stockPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createStockCar(carId), "stock"));
+  if (jeepPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createJeep(carId), "jeep"));
+  return setupCarSuspensionBody(addUniversalHeadlights(createFormulaCar(carId), "formula"));
 }
 
 function createSelectedCarForDriverProfile(carId, profile = driverProfile) {
@@ -8701,6 +8876,8 @@ function startOnlineHostFlow() {
   selectedGameMode = "online-host";
   clearAiOpponents();
   applyRaceDefaultsFromSettings();
+  onlineRoomState.privacy = "public";
+  if (onlineLobbyPrivacySelect) onlineLobbyPrivacySelect.value = onlineRoomState.privacy;
   const roomCode = generateOnlineRoomCode();
   connectOnlineRoom(roomCode, "host");
   startGameModeSelection("online-host", "go-online");
@@ -8708,11 +8885,13 @@ function startOnlineHostFlow() {
 
 function completeOnlineHostSetup() {
   if (!onlineRoomState.roomCode) connectOnlineRoom(generateOnlineRoomCode(), "host");
+  onlineRoomState.privacy = onlineLobbyPrivacySelect?.value === "private" ? "private" : "public";
   onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
   onlineRoomState.ready = true;
   onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
   sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
   sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
+  startOnlinePublicLobbyAnnouncements();
   renderOnlineRoom();
   setMenuStep("online-room");
 }
@@ -8726,6 +8905,227 @@ function joinOnlineRoomFromInput() {
   selectedGameMode = "online-join";
   connectOnlineRoom(roomCode, "guest");
   setMenuStep("online-room");
+}
+
+function startOnlineLobbyBrowser() {
+  pruneOnlineLobbyList();
+  renderOnlineLobbyList();
+  if (onlineLobbyState.socket?.readyState === WebSocket.OPEN || onlineLobbyState.socket?.readyState === WebSocket.CONNECTING) {
+    sendOnlineLobbyEvent("lobby_request", { requestedAt: Date.now() });
+    return;
+  }
+  disconnectOnlineLobbyBrowser();
+  try {
+    onlineLobbyState.socket = new WebSocket(SUPABASE_REALTIME_URL);
+    onlineLobbyState.socket.addEventListener("open", () => {
+      joinOnlineLobbyChannel();
+      onlineLobbyState.heartbeatId = window.setInterval(sendOnlineLobbyHeartbeat, 25000);
+      setOnlineLobbyStatus("Looking for public lobbies...", "is-warning");
+    });
+    onlineLobbyState.socket.addEventListener("message", handleOnlineLobbyRealtimeMessage);
+    onlineLobbyState.socket.addEventListener("close", () => {
+      onlineLobbyState.connected = false;
+      if (onlineLobbyState.heartbeatId) window.clearInterval(onlineLobbyState.heartbeatId);
+      onlineLobbyState.heartbeatId = null;
+    });
+    onlineLobbyState.socket.addEventListener("error", () => {
+      setOnlineLobbyStatus("Could not load public lobbies.", "is-bad");
+    });
+  } catch {
+    setOnlineLobbyStatus("This browser could not load public lobbies.", "is-bad");
+  }
+}
+
+function disconnectOnlineLobbyBrowser() {
+  if (onlineLobbyState.heartbeatId) window.clearInterval(onlineLobbyState.heartbeatId);
+  onlineLobbyState.heartbeatId = null;
+  if (onlineLobbyState.socket) {
+    try {
+      onlineLobbyState.socket.close();
+    } catch {
+      // The socket may already be closed.
+    }
+  }
+  onlineLobbyState.socket = null;
+  onlineLobbyState.connected = false;
+}
+
+function joinOnlineLobbyChannel() {
+  sendOnlineLobbyRealtimeMessage(ONLINE_LOBBY_TOPIC, "phx_join", {
+    config: {
+      broadcast: { ack: false, self: true },
+      presence: { enabled: false },
+      private: false,
+    },
+  });
+}
+
+function sendOnlineLobbyHeartbeat() {
+  sendOnlineLobbyRealtimeMessage("phoenix", "heartbeat", {});
+}
+
+function sendOnlineLobbyRealtimeMessage(topic, event, payload = {}) {
+  const socket = onlineLobbyState.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  const ref = String(onlineLobbyState.ref++);
+  if (event === "phx_join") onlineLobbyState.joinRef = ref;
+  socket.send(JSON.stringify({
+    topic,
+    event,
+    payload,
+    ref,
+    join_ref: topic === "phoenix" ? undefined : onlineLobbyState.joinRef || ref,
+  }));
+  return true;
+}
+
+function sendOnlineLobbyEvent(event, payload = {}) {
+  return sendOnlineLobbyRealtimeMessage(ONLINE_LOBBY_TOPIC, "broadcast", { type: "broadcast", event, payload });
+}
+
+function startOnlinePublicLobbyAnnouncements() {
+  if (onlineRoomState.role !== "host" || onlineRoomState.privacy !== "public") return;
+  startOnlineLobbyBrowser();
+  if (!onlineLobbyState.announceId) {
+    onlineLobbyState.announceId = window.setInterval(announceOnlinePublicLobby, 5000);
+  }
+  announceOnlinePublicLobby();
+}
+
+function stopOnlinePublicLobbyAnnouncements() {
+  if (onlineLobbyState.announceId) window.clearInterval(onlineLobbyState.announceId);
+  onlineLobbyState.announceId = null;
+}
+
+function announceOnlinePublicLobby() {
+  if (onlineRoomState.role !== "host" || onlineRoomState.privacy !== "public" || !onlineRoomState.roomCode || gameStarted || onlineRoomState.raceStarted) return;
+  onlineRoomState.hostSettings ??= getOnlineRoomSettingsPayload();
+  sendOnlineLobbyEvent("lobby_announce", getOnlinePublicLobbyPayload());
+}
+
+function getOnlinePublicLobbyPayload() {
+  const settings = onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload();
+  return {
+    roomCode: onlineRoomState.roomCode,
+    privacy: onlineRoomState.privacy,
+    raceStarted: Boolean(onlineRoomState.raceStarted || gameStarted),
+    hostName: driverProfile.driverName || "Driver Name",
+    trackName: settings.trackName,
+    carClass: settings.carClass,
+    laps: settings.laps,
+    aiOpponentCount: settings.aiOpponentCount,
+    aiDifficulty: settings.aiDifficulty,
+    playerCount: Math.max(1, onlineRoomState.players.size),
+    updatedAt: Date.now(),
+  };
+}
+
+function handleOnlineLobbyRealtimeMessage(event) {
+  let message = null;
+  try {
+    message = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+  if (message.topic !== ONLINE_LOBBY_TOPIC) return;
+  if (message.event === "phx_reply" && message.payload?.status === "ok") {
+    onlineLobbyState.connected = true;
+    setOnlineLobbyStatus("Listening for public lobbies...", "is-good");
+    refreshOnlineLobbyBrowser();
+    return;
+  }
+  if (message.event !== "broadcast") return;
+  const broadcastEvent = message.payload?.event;
+  const payload = message.payload?.payload ?? {};
+  if (broadcastEvent === "lobby_announce") {
+    receiveOnlineLobbyAnnouncement(payload);
+  } else if (broadcastEvent === "lobby_request") {
+    announceOnlinePublicLobby();
+  }
+}
+
+function refreshOnlineLobbyBrowser() {
+  onlineLobbyState.lastRefreshTime = performance.now();
+  pruneOnlineLobbyList();
+  renderOnlineLobbyList();
+  if (!onlineLobbyState.socket || onlineLobbyState.socket.readyState === WebSocket.CLOSED) {
+    startOnlineLobbyBrowser();
+    return;
+  }
+  sendOnlineLobbyEvent("lobby_request", { requestedAt: Date.now() });
+}
+
+function receiveOnlineLobbyAnnouncement(payload = {}) {
+  if (!payload.roomCode || payload.privacy !== "public" || payload.raceStarted) return;
+  onlineLobbyState.lobbies.set(payload.roomCode, {
+    ...payload,
+    lastSeen: performance.now(),
+  });
+  pruneOnlineLobbyList();
+  renderOnlineLobbyList();
+}
+
+function pruneOnlineLobbyList() {
+  const now = performance.now();
+  for (const [roomCode, lobby] of onlineLobbyState.lobbies.entries()) {
+    if (now - (lobby.lastSeen ?? 0) > 15000) onlineLobbyState.lobbies.delete(roomCode);
+  }
+}
+
+function setOnlineLobbyStatus(text, className = "") {
+  if (!onlineLobbyBrowserStatusEl) return;
+  onlineLobbyBrowserStatusEl.textContent = text;
+  onlineLobbyBrowserStatusEl.classList.remove("is-good", "is-warning", "is-bad");
+  if (className) onlineLobbyBrowserStatusEl.classList.add(className);
+}
+
+function renderOnlineLobbyList() {
+  if (!onlineLobbyListEl) return;
+  onlineLobbyListEl.replaceChildren();
+  const lobbies = [...onlineLobbyState.lobbies.values()]
+    .sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
+  if (!lobbies.length) {
+    const empty = document.createElement("li");
+    empty.className = "is-empty";
+    empty.textContent = onlineLobbyState.connected ? "No public lobbies yet. Try Refresh, or enter a private room code." : "Connecting to the public lobby list...";
+    onlineLobbyListEl.appendChild(empty);
+    return;
+  }
+  for (const lobby of lobbies) {
+    const row = document.createElement("li");
+    const players = Math.max(1, Number(lobby.playerCount) || 1);
+    const ai = Math.max(0, Number(lobby.aiOpponentCount) || 0);
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(lobby.hostName || "Host")} - ${escapeHtml(lobby.trackName || "Track")}</strong>
+        <small>${escapeHtml(getCarClassLabel(lobby.carClass || "stock"))} / ${Number(lobby.laps) || 3} laps / ${players} player${players === 1 ? "" : "s"} / ${ai} AI</small>
+      </div>
+      <button class="profile-action-button" type="button" data-join-public-lobby="${escapeHtml(lobby.roomCode)}">Join</button>
+    `;
+    onlineLobbyListEl.appendChild(row);
+  }
+}
+
+function handleOnlineLobbyListClick(event) {
+  const button = event.target?.closest?.("[data-join-public-lobby]");
+  if (!button) return;
+  const roomCode = normalizeOnlineRoomCode(button.dataset.joinPublicLobby);
+  if (!roomCode) return;
+  if (onlineRoomCodeInput) onlineRoomCodeInput.value = roomCode;
+  setOnlineJoinStatus(`Joining public lobby ${roomCode}...`, "is-good");
+  selectedGameMode = "online-join";
+  connectOnlineRoom(roomCode, "guest");
+  setMenuStep("online-room");
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  }[char]));
 }
 
 function getOnlinePlayerId() {
@@ -8742,14 +9142,14 @@ function getOnlinePlayerId() {
 }
 
 function generateOnlineRoomCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   let code = "";
-  for (let i = 0; i < 6; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 4; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
   return code;
 }
 
 function normalizeOnlineRoomCode(value = "") {
-  return String(value).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return String(value).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
 }
 
 function connectOnlineRoom(roomCode, role) {
@@ -8796,6 +9196,7 @@ function connectOnlineRoom(roomCode, role) {
 }
 
 function disconnectOnlineRoom() {
+  stopOnlinePublicLobbyAnnouncements();
   if (onlineRoomState.heartbeatId) window.clearInterval(onlineRoomState.heartbeatId);
   onlineRoomState.heartbeatId = null;
   if (onlineRoomState.socket) {
@@ -8907,6 +9308,7 @@ function getOnlineRoomSettingsPayload() {
     laps: selectedQuickRaceLapCount,
     aiOpponentCount: selectedAiOpponentCount,
     aiDifficulty: selectedAiDifficulty,
+    privacy: onlineRoomState.privacy,
   };
 }
 
@@ -8941,6 +9343,7 @@ function applyOnlineHostSettings(settings = {}) {
   selectedQuickRaceLapCount = THREE.MathUtils.clamp(Math.round(Number(settings.laps ?? selectedQuickRaceLapCount) || 3), 1, 10);
   selectedAiOpponentCount = THREE.MathUtils.clamp(Math.round(Number(settings.aiOpponentCount ?? selectedAiOpponentCount) || 0), 0, 10);
   selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[settings.aiDifficulty] ? settings.aiDifficulty : selectedAiDifficulty;
+  onlineRoomState.privacy = settings.privacy === "private" ? "private" : "public";
   updateOnlineHostSettingsControls();
   if (onlineRoomState.role === "guest" && !gameStarted) {
     if (selectedTrack !== settings.selectedTrack) selectTrack(settings.selectedTrack);
@@ -8979,10 +9382,22 @@ function updateOnlineAiDifficultySelection() {
   syncOnlineHostSettingsFromControls();
 }
 
+function updateOnlineLobbyPrivacySelection() {
+  onlineRoomState.privacy = onlineLobbyPrivacySelect?.value === "private" ? "private" : "public";
+  if (onlineRoomState.privacy === "public") {
+    startOnlinePublicLobbyAnnouncements();
+    announceOnlinePublicLobby();
+  } else {
+    stopOnlinePublicLobbyAnnouncements();
+  }
+  renderOnlineRoom();
+}
+
 function syncOnlineHostSettingsFromControls() {
   if (onlineRoomState.role !== "host" || menuStep !== "online-room") return;
   onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
   sendOnlineRosterUpdate();
+  announceOnlinePublicLobby();
   renderOnlineRoom();
 }
 
@@ -8992,10 +9407,11 @@ function startOnlineRaceFromLobby() {
     return;
   }
   onlineRoomState.hostSettings = getOnlineRoomSettingsPayload();
+  stopOnlinePublicLobbyAnnouncements();
   const payload = {
     ...onlineRoomState.hostSettings,
     gridOrder: createOnlineGridOrder(),
-    startAt: Date.now() + 900,
+    startAt: Date.now() + 1800,
   };
   sendOnlineRoomEvent("host_settings", onlineRoomState.hostSettings);
   sendOnlineRoomEvent("race_start", payload);
@@ -9238,20 +9654,107 @@ function receiveOnlinePlayerPose(payload = {}) {
     remote = createOnlineRemoteCar(payload);
     onlineRoomState.remoteCars.set(payload.playerId, remote);
   }
-  remote.lastSeen = performance.now();
-        remote.target.position.set(Number(payload.x) || 0, track.groundY + CAR_VISUAL_RIDE_HEIGHT, Number(payload.z) || 0);
-  remote.target.heading = Number(payload.heading) || 0;
-  remote.target.velocity.set(
-    Math.sin(remote.target.heading) * (Number(payload.speed) || 0),
-    0,
-    Math.cos(remote.target.heading) * (Number(payload.speed) || 0),
-  );
-  remote.target.steer = Number(payload.steer) || 0;
-  remote.target.wheelSpin = Number(payload.wheelSpin) || remote.target.wheelSpin;
-  remote.target.boostActive = Boolean(payload.boostActive);
-  remote.target.throttle = Number(payload.throttle) > 0.1 ? 1 : 0;
-  remote.target.brake = Number(payload.brake) > 0.1;
+  const snapshot = createOnlineRemoteSnapshot(payload, performance.now());
+  remote.lastSeen = snapshot.receivedAt;
+  remote.snapshots.push(snapshot);
+  while (remote.snapshots.length > 10) remote.snapshots.shift();
+  remote.target.position.copy(snapshot.position);
+  remote.target.heading = snapshot.heading;
+  remote.target.velocity.copy(snapshot.velocity);
+  remote.target.steer = snapshot.steer;
+  remote.target.wheelSpin = snapshot.wheelSpin;
+  remote.target.boostActive = snapshot.boostActive;
+  remote.target.throttle = snapshot.throttle;
+  remote.target.brake = snapshot.brake;
+  if (!remote.hasRenderedSnapshot) {
+    remote.car.root.position.copy(snapshot.position);
+    remote.car.root.rotation.y = snapshot.heading;
+    remote.hasRenderedSnapshot = true;
+  }
   remote.car.root.visible = true;
+}
+
+function createOnlineRemoteSnapshot(payload = {}, receivedAt = performance.now()) {
+  const heading = Number(payload.heading) || 0;
+  const speed = Number(payload.speed) || 0;
+  return {
+    receivedAt,
+    position: new THREE.Vector3(Number(payload.x) || 0, track.groundY + CAR_VISUAL_RIDE_HEIGHT, Number(payload.z) || 0),
+    heading,
+    velocity: new THREE.Vector3(
+      Math.sin(heading) * speed,
+      0,
+      Math.cos(heading) * speed,
+    ),
+    steer: Number(payload.steer) || 0,
+    wheelSpin: Number(payload.wheelSpin) || 0,
+    boostActive: Boolean(payload.boostActive),
+    throttle: Number(payload.throttle) > 0.1 ? 1 : 0,
+    brake: Number(payload.brake) > 0.1,
+  };
+}
+
+function getInterpolatedOnlineRemoteSnapshot(remote, now = performance.now()) {
+  const snapshots = remote?.snapshots ?? [];
+  if (!snapshots.length) return null;
+  const renderTime = now - ONLINE_REMOTE_INTERPOLATION_DELAY_MS;
+  while (snapshots.length > 2 && snapshots[1].receivedAt < renderTime - 80) snapshots.shift();
+  let previous = snapshots[0];
+  let next = null;
+  for (let i = 1; i < snapshots.length; i += 1) {
+    next = snapshots[i];
+    if (next.receivedAt >= renderTime) break;
+    previous = next;
+    next = null;
+  }
+  if (next && next.receivedAt > previous.receivedAt) {
+    const blend = THREE.MathUtils.clamp((renderTime - previous.receivedAt) / (next.receivedAt - previous.receivedAt), 0, 1);
+    return blendOnlineRemoteSnapshots(previous, next, blend);
+  }
+  const latest = snapshots[snapshots.length - 1];
+  const predictSeconds = THREE.MathUtils.clamp((renderTime - latest.receivedAt) / 1000, 0, ONLINE_REMOTE_MAX_PREDICTION_MS / 1000);
+  return {
+    ...latest,
+    position: latest.position.clone().addScaledVector(latest.velocity, predictSeconds),
+  };
+}
+
+function blendOnlineRemoteSnapshots(a, b, blend) {
+  const heading = angleLerp(a.heading, b.heading, blend);
+  return {
+    receivedAt: THREE.MathUtils.lerp(a.receivedAt, b.receivedAt, blend),
+    position: a.position.clone().lerp(b.position, blend),
+    heading,
+    velocity: a.velocity.clone().lerp(b.velocity, blend),
+    steer: THREE.MathUtils.lerp(a.steer, b.steer, blend),
+    wheelSpin: THREE.MathUtils.lerp(a.wheelSpin, b.wheelSpin, blend),
+    boostActive: blend < 0.5 ? a.boostActive : b.boostActive,
+    throttle: THREE.MathUtils.lerp(a.throttle, b.throttle, blend),
+    brake: blend < 0.5 ? a.brake : b.brake,
+  };
+}
+
+function applyOnlineRemoteSnapshot(remote, pose, dt) {
+  if (!remote?.car?.root || !pose) return;
+  const root = remote.car.root;
+  const distance = root.position.distanceTo(pose.position);
+  if (!remote.hasRenderedSnapshot || distance > ONLINE_REMOTE_MAX_SNAP_DISTANCE) {
+    root.position.copy(pose.position);
+    root.rotation.y = pose.heading;
+  } else {
+    root.position.lerp(pose.position, 1 - Math.exp(-dt * 18));
+    root.rotation.y = angleLerp(root.rotation.y, pose.heading, 1 - Math.exp(-dt * 16));
+  }
+  remote.renderedVelocity.copy(pose.velocity);
+  remote.target.position.copy(pose.position);
+  remote.target.heading = pose.heading;
+  remote.target.velocity.copy(pose.velocity);
+  remote.target.steer = pose.steer;
+  remote.target.wheelSpin = pose.wheelSpin;
+  remote.target.boostActive = pose.boostActive;
+  remote.target.throttle = pose.throttle;
+  remote.target.brake = pose.brake;
+  remote.hasRenderedSnapshot = true;
 }
 
 function createOnlineRemoteCar(payload = {}) {
@@ -9261,7 +9764,6 @@ function createOnlineRemoteCar(payload = {}) {
     primaryColor: payload.primaryColor || "#242833",
     accentColor: payload.accentColor || "#f6f2e8",
   });
-  applyOnlineGhostMaterial(ghostCar.root);
   ghostCar.root.visible = false;
   scene.add(ghostCar.root);
   return {
@@ -9277,6 +9779,9 @@ function createOnlineRemoteCar(payload = {}) {
       throttle: 0,
       brake: false,
     },
+    snapshots: [],
+    renderedVelocity: new THREE.Vector3(),
+    hasRenderedSnapshot: false,
     lastSeen: performance.now(),
   };
 }
@@ -9310,8 +9815,8 @@ function updateOnlineRemoteCars(dt, visible) {
     const stale = now - remote.lastSeen > 1600;
     remote.car.root.visible = visible && !stale;
     if (stale) continue;
-    remote.car.root.position.lerp(remote.target.position, 1 - Math.exp(-dt * 11));
-    remote.car.root.rotation.y = angleLerp(remote.car.root.rotation.y, remote.target.heading, 1 - Math.exp(-dt * 10));
+    const pose = getInterpolatedOnlineRemoteSnapshot(remote, now);
+    applyOnlineRemoteSnapshot(remote, pose, dt);
     if (remote.car.wheels?.frontLeft) remote.car.wheels.frontLeft.rotation.y = remote.target.steer;
     if (remote.car.wheels?.frontRight) remote.car.wheels.frontRight.rotation.y = remote.target.steer;
     for (const wheel of remote.car.wheelMeshes ?? []) {
@@ -9328,6 +9833,7 @@ function updateOnlineRemoteCars(dt, visible) {
       if (!brakeLight.material?.emissive) continue;
       brakeLight.material.emissiveIntensity = remote.target.brake ? 2.4 : 0.18;
     }
+    updateLowGraphicsCarDetail(remote.car, remote.car.root.position);
   }
 }
 
@@ -9353,7 +9859,7 @@ function resolveOnlineSoftRemoteCollisions(dt) {
     const remoteBox = getRaceCarCollisionBox({
       kind: "remote",
       position: remote.car.root.position,
-      velocity: remote.target.velocity ?? scratchZeroVelocity,
+      velocity: remote.renderedVelocity ?? remote.target.velocity ?? scratchZeroVelocity,
       headingRef: { heading: remote.car.root.rotation.y },
       get heading() { return remote.car.root.rotation.y; },
       profile: getCarProfileById(remote.carId ?? selectedCar),
@@ -9365,7 +9871,7 @@ function resolveOnlineSoftRemoteCollisions(dt) {
     const intoRemoteSpeed = carState.velocity.dot(normal);
     const correction = Math.min(overlap.depth + 0.02, 0.85);
     carState.position.addScaledVector(normal, -correction * 0.72);
-    const remoteSpeedIntoPlayer = (remote.target.velocity ?? scratchZeroVelocity).dot(normal);
+    const remoteSpeedIntoPlayer = (remote.renderedVelocity ?? remote.target.velocity ?? scratchZeroVelocity).dot(normal);
     const impactSpeed = Math.max(0, intoRemoteSpeed - remoteSpeedIntoPlayer);
     if (intoRemoteSpeed > 0) carState.velocity.addScaledVector(normal, -intoRemoteSpeed * 0.42);
     const scrapeAxis = new THREE.Vector3(normal.z, 0, -normal.x);
@@ -9485,6 +9991,8 @@ function showOnlineRaceResults() {
 function renderOnlineRaceResults() {
   if (!quickRaceResultsListEl) return;
   if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = true;
+  const titleEl = quickRaceResultsEl?.querySelector("header span");
+  if (titleEl) titleEl.textContent = "Online Race Complete";
   const ordered = getOnlineRaceStandings();
   const totalPlayers = Math.max(1, ordered.length);
   const playerIndex = ordered.findIndex((entry) => entry.playerId === onlineRoomState.playerId);
@@ -9517,8 +10025,9 @@ function renderOnlineRoom() {
   if (onlineRoomCodeEl) onlineRoomCodeEl.textContent = `Room ${onlineRoomState.roomCode || "----"}`;
   if (onlineRoomSummaryEl) {
     const settings = onlineRoomState.hostSettings ?? getOnlineRoomSettingsPayload();
+    const privacyLabel = onlineRoomState.privacy === "private" ? "Private" : "Public";
     onlineRoomSummaryEl.textContent = onlineRoomState.hostSettings || onlineRoomState.role === "host"
-      ? `${settings.trackName} / ${getCarClassLabel(settings.carClass)} / ${settings.carName} / ${settings.laps ?? 3} laps / ${settings.aiOpponentCount ?? 0} AI`
+      ? `${privacyLabel} / ${settings.trackName} / ${getCarClassLabel(settings.carClass)} / ${settings.carName} / ${settings.laps ?? 3} laps / ${settings.aiOpponentCount ?? 0} AI`
       : "Waiting for the host room.";
   }
   if (onlineRoomPlayersEl) {
@@ -9551,6 +10060,7 @@ function renderOnlineRoom() {
 
 function updateOnlineHostSettingsControls() {
   if (onlineHostSettingsEl) onlineHostSettingsEl.hidden = onlineRoomState.role !== "host";
+  if (onlineLobbyPrivacySelect) onlineLobbyPrivacySelect.value = onlineRoomState.privacy === "private" ? "private" : "public";
   if (onlineAiOpponentSlider) onlineAiOpponentSlider.value = String(selectedAiOpponentCount);
   if (onlineAiOpponentReadout) onlineAiOpponentReadout.textContent = String(selectedAiOpponentCount);
   if (onlineRaceLapSlider) onlineRaceLapSlider.value = String(selectedQuickRaceLapCount);
@@ -9686,7 +10196,10 @@ function applyGraphicsSettings() {
   previewKeyLight.castShadow = gameSettings.graphicsQuality !== "low";
   applyHeadlightQuality(car, { isPlayer: true, forceVisible: carState.headlightsOn });
   const activeAiHeadlights = getActiveAiHeadlightOpponents();
-  for (const opponent of aiOpponents) tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+  for (const opponent of aiOpponents) {
+    tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+    updateLowGraphicsCarDetail(opponent.car, opponent.position);
+  }
   for (const remote of onlineRoomState.remoteCars.values()) {
     const headlightsOn = shouldShowOpponentHeadlightsAt(remote.car.root.position);
     applyHeadlightQuality(remote.car, { isPlayer: false, forceVisible: headlightsOn });
@@ -9694,6 +10207,7 @@ function applyGraphicsSettings() {
       light.visible = headlightsOn;
       light.intensity = headlightsOn ? (light.userData.baseIntensity ?? 16) * 0.45 : 0;
     }
+    updateLowGraphicsCarDetail(remote.car, remote.car.root.position);
   }
 }
 
@@ -9707,7 +10221,7 @@ function applyRaceDefaultsFromSettings() {
   selectedAiOpponentCount = gameSettings.defaultOpponents;
   selectedGridPosition = selectedAiOpponentCount + 1;
   selectedQuickRaceLapCount = gameSettings.defaultRaceLaps;
-  selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[gameSettings.defaultAiDifficulty] ? gameSettings.defaultAiDifficulty : "standard";
+  selectedAiDifficulty = AI_DIFFICULTY_SETTINGS[gameSettings.defaultAiDifficulty] ? gameSettings.defaultAiDifficulty : "beginner";
   if (aiOpponentSlider) aiOpponentSlider.value = String(selectedAiOpponentCount);
   if (quickRaceLapSlider) quickRaceLapSlider.value = String(selectedQuickRaceLapCount);
   if (aiDifficultySelect) aiDifficultySelect.value = selectedAiDifficulty;
@@ -10284,7 +10798,7 @@ function updateMenuPreview(dt) {
   }
   if (previewCar) {
     previewCar.root.rotation.y += dt * 0.42;
-    previewCar.body.rotation.z = Math.sin(clock.elapsedTime * 1.6) * 0.012;
+    setCarBodyLean(previewCar, 0, Math.sin(clock.elapsedTime * 1.6) * 0.012);
   }
   previewRenderer.render(previewScene, previewCamera);
 }
@@ -10293,10 +10807,96 @@ function isMenuOpen() {
   return !startMenu.classList.contains("is-hidden");
 }
 
+function shouldPauseSimulationForPauseMenu() {
+  return !isOnlineRaceGameMode() || onlineRoomState.role === "host";
+}
+
+function updateSessionMenuButton() {
+  if (!sessionMenuButton) return;
+  sessionMenuButton.hidden = !gameStarted || isMenuOpen() || !trackEditor.classList.contains("is-hidden");
+}
+
+function updatePauseMenuContent() {
+  if (!pauseMenuEl) return;
+  const modeLabels = {
+    drive: "Just Drive",
+    "time-trial": "Time Trial",
+    "weekly-time-trial": "Weekly Time Trial",
+    "quick-race": "Quick Race",
+    "online-race": "Online Race",
+  };
+  const modeLabel = modeLabels[selectedGameMode] ?? "Session";
+  const onlineGuest = isOnlineRaceGameMode() && onlineRoomState.role !== "host";
+  if (pauseMenuModeEl) pauseMenuModeEl.textContent = onlineGuest ? "Menu Open" : "Paused";
+  if (pauseMenuTitleEl) pauseMenuTitleEl.textContent = modeLabel;
+  if (pauseMenuDetailEl) {
+    pauseMenuDetailEl.textContent = onlineGuest
+      ? "Online races keep running while this menu is open."
+      : `${getSelectedTrackLabel()} / ${getSelectedCarLabel()}`;
+  }
+  if (pauseMenuRestartButton) {
+    pauseMenuRestartButton.hidden = isOnlineRaceGameMode();
+    pauseMenuRestartButton.textContent = selectedGameMode === "quick-race" ? "Restart Race" : "Restart Session";
+  }
+  if (pauseMenuSettingsButton) pauseMenuSettingsButton.disabled = onlineGuest;
+}
+
+function openPauseMenu() {
+  if (!gameStarted || isMenuOpen()) return;
+  pauseMenuOpen = true;
+  if (pauseMenuEl) pauseMenuEl.hidden = false;
+  updatePauseMenuContent();
+  if (shouldPauseSimulationForPauseMenu()) setPaused(true);
+  else {
+    keys.clear();
+    silencePlayerEngineAudio();
+  }
+  stopRaceIntroMusic();
+}
+
+function closePauseMenu({ restorePause = true } = {}) {
+  pauseMenuOpen = false;
+  pauseSettingsOpen = false;
+  if (pauseMenuEl) pauseMenuEl.hidden = true;
+  if (restorePause) setPaused(false);
+  keys.clear();
+}
+
+function togglePauseMenu() {
+  if (pauseMenuOpen) closePauseMenu();
+  else openPauseMenu();
+}
+
+function restartCurrentSessionFromPauseMenu() {
+  closePauseMenu({ restorePause: false });
+  if (selectedGameMode === "quick-race") {
+    restartQuickRaceFromResults();
+    return;
+  }
+  resetCar();
+  setPaused(false);
+}
+
+function openSettingsFromPauseMenu() {
+  if (isOnlineRaceGameMode() && onlineRoomState.role !== "host") {
+    if (pauseMenuDetailEl) pauseMenuDetailEl.textContent = "Settings are locked during an online race unless you are the host.";
+    return;
+  }
+  pauseMenuOpen = false;
+  if (pauseMenuEl) pauseMenuEl.hidden = true;
+  pauseSettingsOpen = true;
+  setPaused(true);
+  setMenuStep("settings");
+  startMenu.classList.remove("is-hidden");
+  pauseBadge.hidden = true;
+  keys.clear();
+}
+
 function setPaused(paused) {
   isPaused = paused;
-  pauseBadge.hidden = !isPaused || isMenuOpen();
+  pauseBadge.hidden = !isPaused || isMenuOpen() || pauseMenuOpen;
   if (isPaused) keys.clear();
+  if (isPaused || isMenuOpen() || pauseMenuOpen) silencePlayerEngineAudio();
 }
 
 function startEditorTestDrive() {
@@ -11172,6 +11772,7 @@ function openWeeklyTimeTrialMenu() {
 }
 
 function startGame() {
+  closePauseMenu({ restorePause: false });
   gameStarted = true;
   setPaused(false);
   startMenu.classList.add("is-hidden");
@@ -11272,6 +11873,10 @@ function stopRaceIntroMusic() {
 }
 
 function startEngineAudio() {
+  if (pauseMenuOpen || isMenuOpen() || isPaused) {
+    silencePlayerEngineAudio();
+    return;
+  }
   if (audioState.element) {
     audioState.element.play().catch(() => {});
     audioState.ersElement?.play().catch(() => {});
@@ -11421,7 +12026,28 @@ function startEngineAudio() {
   audioState.shiftGain = shiftGain;
 }
 
+function silencePlayerEngineAudio() {
+  if (audioState.element) audioState.element.volume = 0;
+  if (audioState.ersElement) audioState.ersElement.volume = 0;
+  if (audioState.brakeElement) audioState.brakeElement.volume = 0;
+  if (!audioState.context) return;
+  const now = audioState.context.currentTime;
+  for (const gain of [
+    audioState.engineGain,
+    audioState.subGain,
+    audioState.grumbleGain,
+    audioState.ersGain,
+    audioState.brakeGain,
+  ]) {
+    gain?.gain?.setTargetAtTime(0, now, 0.04);
+  }
+}
+
 function updateEngineAudio(dt, forwardSpeed, throttle, boostActive, profile, hardBraking = false) {
+  if (!gameStarted || isPaused || isMenuOpen() || pauseMenuOpen) {
+    silencePlayerEngineAudio();
+    return;
+  }
   const playerVolume = settingVolume("playerEngineVolume");
   if (audioState.element) {
     const isCorvette = profile.kind === "corvette";
@@ -11556,7 +12182,7 @@ function createLoopingNoiseSource(context) {
 function updateSurfaceAudio(dt, state = {}) {
   if (!audioState.context || audioState.element || !audioState.tireGain) return;
   const now = audioState.context.currentTime;
-  if (!gameStarted || isPaused || isMenuOpen()) {
+  if (!gameStarted || isPaused || isMenuOpen() || pauseMenuOpen) {
     audioState.tireGain.gain.setTargetAtTime(0, now, 0.12);
     audioState.surfaceGain.gain.setTargetAtTime(0, now, 0.12);
     audioState.kerbGain.gain.setTargetAtTime(0, now, 0.12);
@@ -11637,7 +12263,7 @@ function createOpponentEngineVoice(context) {
 function updateOpponentEngineAudio(dt) {
   if (audioState.element) return;
   if (audioState.opponentEngineMaster) audioState.opponentEngineMaster.gain.setTargetAtTime(0.42 * settingVolume("opponentEngineVolume"), audioState.context.currentTime, 0.12);
-  if (!gameStarted || isPaused || isMenuOpen() || !audioState.context || !audioState.opponentEngineMaster) {
+  if (!gameStarted || isPaused || isMenuOpen() || pauseMenuOpen || !audioState.context || !audioState.opponentEngineMaster) {
     fadeOpponentEngineVoices(dt);
     return;
   }
@@ -11998,7 +12624,7 @@ function getOpponentClosingSpeed(opponent) {
 }
 
 function playCollisionSound(impactSpeed = 0, kind = "car") {
-  if (!audioState.context || audioState.element || isPaused || isMenuOpen()) return;
+  if (!audioState.context || audioState.element || isPaused || isMenuOpen() || pauseMenuOpen) return;
   if ((audioState.collisionCooldown ?? 0) > 0 && impactSpeed < 18) return;
   const now = audioState.context.currentTime;
   const collisionVolume = settingVolume("collisionVolume");
@@ -12897,8 +13523,12 @@ function syncPostRacePlayerCarFromJoyride(joyride, profile, dt) {
   updateEngineAudio(dt, forwardSpeed, joyride.throttle, false, profile, false);
   syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
-  car.body.rotation.x = THREE.MathUtils.damp(car.body.rotation.x, 0, 5, dt);
-  car.body.rotation.z = THREE.MathUtils.damp(car.body.rotation.z, 0, 5, dt);
+  const suspensionBody = getCarSuspensionBody(car);
+  setCarBodyLean(
+    car,
+    THREE.MathUtils.damp(suspensionBody?.rotation.x ?? 0, 0, 5, dt),
+    THREE.MathUtils.damp(suspensionBody?.rotation.z ?? 0, 0, 5, dt),
+  );
   if (car.wheels.frontLeft) car.wheels.frontLeft.rotation.y = carState.steer;
   if (car.wheels.frontRight) car.wheels.frontRight.rotation.y = carState.steer;
   carState.wheelSpin -= Math.max(0, forwardSpeed) * dt * 1.25;
@@ -12963,6 +13593,8 @@ function showQuickRaceResults() {
 function renderQuickRaceResults() {
   if (!quickRaceResultsListEl) return;
   if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = false;
+  const titleEl = quickRaceResultsEl?.querySelector("header span");
+  if (titleEl) titleEl.textContent = "Race Complete";
   const ordered = getQuickRaceOrderedEntries();
   const totalCars = Math.max(1, ordered.length);
   const playerIndex = ordered.findIndex((entry) => entry.type === "player");
@@ -12993,6 +13625,7 @@ function getQuickRaceOrderedEntries() {
 }
 
 function restartQuickRaceFromResults() {
+  closePauseMenu({ restorePause: false });
   selectedGameMode = "quick-race";
   gameStarted = true;
   setPaused(false);
@@ -13005,6 +13638,7 @@ function restartQuickRaceFromResults() {
 }
 
 function returnToMainMenuFromRace() {
+  closePauseMenu({ restorePause: false });
   gameStarted = false;
   setPaused(false);
   stopRaceIntroMusic();
@@ -13635,6 +14269,34 @@ function getAiDebugIntentColor(intent, target = new THREE.Color()) {
   return target.setHex(0xffd34a);
 }
 
+function setCarDetailObjectVisible(object, visible) {
+  if (object) object.visible = visible;
+}
+
+function setCarDetailObjectsVisible(carModel, visible) {
+  for (const wheel of carModel?.wheelMeshes ?? []) setCarDetailObjectVisible(wheel, visible);
+  setCarDetailObjectVisible(carModel?.wheels?.frontLeft, visible);
+  setCarDetailObjectVisible(carModel?.wheels?.frontRight, visible);
+  setCarDetailObjectVisible(carModel?.wheels?.rearLeft, visible);
+  setCarDetailObjectVisible(carModel?.wheels?.rearRight, visible);
+  setCarDetailObjectVisible(carModel?.frontWing, visible);
+  setCarDetailObjectVisible(carModel?.rearWing, visible);
+  for (const mesh of carModel?.lights?.headlightMeshes ?? []) setCarDetailObjectVisible(mesh, visible);
+  for (const mesh of carModel?.lights?.brakeLights ?? []) setCarDetailObjectVisible(mesh, visible);
+}
+
+function updateLowGraphicsCarDetail(carModel, position = null) {
+  if (!carModel?.root) return;
+  const reference = position ?? carModel.root.position;
+  const useSimpleDetail = gameSettings.graphicsQuality === "low"
+    && gameStarted
+    && reference
+    && reference.distanceToSquared(carState.position) > LOW_GRAPHICS_SIMPLE_CAR_DISTANCE ** 2;
+  if (carModel.root.userData.lowGraphicsSimpleDetail === useSimpleDetail) return;
+  carModel.root.userData.lowGraphicsSimpleDetail = useSimpleDetail;
+  setCarDetailObjectsVisible(carModel, !useSimpleDetail);
+}
+
 function tuneAiCarLights(aiCar, position = null, allowBeam = true) {
   const headlightsOn = allowBeam && shouldShowOpponentHeadlightsAt(position ?? aiCar?.root?.position);
   applyHeadlightQuality(aiCar, { isPlayer: false, forceVisible: headlightsOn });
@@ -13753,9 +14415,13 @@ function updateAiOpponents(dt) {
     syncCarVisualRoot(opponent.car.root, opponent.position);
     opponent.car.root.rotation.set(0, opponent.heading, 0);
     tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+    updateLowGraphicsCarDetail(opponent.car, opponent.position);
     updateRearWing(dt, false, opponent.car);
-    opponent.car.body.rotation.z = opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.18;
-    opponent.car.body.rotation.x = opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.035;
+    setCarBodyLean(
+      opponent.car,
+      opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.035,
+      opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.18,
+    );
     opponent.wheelSpin -= opponent.speed * dt * 1.25;
     for (const wheel of opponent.car.wheelMeshes ?? []) {
       if (!wheel) continue;
@@ -13869,9 +14535,13 @@ function updateCyborgAiOpponent(opponent, dt, activeAiHeadlights = getActiveAiHe
   syncCarVisualRoot(opponent.car.root, opponent.position);
   opponent.car.root.rotation.set(0, opponent.heading, 0);
   tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+  updateLowGraphicsCarDetail(opponent.car, opponent.position);
   updateRearWing(dt, opponent.boostActive, opponent.car);
-  opponent.car.body.rotation.z = opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.14;
-  opponent.car.body.rotation.x = opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.032;
+  setCarBodyLean(
+    opponent.car,
+    opponent.brake * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.032,
+    opponent.steer * THREE.MathUtils.clamp(opponent.speed / 45, 0, 1) * 0.14,
+  );
   opponent.wheelSpin -= opponent.speed * dt * 1.25;
   for (const wheel of opponent.car.wheelMeshes ?? []) {
     if (!wheel) continue;
@@ -14301,9 +14971,9 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
   const currentWheelGrassCount = getAiWheelGrassCount(opponent);
   const offTrackScale = surface.kind === "grass" ? 0.7 : surface.kind === "kerb" || surface.kind === "sausage" ? 0.74 : 1;
   const slipstreamStrength = getSlipstreamStrength(getAiSlipstreamBody(opponent));
-  const slipstreamPowerScale = 1 + slipstreamStrength * 0.08;
-  const slipstreamDragScale = 1 - slipstreamStrength * 0.22;
-  const slipstreamMaxSpeed = racing.maxSpeed * (1 + slipstreamStrength * 0.045);
+  const slipstreamPowerScale = 1 + slipstreamStrength * 0.104;
+  const slipstreamDragScale = 1 - slipstreamStrength * 0.286;
+  const slipstreamMaxSpeed = racing.maxSpeed * (1 + slipstreamStrength * 0.0585);
   const steeringLoad = Math.abs(opponent.steer) / Math.max(maxSteer, 0.001);
   const cornerAccelPenalty = 1 - racing.cornerSeverity * 0.35 - steeringLoad * 0.16;
   if (edgePressure > 0.05) {
@@ -14924,12 +15594,14 @@ function resetCar({ keepTimeTrialLaps = false } = {}) {
   carState.kerbKickPitch = 0;
   carState.kerbKickRollTarget = 0;
   carState.kerbKickPitchTarget = 0;
+  carState.collisionGripTimer = 0;
+  carState.collisionGripLoss = 0;
   carState.boostActive = false;
   carState.nitrousFlameScale = 0;
   carState.headlightsOn = shouldDefaultHeadlightsOn();
   syncCarVisualRoot(car.root, carState.position);
   car.root.rotation.set(0, carState.heading, 0);
-  car.body.rotation.set(0, 0, 0);
+  setCarBodyLean(car, 0, 0);
   for (const wheelPivot of Object.values(car.wheels)) {
     if (!wheelPivot) continue;
     wheelPivot.rotation.x = 0;

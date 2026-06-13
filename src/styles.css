@@ -479,6 +479,63 @@ h1 {
   font-weight: 850;
 }
 
+.online-lobby-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.online-lobby-list {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.online-lobby-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 5px;
+  background: rgba(246, 242, 232, 0.065);
+}
+
+.online-lobby-list li.is-empty {
+  display: block;
+  color: rgba(246, 242, 232, 0.62);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.online-lobby-list strong {
+  display: block;
+  overflow: hidden;
+  color: #f6f2e8;
+  font-size: 13px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-lobby-list small {
+  display: block;
+  margin-top: 3px;
+  color: rgba(191, 230, 255, 0.72);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.online-lobby-list button {
+  min-height: 32px;
+}
+
 .online-room-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2003,13 +2060,27 @@ h1 {
   pointer-events: none;
 }
 
-.brand {
-  font-size: 14px;
-  font-weight: 800;
+.session-menu-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 207, 74, 0.42);
+  border-radius: 999px;
+  background: rgba(8, 10, 8, 0.62);
+  color: #ffcf4a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
   letter-spacing: 0;
   text-transform: uppercase;
-  color: #f4d45f;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.session-menu-button:hover {
+  border-color: rgba(255, 207, 74, 0.72);
+  background: rgba(28, 22, 9, 0.72);
 }
 
 .left-hud {
@@ -2136,6 +2207,26 @@ h1 {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.draft-cue[hidden] {
+  display: none;
+}
+
+.draft-cue {
+  min-width: 58px;
+  border-color: rgba(83, 193, 255, 0.62) !important;
+  background:
+    linear-gradient(90deg, rgba(34, 130, 255, 0.28), rgba(83, 193, 255, 0.12)),
+    rgba(8, 10, 8, 0.62) !important;
+  color: #7fd8ff;
+  box-shadow: 0 0 18px rgba(83, 193, 255, 0.28), 0 8px 24px rgba(0, 0, 0, 0.24) !important;
+  text-shadow: 0 0 10px rgba(127, 216, 255, 0.55);
+}
+
+.readouts.is-drafting #speed {
+  border-color: rgba(83, 193, 255, 0.58);
+  box-shadow: 0 0 18px rgba(83, 193, 255, 0.24), 0 8px 24px rgba(0, 0, 0, 0.24);
 }
 
 .time-trial-timer[hidden],
@@ -2998,6 +3089,88 @@ h1 {
   text-transform: uppercase;
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+
+.pause-menu[hidden] {
+  display: none;
+}
+
+.pause-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 5, 7, 0.34);
+  pointer-events: auto;
+}
+
+.pause-menu-panel {
+  width: min(360px, calc(100vw - 48px));
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid rgba(255, 207, 74, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(13, 17, 18, 0.94), rgba(25, 27, 24, 0.88)),
+    rgba(8, 10, 8, 0.86);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+}
+
+.pause-menu-panel > span {
+  color: rgba(255, 207, 74, 0.82);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.pause-menu-panel > strong {
+  color: #f6f2e8;
+  font-family: Audiowide, Orbitron, sans-serif;
+  font-size: 28px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pause-menu-panel > p {
+  min-height: 18px;
+  margin: 0;
+  color: rgba(246, 242, 232, 0.68);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pause-menu-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.pause-menu-actions button {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(246, 242, 232, 0.12), rgba(246, 242, 232, 0.03));
+  color: #f6f2e8;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 950;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.pause-menu-actions button:hover {
+  border-color: rgba(255, 207, 74, 0.58);
+  background: rgba(255, 207, 74, 0.14);
+}
+
+.pause-menu-actions button:disabled {
+  border-color: rgba(246, 242, 232, 0.12);
+  background: rgba(246, 242, 232, 0.06);
+  color: rgba(246, 242, 232, 0.36);
+  cursor: not-allowed;
 }
 
 .ai-debug-panel[hidden] {

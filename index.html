@@ -30,7 +30,7 @@
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="settings">
-            <button class="profile-main-menu-button" type="button" data-menu-back="intro">Main Menu</button>
+            <button class="profile-main-menu-button" type="button" data-menu-back="intro">Back</button>
             <section class="settings-layout" aria-label="Settings">
               <section class="settings-section">
                 <h2>Graphics</h2>
@@ -191,12 +191,21 @@
 
           <div class="menu-step is-hidden" data-menu-step="online-join">
             <button class="back-button" type="button" data-menu-back="go-online">Back</button>
+            <section class="race-setup-panel online-room-panel" aria-label="Public online lobbies">
+              <span>Join Game</span>
+              <strong>Public Lobbies</strong>
+              <div class="online-lobby-header">
+                <p id="online-lobby-browser-status" class="online-room-status">Looking for public lobbies...</p>
+                <button id="online-lobby-refresh" class="profile-action-button" type="button">Refresh</button>
+              </div>
+              <ol id="online-lobby-list" class="online-lobby-list"></ol>
+            </section>
             <section class="race-setup-panel online-room-panel" aria-label="Join online room">
               <span>Join Game</span>
-              <strong>Enter Room Code</strong>
+              <strong>Private Room Code</strong>
               <label class="race-select online-code-field">
                 <span>Room Code</span>
-                <input id="online-room-code-input" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="ABCD12" />
+                <input id="online-room-code-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="RACE" />
               </label>
               <p id="online-join-status" class="online-room-status"></p>
             </section>
@@ -215,6 +224,13 @@
             <section id="online-host-settings" class="race-setup-panel online-host-settings" aria-label="Online race settings">
               <span>Host Settings</span>
               <strong>Race Setup</strong>
+              <label class="race-select online-privacy-field">
+                <span>Lobby</span>
+                <select id="online-lobby-privacy">
+                  <option value="public" selected>Public</option>
+                  <option value="private">Private Code</option>
+                </select>
+              </label>
               <label class="race-slider">
                 <span>AI Opponents</span>
                 <input id="online-ai-opponent-slider" type="range" min="0" max="10" step="1" value="4" />
@@ -736,7 +752,7 @@
     </section>
     <div class="hud">
       <div class="left-hud">
-        <div class="brand">The Paddock</div>
+        <button id="session-menu-button" class="session-menu-button" type="button" hidden>Menu</button>
         <div class="ers-panel">
           <div class="ers-label">
             <span id="ers-label">ERS</span>
@@ -748,6 +764,7 @@
         </div>
       </div>
       <div class="readouts">
+        <span id="draft-cue" class="draft-cue" hidden>DRAFT</span>
         <span id="speed">0 mph</span>
         <span id="gear">N</span>
         <span id="surface">Track</span>
@@ -828,6 +845,20 @@
     </div>
     <button id="back-to-editor" class="back-to-editor" type="button" hidden>Back to Track Editor</button>
     <div id="pause-badge" class="pause-badge" hidden>Paused</div>
+    <section id="pause-menu" class="pause-menu" hidden aria-label="Pause menu">
+      <div class="pause-menu-panel">
+        <span id="pause-menu-mode">Paused</span>
+        <strong id="pause-menu-title">Session Menu</strong>
+        <p id="pause-menu-detail"></p>
+        <div class="pause-menu-actions">
+          <button id="pause-menu-resume" type="button">Resume</button>
+          <button id="pause-menu-reset" type="button">Reset Car (R)</button>
+          <button id="pause-menu-restart" type="button">Restart Session</button>
+          <button id="pause-menu-settings" type="button">Settings</button>
+          <button id="pause-menu-quit" type="button">Quit to Main Menu</button>
+        </div>
+      </div>
+    </section>
     <section id="ai-debug-panel" class="ai-debug-panel" hidden aria-label="AI tuning status">
       <strong>AI Tuning</strong>
       <span id="ai-debug-status">Waiting for lap data</span>
@@ -839,8 +870,8 @@
       <span>Space: camera</span>
       <span>C: handbrake</span>
       <span>Mouse: shift</span>
-      <span>P: pause</span>
-      <span>Esc: cars</span>
+      <span>P: menu</span>
+      <span>Esc: menu</span>
       <span>R: reset</span>
     </div>
   </body>
