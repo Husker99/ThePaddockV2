@@ -307,6 +307,10 @@ function getGraphicsPixelRatio() {
   return Math.min(deviceRatio, 1.25);
 }
 
+function shouldUseMediumOrLowGraphics() {
+  return gameSettings.graphicsQuality === "low" || gameSettings.graphicsQuality === "medium";
+}
+
 function settingVolume(key) {
   return THREE.MathUtils.clamp((gameSettings?.[key] ?? 100) / 100, 0, 1.1);
 }
@@ -326,13 +330,19 @@ function getSceneryLightVisibilityMultiplier(role = "ambient") {
 function getEffectsDensityMultiplier() {
   if (gameSettings.graphicsQuality === "low") return 0.34;
   if (gameSettings.graphicsQuality === "high") return 1.12;
+  return 0.72;
+}
+
+function getSparkSmokeDensityMultiplier() {
+  if (gameSettings.graphicsQuality === "low") return 0.5;
+  if (gameSettings.graphicsQuality === "medium") return 0.62;
   return 1;
 }
 
 function getCrashSparkDensityMultiplier() {
   if (gameSettings.graphicsQuality === "low") return 0;
-  if (gameSettings.graphicsQuality === "medium") return 0.55;
-  return getEffectsDensityMultiplier();
+  if (gameSettings.graphicsQuality === "medium") return 0.42;
+  return 1;
 }
 
 function shouldUseOpponentHeadlightBeams() {
@@ -566,9 +576,27 @@ function registerSceneryLight(light, maxDistance = 125, role = "ambient") {
 }
 
 function registerSceneryCullable(object, maxDistance = 520) {
+  markCostlySceneryShadow(object);
   object.userData.baseVisibleDistance = maxDistance;
   object.userData.baseHiddenDistance = maxDistance * 1.16;
   sceneryCullables.push(object);
+  return object;
+}
+
+function preserveBaseShadowFlags(object) {
+  object?.traverse?.((child) => {
+    if (!child.isMesh || child.userData.baseShadowFlagsSaved) return;
+    child.userData.baseCastShadow = child.castShadow;
+    child.userData.baseReceiveShadow = child.receiveShadow;
+    child.userData.baseShadowFlagsSaved = true;
+  });
+}
+
+function markCostlySceneryShadow(object) {
+  preserveBaseShadowFlags(object);
+  object?.traverse?.((child) => {
+    if (child.isMesh) child.userData.costlySceneryShadow = true;
+  });
   return object;
 }
 
@@ -816,7 +844,7 @@ const HOW_TO_PLAY_TOPICS = {
       "Greg is the gentlest mode: slower cars, very cautious margins, low overtake intent, and quarter-strength penalties.",
       "Beginner is slower, safer, and gets the strongest slowdown when ahead of human players.",
       "Standard is the balanced setting with cautious margins and sliding rubberbanding.",
-      "Amateur is faster and can include boss drivers in Stock Car and Formula races.",
+      "Amateur is faster and can include boss drivers in Stock Car, Formula, and Prototype races.",
       "Professional has the highest overtake intent, stronger catch-up pressure, and the sharpest boss behavior.",
     ],
     note: "Boss drivers power up in the final smaller half of the race, so a 3 lap race turns them loose on lap 3.",
@@ -828,7 +856,7 @@ const HOW_TO_PLAY_TOPICS = {
       "When a Cyborg model exists, AI cars use recorded laps to follow a better racing line.",
       "Without a Cyborg model, AI falls back to the general race model for that track.",
       "AI can overtake, slipstream, avoid nearby cars, and race with collision physics.",
-      "Stock Car races can feature Geoff Corden, and Formula races can feature Louisa Hampton on Amateur or Professional.",
+      "Stock Car races can feature Geoff Corden, Formula races can feature Louisa Hampton, and Prototype races can feature Patricia Dempsey on Amateur or Professional.",
     ],
     note: "Recorded training laps are still the best way to make a specific car and track combo feel sharper.",
   },
@@ -1162,6 +1190,32 @@ const quickRaceAiCarPools = {
   jeep: ["dune-jeep", "forest-jeep", "rescue-jeep", "storm-jeep"],
   corvette: ["vette-yellow", "vette-white", "vette-red", "vette-striped"],
 };
+const AI_DRIVER_NAMES = [
+  "Mario Andrettini",
+  "Lewis Hammerton",
+  "Ayrton Sennaford",
+  "Jeff Gourdain",
+  "Dale Earnhardly",
+  "Richard Pettybone",
+  "Sebastian Vettelle",
+  "Jenson Buttonwood",
+  "Fernando Alonzio",
+  "Max Verstaffin",
+  "Mika Hakkalinen",
+  "Kimi Icekonen",
+  "Niki Loudha",
+  "Juan Manuel Fango",
+  "Dan Gurnstone",
+  "Phil Hilltop",
+  "Sebi Bourdough",
+  "Tom Kristensun",
+  "Hurley Haygood",
+  "Jackie Stewpot",
+  "Emerson Fittypaldi",
+  "Michael Shumarker",
+  "Scott Speedwell",
+  "Valentino Rosetti",
+];
 const raceModeCarCategories = new Set(["formula", "lmp", "stock"]);
 const weeklyTimeTrialClassPool = ["formula", "lmp", "stock", "corvette"];
 const weeklyTimeTrialTrackPool = [
@@ -1538,6 +1592,13 @@ const lmpPaintSchemes = {
     stripe: 0xf3f3f0,
     glass: 0xa3f2ff,
   },
+  "patricia-dempsey-lmp": {
+    primary: 0xff7a18,
+    secondary: 0x1b9a4a,
+    stripe: 0xf6f2e8,
+    glass: 0x7edfff,
+    patriciaBoss: true,
+  },
 };
 lmpPaintSchemes[PROFILE_TEAM_CAR_IDS.lmp] = getDriverProfileLmpScheme(driverProfile);
 
@@ -1753,7 +1814,7 @@ for (const stockId of ["thunder-stock", "jade-stock", "grape-stock", "geoff-cord
   carProfiles[stockId] = carProfiles["orange-stock"];
 }
 carProfiles[PROFILE_TEAM_CAR_IDS.stock] = carProfiles["orange-stock"];
-for (const lmpId of ["scarlet-lmp", "ocean-lmp", "volt-lmp"]) {
+for (const lmpId of ["scarlet-lmp", "ocean-lmp", "volt-lmp", "patricia-dempsey-lmp"]) {
   carProfiles[lmpId] = carProfiles.lmp;
 }
 carProfiles[PROFILE_TEAM_CAR_IDS.lmp] = carProfiles.lmp;
@@ -2002,8 +2063,11 @@ const AI_REASONABLE_AVERAGE_MPH = 45;
 const AI_STABLE_CORRECTION_LOAD = 8;
 const AI_MIN_PACE = 0.86;
 const AI_MAX_PACE = 1.2;
+const AI_LAUNCH_STEER_LIMIT_SECONDS = 2;
 const CYBORG_LINE_SAMPLE_DISTANCE = 1.25;
 const CYBORG_BASE_BRAKING_LOOKAHEAD_SCALE = 0.1;
+const BOSS_FAST_CYBORG_LINE_FRACTION = 0.4;
+const BOSS_MODE_NEAR_PLAYER_SECONDS = 4;
 const kataraStockCyborgLines = createCyborgRacingLines(kataraStockCyborgTraining);
 const kataraStockCyborgLine = kataraStockCyborgLines[0] ?? { samples: [], totalDistance: 0, sourceLapTime: null };
 const kataraFormulaCyborgLines = createCyborgRacingLines(kataraFormulaCyborgTraining);
@@ -4090,6 +4154,7 @@ function setTimeTrialGhostRun(best) {
   const samples = best?.ghost?.samples;
   if (!Array.isArray(samples) || samples.length < 2) return;
   const ghostCar = createSelectedCar(best.car?.id ?? selectedCar);
+  applyCarVisualQuality(ghostCar, { isPlayer: false });
   styleTimeTrialGhostCar(ghostCar);
   ghostCar.root.visible = false;
   scene.add(ghostCar.root);
@@ -4714,7 +4779,7 @@ function updateSparkParticles(dt) {
 function spawnFormulaSparks(dt, profile, boostActive, forwardSpeed, speedAbs, source = null) {
   if (profile.kind !== "formula" || boostActive || forwardSpeed <= 0) return;
   if (speedAbs < profile.maxForwardSpeed * 0.98) return;
-  if (Math.random() > dt * 14.4 * getEffectsDensityMultiplier()) return;
+  if (Math.random() > dt * 14.4 * getSparkSmokeDensityMultiplier()) return;
 
   const sourcePosition = source?.position ?? carState.position;
   const sourceForward = source?.forward ?? scratchForward;
@@ -4796,7 +4861,7 @@ function updateCollisionSmokeParticles(dt) {
 }
 
 function spawnCollisionSmoke(position, normal, speedAbs) {
-  const burstCount = Math.round(THREE.MathUtils.clamp(speedAbs / 4, 5, 12) * getEffectsDensityMultiplier());
+  const burstCount = Math.round(THREE.MathUtils.clamp(speedAbs / 4, 5, 12) * getSparkSmokeDensityMultiplier());
   for (let i = 0; i < burstCount; i += 1) {
     const particle = smokeParticles.find((item) => item.userData.life <= 0);
     if (!particle) return;
@@ -4987,6 +5052,7 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   if (definition.extras) definition.extras(group, extraTrackAreas, samples, obstacles);
   rebuildNatureEmitters();
   addCloudsAndSun(group, trackId === "generated");
+  applySceneShadowQuality(group);
 
   const start = pointFromPlan(...definition.start, planScale);
   const next = pointFromPlan(...definition.next, planScale);
@@ -5534,6 +5600,7 @@ function addGeneratedLayoutDetails(group, extraTrackAreas, samples) {
   }
   bridge.position.copy(bridgePose.position);
   bridge.rotation.y = bridgePose.angle + Math.PI / 2;
+  markCostlySceneryShadow(bridge);
   group.add(bridge);
 }
 
@@ -5552,9 +5619,9 @@ function addGrandstandAtTrack(group, samples, spec) {
   const safeOffset = spec.side * ((spec.trackHalfWidth ?? 9.4) + standDepth / 2 + 1.6);
   const pose = getTrackPoseAt(samples, spec.t, safeOffset);
   const stand = new THREE.Group();
-  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xbfc6c9, roughness: 0.58, metalness: 0.18, flatShading: true });
-  const seatMaterial = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.65, metalness: 0.04, flatShading: true });
-  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x202532, roughness: 0.5, metalness: 0.22, flatShading: true });
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xbfc6c9, roughness: 0.86, metalness: 0, flatShading: true });
+  const seatMaterial = new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.9, metalness: 0, flatShading: true });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x202532, roughness: 0.88, metalness: 0, flatShading: true });
   const crowdColors = [0xf4d35e, 0xe94f37, 0x2d7dd2, 0x3cb371, 0xf7f7f2];
 
   for (let tier = 0; tier < spec.tiers; tier += 1) {
@@ -5588,6 +5655,7 @@ function addGrandstandAtTrack(group, samples, spec) {
 
   stand.position.copy(pose.position);
   stand.rotation.y = pose.angle + Math.PI / 2;
+  markCostlySceneryShadow(stand);
   registerCrowdEmitter(stand, { radius: 125, strength: Math.max(0.75, (spec.length ?? 36) / 56) });
   group.add(stand);
 }
@@ -6173,12 +6241,16 @@ function randomizePlane(geometry, amount) {
 }
 
 function createRacePaintMaterial(color, roughness = 0.36, metalness = 0.14) {
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color,
     roughness,
     metalness,
     flatShading: true,
   });
+  material.userData.racePaint = true;
+  material.userData.baseRoughness = roughness;
+  material.userData.baseMetalness = metalness;
+  return material;
 }
 
 function createCarDecalMaterial(text, {
@@ -6670,11 +6742,15 @@ function setCarBodyLean(carModel, pitch = 0, roll = 0) {
 }
 
 function createSelectedCar(carId) {
-  if (corvettePaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createCorvette(carId), "corvette"));
-  if (lmpPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createLeMansPrototype(carId), "lmp"));
-  if (stockPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createStockCar(carId), "stock"));
-  if (jeepPaintSchemes[carId]) return setupCarSuspensionBody(addUniversalHeadlights(createJeep(carId), "jeep"));
-  return setupCarSuspensionBody(addUniversalHeadlights(createFormulaCar(carId), "formula"));
+  let model;
+  if (corvettePaintSchemes[carId]) model = setupCarSuspensionBody(addUniversalHeadlights(createCorvette(carId), "corvette"));
+  else if (lmpPaintSchemes[carId]) model = setupCarSuspensionBody(addUniversalHeadlights(createLeMansPrototype(carId), "lmp"));
+  else if (stockPaintSchemes[carId]) model = setupCarSuspensionBody(addUniversalHeadlights(createStockCar(carId), "stock"));
+  else if (jeepPaintSchemes[carId]) model = setupCarSuspensionBody(addUniversalHeadlights(createJeep(carId), "jeep"));
+  else model = setupCarSuspensionBody(addUniversalHeadlights(createFormulaCar(carId), "formula"));
+  preserveBaseShadowFlags(model.root);
+  applyCarVisualQuality(model, { isPlayer: true });
+  return model;
 }
 
 function createSelectedCarForDriverProfile(carId, profile = driverProfile) {
@@ -7147,6 +7223,10 @@ function createLeMansPrototype(paint = "lmp") {
     body.add(blueStripe);
   }
 
+  if (scheme.patriciaBoss) {
+    addPatriciaDempseyLmpDetails(body, { white, red, blue, carbon });
+  }
+
   for (const [x, z] of [
     [-0.98, 1.55],
     [0.98, 1.55],
@@ -7208,6 +7288,102 @@ function createLeMansPrototype(paint = "lmp") {
   }
 
   return { root, body, wheels, wheelMeshes, lights: { brakeLights } };
+}
+
+function addPatriciaDempseyLmpDetails(body, { white, red, blue, carbon }) {
+  const orange = white;
+  const green = red;
+  const cream = blue;
+  const darkGreen = new THREE.MeshStandardMaterial({ color: 0x0b4f2f, roughness: 0.42, metalness: 0.12, flatShading: true });
+  const numberMaterial = new THREE.MeshStandardMaterial({ color: 0xf8f3dc, roughness: 0.32, metalness: 0.1, flatShading: true });
+  const blackNumber = new THREE.MeshStandardMaterial({ color: 0x111314, roughness: 0.7, flatShading: true });
+
+  for (const x of [-0.5, 0.5]) {
+    const creamStripe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.065, 5.1), cream);
+    creamStripe.position.set(x, 0.9, 0.08);
+    creamStripe.rotation.z = -x * 0.04;
+    body.add(creamStripe);
+  }
+
+  for (const [x, z, rot, material] of [
+    [-0.82, 1.25, -0.32, green],
+    [-0.82, 0.55, 0.28, darkGreen],
+    [-0.82, -0.15, -0.26, cream],
+    [-0.82, -0.85, 0.3, green],
+    [0.82, 1.25, 0.32, green],
+    [0.82, 0.55, -0.28, darkGreen],
+    [0.82, -0.15, 0.26, cream],
+    [0.82, -0.85, -0.3, green],
+  ]) {
+    const diamond = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.07, 0.46), material);
+    diamond.position.set(x, 0.86, z);
+    diamond.rotation.y = rot;
+    diamond.rotation.z = 0.55;
+    body.add(diamond);
+  }
+
+  for (const x of [-1.01, 1.01]) {
+    const sidePanel = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.055, 2.6), green);
+    sidePanel.position.set(x, 0.69, -0.15);
+    sidePanel.rotation.z = x > 0 ? -0.05 : 0.05;
+    body.add(sidePanel);
+
+    const lowerCream = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.06, 1.95), cream);
+    lowerCream.position.set(x * 1.02, 0.54, 0.18);
+    lowerCream.rotation.z = x > 0 ? -0.08 : 0.08;
+    body.add(lowerCream);
+
+    const divePlane = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.035, 0.18), carbon);
+    divePlane.position.set(x * 1.34, 0.54, 1.94);
+    divePlane.rotation.y = x > 0 ? -0.28 : 0.28;
+    divePlane.rotation.z = x > 0 ? -0.08 : 0.08;
+    body.add(divePlane);
+  }
+
+  const noseCream = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.06, 1.72), cream);
+  noseCream.position.set(0, 0.75, 1.72);
+  body.add(noseCream);
+
+  const noseGreen = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.07, 1.38), green);
+  noseGreen.position.set(0, 0.8, 1.64);
+  body.add(noseGreen);
+
+  const dorsalGreen = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 1.46), green);
+  dorsalGreen.position.set(0, 1.59, -0.78);
+  body.add(dorsalGreen);
+
+  const wingSplash = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.07, 0.14), cream);
+  wingSplash.position.set(0, 1.12, -2.98);
+  wingSplash.rotation.x = 0.16;
+  body.add(wingSplash);
+
+  for (const [x, z] of [[0, 0.16], [-0.88, -0.86], [0.88, -0.86]]) {
+    const numberPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.055, 28), numberMaterial);
+    numberPlate.rotation.x = Math.PI / 2;
+    numberPlate.position.set(x, x === 0 ? 1.21 : 0.82, z);
+    body.add(numberPlate);
+
+    const numberFiveA = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.065, 0.045), blackNumber);
+    numberFiveA.position.set(x - 0.07, numberPlate.position.y + 0.035, z - 0.045);
+    body.add(numberFiveA);
+    const numberFiveB = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.065, 0.045), blackNumber);
+    numberFiveB.position.set(x - 0.07, numberPlate.position.y + 0.035, z + 0.045);
+    body.add(numberFiveB);
+    const numberFiveC = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.065, 0.045), blackNumber);
+    numberFiveC.position.set(x + 0.1, numberPlate.position.y + 0.035, z - 0.045);
+    body.add(numberFiveC);
+  }
+
+  const heritageStripe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.065, 4.9), darkGreen);
+  heritageStripe.position.set(0, 0.91, 0.05);
+  body.add(heritageStripe);
+
+  for (const z of [1.05, 0.25, -0.55]) {
+    const crossBand = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.06, 0.08), green);
+    crossBand.position.set(0, 0.93, z);
+    crossBand.rotation.y = z > 0 ? 0.16 : -0.16;
+    body.add(crossBand);
+  }
 }
 
 function createLmpWedgeNose(material) {
@@ -9773,6 +9949,7 @@ function createOnlineRemoteCar(payload = {}) {
     accentColor: payload.accentColor || "#f6f2e8",
   });
   ghostCar.root.visible = false;
+  applyCarVisualQuality(ghostCar, { isPlayer: false });
   scene.add(ghostCar.root);
   return {
     car: ghostCar,
@@ -10205,10 +10382,13 @@ function applyGraphicsSettings() {
   previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
   sun.castShadow = gameSettings.graphicsQuality !== "low";
   previewKeyLight.castShadow = gameSettings.graphicsQuality !== "low";
+  applySceneShadowQuality();
   applyHeadlightQuality(car, { isPlayer: true, forceVisible: carState.headlightsOn });
+  applyCarVisualQuality(car, { isPlayer: true });
   const activeAiHeadlights = getActiveAiHeadlightOpponents();
   for (const opponent of aiOpponents) {
     tuneAiCarLights(opponent.car, opponent.position, activeAiHeadlights.has(opponent));
+    applyCarVisualQuality(opponent.car, { isPlayer: false });
     updateLowGraphicsCarDetail(opponent.car, opponent.position);
   }
   for (const remote of onlineRoomState.remoteCars.values()) {
@@ -10218,8 +10398,38 @@ function applyGraphicsSettings() {
       light.visible = headlightsOn;
       light.intensity = headlightsOn ? (light.userData.baseIntensity ?? 16) * 0.45 : 0;
     }
+    applyCarVisualQuality(remote.car, { isPlayer: false });
     updateLowGraphicsCarDetail(remote.car, remote.car.root.position);
   }
+}
+
+function applyCarVisualQuality(carModel, { isPlayer = false } = {}) {
+  if (!carModel?.root) return;
+  const allowShine = gameSettings.graphicsQuality === "high" || (gameSettings.graphicsQuality === "medium" && isPlayer);
+  const allowShadow = gameSettings.graphicsQuality === "high" || (gameSettings.graphicsQuality === "medium" && isPlayer);
+  carModel.root.traverse((object) => {
+    if (object.isMesh) {
+      object.castShadow = allowShadow && object.userData.baseCastShadow !== false;
+      object.receiveShadow = allowShadow && object.userData.baseReceiveShadow !== false;
+    }
+    const materials = object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : [];
+    for (const material of materials) {
+      if (!material || material.metalness === undefined || material.roughness === undefined) continue;
+      if (material.userData.baseMetalness === undefined) material.userData.baseMetalness = material.metalness;
+      if (material.userData.baseRoughness === undefined) material.userData.baseRoughness = material.roughness;
+      material.metalness = allowShine ? material.userData.baseMetalness : 0;
+      material.roughness = allowShine ? material.userData.baseRoughness : Math.max(0.86, material.userData.baseRoughness);
+      material.needsUpdate = true;
+    }
+  });
+}
+
+function applySceneShadowQuality(root = scene) {
+  root.traverse((object) => {
+    if (!object.isMesh || !object.userData.costlySceneryShadow) return;
+    object.castShadow = !shouldUseMediumOrLowGraphics() && object.userData.baseCastShadow !== false;
+    object.receiveShadow = !shouldUseMediumOrLowGraphics() && object.userData.baseReceiveShadow !== false;
+  });
 }
 
 function applyMenuAudioVolume() {
@@ -11381,6 +11591,7 @@ function addEditorTreeCluster(group, x, z, rotation = 0, obstacles = []) {
   cluster.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   cluster.rotation.y = worldRotation;
+  markCostlySceneryShadow(cluster);
   registerSceneryCullable(cluster, 440);
   group.add(cluster);
 
@@ -11435,6 +11646,7 @@ function addEditorCherryTreeCluster(group, x, z, rotation = 0, obstacles = []) {
   cluster.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   cluster.rotation.y = worldRotation;
+  markCostlySceneryShadow(cluster);
   registerSceneryCullable(cluster, 460);
   group.add(cluster);
   addTreeObstacleSpots(obstacles, spots, x, z, worldRotation, 0.72);
@@ -11477,6 +11689,7 @@ function addEditorDouglasPines(group, x, z, rotation = 0, obstacles = []) {
   cluster.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   cluster.rotation.y = worldRotation;
+  markCostlySceneryShadow(cluster);
   registerSceneryCullable(cluster, 500);
   group.add(cluster);
   addTreeObstacleSpots(obstacles, spots, x, z, worldRotation, 0.41);
@@ -11517,6 +11730,7 @@ function addEditorMapleTree(group, x, z, rotation = 0, obstacles = []) {
   maple.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   maple.rotation.y = worldRotation;
+  markCostlySceneryShadow(maple);
   registerSceneryCullable(maple, 560);
   group.add(maple);
 
@@ -11557,6 +11771,7 @@ function addEditorBoulderCluster(group, x, z, rotation = 0, obstacles = []) {
   cluster.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   cluster.rotation.y = worldRotation;
+  markCostlySceneryShadow(cluster);
   registerSceneryCullable(cluster, 430);
   group.add(cluster);
 
@@ -11588,9 +11803,9 @@ function addTreeObstacleSpots(obstacles, spots, x, z, worldRotation, radiusScale
 
 function addEditorGrandstand(group, x, z, rotation = 0) {
   const stand = new THREE.Group();
-  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xbfc6c9, roughness: 0.56, metalness: 0.2, flatShading: true });
-  const seatMaterial = new THREE.MeshStandardMaterial({ color: 0xff7a1f, roughness: 0.62, metalness: 0.04, flatShading: true });
-  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x202532, roughness: 0.48, metalness: 0.22, flatShading: true });
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xbfc6c9, roughness: 0.86, metalness: 0, flatShading: true });
+  const seatMaterial = new THREE.MeshStandardMaterial({ color: 0xff7a1f, roughness: 0.9, metalness: 0, flatShading: true });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x202532, roughness: 0.88, metalness: 0, flatShading: true });
   const crowdColors = [0xf4d35e, 0xe94f37, 0x2d7dd2, 0x3cb371, 0xf7f7f2, 0x101820];
 
   const length = 68;
@@ -11636,6 +11851,7 @@ function addEditorGrandstand(group, x, z, rotation = 0) {
 
   stand.position.set(x, 0, z);
   stand.rotation.y = editorRotationToWorld(rotation);
+  markCostlySceneryShadow(stand);
   registerSceneryCullable(stand, 650);
   registerCrowdEmitter(stand, { radius: 132, strength: 1.15 });
   group.add(stand);
@@ -11675,6 +11891,7 @@ function addEditorBuilding(group, x, z, rotation = 0, type = "building-small", o
   building.position.set(x, 0, z);
   const worldRotation = editorRotationToWorld(rotation);
   building.rotation.y = worldRotation;
+  markCostlySceneryShadow(building);
   registerSceneryCullable(building, 750);
   group.add(building);
 
@@ -11713,6 +11930,7 @@ function addEditorLamp(group, x, z, rotation = 0) {
   lamp.position.set(x, 0, z);
   lamp.rotation.y = editorRotationToWorld(rotation);
   lamp.scale.setScalar(0.85);
+  markCostlySceneryShadow(lamp);
   registerSceneryCullable(lamp, 520);
   group.add(lamp);
 }
@@ -11751,6 +11969,7 @@ function addEditorFlowerBed(group, x, z, rotation = 0) {
   bed.position.set(x, 0, z);
   bed.scale.set(1.3, 1, 1.3);
   bed.rotation.y = editorRotationToWorld(rotation);
+  markCostlySceneryShadow(bed);
   registerSceneryCullable(bed, 360);
   group.add(bed);
 }
@@ -13032,11 +13251,13 @@ function setupQuickRaceOpponents() {
     : getAiGridPositions(count);
   const bossOpponentIndex = getAiBossOpponentIndex(gridPositions, count);
   const aiModel = getQuickRaceAiModelName();
+  const aiNameRoster = createAiDriverNameRoster(count, bossOpponentIndex);
   for (let i = 0; i < count; i += 1) {
     const carId = getAiOpponentCarId(i, carIds, bossOpponentIndex);
-    const displayName = getAiOpponentDisplayName(i, bossOpponentIndex);
+    const displayName = getAiOpponentDisplayName(i, bossOpponentIndex, aiNameRoster);
     const isBoss = i === bossOpponentIndex;
     const aiCar = createSelectedCar(carId);
+    applyCarVisualQuality(aiCar, { isPlayer: false });
     const pose = getQuickRaceGridPose(gridPositions[i]);
     syncCarVisualRoot(aiCar.root, new THREE.Vector3(pose.position.x, track.groundY, pose.position.z));
     aiCar.root.rotation.set(0, pose.heading, 0);
@@ -13048,7 +13269,7 @@ function setupQuickRaceOpponents() {
       isBoss,
       bossModeActive: false,
       aiModel,
-      cyborg: aiModel === AI_CYBORG_MODEL_NAME ? createCyborgOpponentState(pose, i) : null,
+      cyborg: aiModel === AI_CYBORG_MODEL_NAME ? createCyborgOpponentState(pose, i, isBoss) : null,
       car: aiCar,
       carId,
       profile: getCarProfileById(carId),
@@ -13262,6 +13483,12 @@ function updateRaceLeaderboard(dt) {
     position.textContent = `${index + 1}`;
     const name = document.createElement("strong");
     name.textContent = row.label;
+    if (row.bossModeActive) {
+      const bossIcon = document.createElement("span");
+      bossIcon.className = "boss-push-icon";
+      bossIcon.textContent = ">>";
+      name.appendChild(bossIcon);
+    }
     const gap = document.createElement("small");
     gap.textContent = getRaceLeaderboardGapText(row, playerRow);
 
@@ -13292,6 +13519,7 @@ function getQuickRaceLeaderboardRows() {
       id: entry.id,
       label: isPlayer ? getDriverProfileDisplayName() : entry.label,
       isPlayer,
+      bossModeActive: Boolean(entry.source?.bossModeActive),
       finished: entry.finished,
       raceMeters: entry.totalProgress * sampleSpacing,
       speed,
@@ -13315,6 +13543,7 @@ function getOnlineRaceLeaderboardRows() {
       id: entry.playerId,
       label: isPlayer ? getDriverProfileDisplayName() : entry.player?.driverName || (entry.isAi ? "AI" : "Driver"),
       isPlayer,
+      bossModeActive: Boolean(aiOpponent?.bossModeActive),
       finished: entry.finished,
       raceMeters: (entry.raceDistance ?? 0) * lapDistance,
       speed,
@@ -13796,12 +14025,17 @@ function isAiLaunchOvertakeLocked() {
   return getCurrentRaceElapsed() < AI_LAUNCH_LANE_LOCK_SECONDS;
 }
 
+function getAiLaunchSteerScale() {
+  return getCurrentRaceElapsed() < AI_LAUNCH_STEER_LIMIT_SECONDS ? 0.5 : 1;
+}
+
 function updateAiDifficultyModifiers(opponent, dt) {
   const setting = getAiDifficultySetting();
   updateAiBossModeState(opponent);
   const rubberbandScale = getAiRubberbandAccelerationScale(opponent, setting);
   const bossCatchupScale = getAiBossCatchupAccelerationScale(opponent);
-  const targetAccelerationScale = (setting.accelerationScale ?? 1) * rubberbandScale;
+  const bossModePressureScale = getAiBossModePressureScale(opponent);
+  const targetAccelerationScale = (setting.accelerationScale ?? 1) * rubberbandScale * bossModePressureScale.acceleration;
   opponent.difficultyAccelerationScale = THREE.MathUtils.damp(
     opponent.difficultyAccelerationScale ?? targetAccelerationScale * bossCatchupScale,
     targetAccelerationScale * bossCatchupScale,
@@ -13810,7 +14044,7 @@ function updateAiDifficultyModifiers(opponent, dt) {
   );
   opponent.difficultySafetyMarginScale = setting.safetyMarginScale ?? 1;
   opponent.difficultyOvertakeIntentScale = (setting.overtakeIntentScale ?? 1) * (opponent.bossModeActive ? 1.4 : 1);
-  opponent.difficultyTopSpeedScale = (setting.topSpeedScale ?? 1) * getAiBossCatchupTopSpeedScale(opponent);
+  opponent.difficultyTopSpeedScale = (setting.topSpeedScale ?? 1) * getAiBossCatchupTopSpeedScale(opponent) * bossModePressureScale.topSpeed;
 }
 
 function getAiRubberbandAccelerationScale(opponent, setting) {
@@ -13862,6 +14096,17 @@ function getAiBossCatchupAccelerationScale(opponent) {
 function getAiBossCatchupTopSpeedScale(opponent) {
   if (!opponent?.isBoss) return 1;
   return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.05 : 1;
+}
+
+function getAiBossModePressureScale(opponent) {
+  if (!opponent?.isBoss || !opponent.bossModeActive) return { acceleration: 1, topSpeed: 1 };
+  const gapSeconds = Math.abs(getAiHumanGapSeconds(opponent));
+  if (!Number.isFinite(gapSeconds)) return { acceleration: 1, topSpeed: 1 };
+  const pressure = 1 - THREE.MathUtils.smoothstep(gapSeconds, 0.75, BOSS_MODE_NEAR_PLAYER_SECONDS);
+  return {
+    acceleration: THREE.MathUtils.lerp(1, 1.07, pressure),
+    topSpeed: THREE.MathUtils.lerp(1, 1.035, pressure),
+  };
 }
 
 function getAiRaceCompletionRatio(opponent) {
@@ -13970,8 +14215,8 @@ function estimateAiSampleSpacing() {
   return count ? total / count : 1;
 }
 
-function createCyborgOpponentState(gridPose, opponentIndex = 0) {
-  const line = getCyborgLineForOpponent(opponentIndex);
+function createCyborgOpponentState(gridPose, opponentIndex = 0, bossOnlyFastLines = false) {
+  const line = getCyborgLineForOpponent(opponentIndex, bossOnlyFastLines);
   const startProgress = getNearestCyborgProgress(line, gridPose.position);
   const laneOffsets = [0, -0.28, 0.28, -0.46, 0.46];
   const trainedLaneOffset = laneOffsets[opponentIndex % laneOffsets.length] ?? 0;
@@ -13992,14 +14237,21 @@ function createCyborgOpponentState(gridPose, opponentIndex = 0) {
   };
 }
 
-function getCyborgLineForOpponent(opponentIndex = 0) {
+function getCyborgLineForOpponent(opponentIndex = 0, bossOnlyFastLines = false) {
   const bank = getSelectedCyborgLineBank();
-  const lines = bank?.lines ?? [];
+  const allLines = bank?.lines ?? [];
   const fallback = bank?.fallback ?? { samples: [], totalDistance: 0, sourceLapTime: null };
+  const lines = bossOnlyFastLines ? getFastestCyborgLines(allLines) : allLines;
   if (!lines.length) return fallback;
   const lineOrder = [0, 2, 4, 1, 3, 5, 6, 7, 8];
   const index = lineOrder[opponentIndex % lineOrder.length] % lines.length;
   return lines[index] ?? lines[0];
+}
+
+function getFastestCyborgLines(lines = []) {
+  if (!lines.length) return [];
+  const count = Math.max(1, Math.ceil(lines.length * BOSS_FAST_CYBORG_LINE_FRACTION));
+  return lines.slice(0, count);
 }
 
 function getSelectedCyborgLineBank() {
@@ -14190,10 +14442,25 @@ function getAiOpponentCarId(index = 0, carIds = [], bossOpponentIndex = -1) {
   return carIds[index % carIds.length] ?? "mersedeez";
 }
 
-function getAiOpponentDisplayName(index = 0, bossOpponentIndex = -1) {
+function createAiDriverNameRoster(aiCount = 0, bossOpponentIndex = -1) {
+  const roster = [...AI_DRIVER_NAMES];
+  let seed = hashStringToUint32(`${selectedTrack}:${getCarProfile().kind}:${selectedAiDifficulty}:${selectedQuickRaceLapCount}:${aiCount}`);
+  for (let i = roster.length - 1; i > 0; i -= 1) {
+    seed = Math.imul(seed ^ (seed >>> 13), 1664525) + 1013904223;
+    const j = Math.abs(seed) % (i + 1);
+    [roster[i], roster[j]] = [roster[j], roster[i]];
+  }
+  const assigned = [];
+  for (let i = 0; i < aiCount; i += 1) {
+    assigned[i] = i === bossOpponentIndex ? "" : roster[assigned.filter(Boolean).length % roster.length];
+  }
+  return assigned;
+}
+
+function getAiOpponentDisplayName(index = 0, bossOpponentIndex = -1, aiNameRoster = []) {
   const bossName = getAiBossNameForCurrentRace();
   if (index === bossOpponentIndex && bossName) return bossName;
-  return `AI ${index + 1}`;
+  return aiNameRoster[index] || AI_DRIVER_NAMES[index % AI_DRIVER_NAMES.length];
 }
 
 function getAiBossOpponentIndex(gridPositions = [], aiCount = 0) {
@@ -14202,10 +14469,11 @@ function getAiBossOpponentIndex(gridPositions = [], aiCount = 0) {
     ? 1
     : Math.max(1, onlineRoomState.gridOrder.length || onlineRoomState.players.size || 1);
   const totalGridCars = Math.max(1, aiCount + humanCount);
-  const frontCutoff = Math.max(1, Math.ceil(totalGridCars * 0.75));
+  const frontCutoff = Math.max(1, Math.ceil(totalGridCars * 0.5));
   const candidates = gridPositions
     .map((gridPosition, index) => ({ gridPosition, index }))
-    .filter((candidate) => candidate.gridPosition <= frontCutoff);
+    .filter((candidate) => candidate.gridPosition <= frontCutoff)
+    .filter((candidate) => aiCount <= 1 || candidate.gridPosition !== 1);
   const pool = candidates.length ? candidates : gridPositions.map((gridPosition, index) => ({ gridPosition, index }));
   if (!pool.length) return -1;
   return pool[Math.floor(Math.random() * pool.length)].index;
@@ -14216,6 +14484,7 @@ function getAiBossNameForCurrentRace() {
   const kind = getCarProfile().kind;
   if (kind === "stock") return "Geoff Corden";
   if (kind === "formula") return "Louisa Hampton";
+  if (kind === "lmp") return "Patricia Dempsey";
   return "";
 }
 
@@ -14224,6 +14493,7 @@ function getAiBossCarIdForCurrentRace() {
   const kind = getCarProfile().kind;
   if (kind === "stock") return "geoff-corden-stock";
   if (kind === "formula") return "louisa-hampton-formula";
+  if (kind === "lmp") return "patricia-dempsey-lmp";
   return "";
 }
 
@@ -14413,7 +14683,7 @@ function resetAiOpponentsToGrid() {
     opponent.launchLaneOffset = pose.laneOffset;
     opponent.racingLineOffset = 0;
     if (opponent.aiModel === AI_CYBORG_MODEL_NAME) {
-      opponent.cyborg = createCyborgOpponentState(pose, i);
+      opponent.cyborg = createCyborgOpponentState(pose, i, opponent.isBoss);
     }
     syncCarVisualRoot(opponent.car.root, opponent.position);
     opponent.car.root.rotation.set(0, opponent.heading, 0);
@@ -15032,7 +15302,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
     aiLowSpeedSteer,
     aiHighSpeedSteer,
     THREE.MathUtils.smoothstep(speed, 8, 52),
-  ) * THREE.MathUtils.lerp(1, 0.9, THREE.MathUtils.smoothstep(speed, 34, 70));
+  ) * THREE.MathUtils.lerp(1, 0.9, THREE.MathUtils.smoothstep(speed, 34, 70)) * getAiLaunchSteerScale();
   const steerGain = targetPose.steerGainOverride ?? 1.12;
   const steerDamp = targetPose.steerDampOverride ?? 9.5;
   opponent.steer = THREE.MathUtils.damp(opponent.steer, THREE.MathUtils.clamp(turnError * steerGain, -maxSteer, maxSteer), steerDamp, dt);
