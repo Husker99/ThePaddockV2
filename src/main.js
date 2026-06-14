@@ -163,6 +163,7 @@ const gearEl = document.querySelector("#gear");
 const surfaceEl = document.querySelector("#surface");
 const draftCueEl = document.querySelector("#draft-cue");
 const sessionMenuButton = document.querySelector("#session-menu-button");
+const controlsEl = document.querySelector(".controls");
 const ersPanelEl = document.querySelector(".ers-panel");
 const ersControlHintEl = document.querySelector("#ers-control-hint");
 const ersLabelEl = document.querySelector("#ers-label");
@@ -212,6 +213,7 @@ const quickRaceResultsEl = document.querySelector("#quick-race-results");
 const quickRaceResultsPositionEl = document.querySelector("#quick-race-results-position");
 const quickRaceResultsListEl = document.querySelector("#quick-race-results-list");
 const quickRaceResultsRestartButton = document.querySelector("#quick-race-results-restart");
+const quickRaceResultsLobbyButton = document.querySelector("#quick-race-results-lobby");
 const quickRaceResultsMenuButton = document.querySelector("#quick-race-results-menu");
 const timeTrialResultsEl = document.querySelector("#time-trial-results");
 const timeTrialLapsEl = document.querySelector("#time-trial-laps");
@@ -776,7 +778,11 @@ function isTimeTrialGameMode() {
 }
 
 function isOnlineRaceGameMode() {
-  return selectedGameMode === "online-host" || selectedGameMode === "online-join";
+  return selectedGameMode === "online-host" || selectedGameMode === "online-join" || selectedGameMode === "online-race";
+}
+
+function isRaceSessionGameMode() {
+  return selectedGameMode === "quick-race" || isOnlineRaceGameMode();
 }
 
 const HOW_TO_PLAY_TOPICS = {
@@ -1341,6 +1347,7 @@ for (const button of startRaceButtons) {
 quickRaceStartButton?.addEventListener("pointerenter", startMenuMusic);
 quickRaceStartButton?.addEventListener("click", startGame);
 quickRaceResultsRestartButton?.addEventListener("click", restartQuickRaceFromResults);
+quickRaceResultsLobbyButton?.addEventListener("click", returnToOnlineLobbyFromRace);
 quickRaceResultsMenuButton?.addEventListener("click", returnToMainMenuFromRace);
 sessionMenuButton?.addEventListener("click", () => openPauseMenu());
 pauseMenuResumeButton?.addEventListener("click", () => closePauseMenu());
@@ -2096,6 +2103,7 @@ function update() {
   updateSceneryVisibility();
   updateSceneryLights();
   updateSessionMenuButton();
+  updateControlsReminderVisibility();
   audioState.collisionCooldown = Math.max(0, (audioState.collisionCooldown ?? 0) - dt);
   updateCrowdAudio(dt);
   updateNatureAudio(dt);
@@ -2131,7 +2139,7 @@ function updateSceneryVisibility() {
 }
 
 function resolveRaceCarCollisions(dt) {
-  if (selectedGameMode !== "quick-race" || !aiOpponents.length) return;
+  if (!(selectedGameMode === "quick-race" || isOnlineRaceGameMode()) || !aiOpponents.length) return;
   const bodies = [
     {
       kind: "player",
@@ -9991,6 +9999,8 @@ function showOnlineRaceResults() {
 function renderOnlineRaceResults() {
   if (!quickRaceResultsListEl) return;
   if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = true;
+  if (quickRaceResultsLobbyButton) quickRaceResultsLobbyButton.hidden = false;
+  if (quickRaceResultsMenuButton) quickRaceResultsMenuButton.textContent = "Main Menu";
   const titleEl = quickRaceResultsEl?.querySelector("header span");
   if (titleEl) titleEl.textContent = "Online Race Complete";
   const ordered = getOnlineRaceStandings();
@@ -10000,6 +10010,7 @@ function renderOnlineRaceResults() {
   quickRaceResultsListEl.replaceChildren();
   for (const [index, entry] of ordered.entries()) {
     const row = document.createElement("li");
+    row.className = entry.playerId === onlineRoomState.playerId ? "is-player" : "";
     const player = entry.player ?? {};
     const label = player.driverName || (entry.playerId === onlineRoomState.playerId ? "You" : "Driver");
     const time = entry.finished
@@ -10814,6 +10825,11 @@ function shouldPauseSimulationForPauseMenu() {
 function updateSessionMenuButton() {
   if (!sessionMenuButton) return;
   sessionMenuButton.hidden = !gameStarted || isMenuOpen() || !trackEditor.classList.contains("is-hidden");
+}
+
+function updateControlsReminderVisibility() {
+  if (!controlsEl) return;
+  controlsEl.hidden = gameStarted && isRaceSessionGameMode();
 }
 
 function updatePauseMenuContent() {
@@ -12284,7 +12300,7 @@ function updateOpponentEngineAudio(dt) {
 
 function updateCrowdAudio(dt) {
   if (audioState.element) return;
-  if (!gameStarted || isPaused || isMenuOpen() || !audioState.context || !crowdEmitters.length || settingVolume("crowdVolume") <= 0) {
+  if (!gameStarted || isPaused || isMenuOpen() || pauseMenuOpen || !audioState.context || !crowdEmitters.length || settingVolume("crowdVolume") <= 0) {
     fadeCrowdVoices(dt);
     return;
   }
@@ -12386,7 +12402,8 @@ function getCrowdAudioCandidates() {
 function updateNatureAudio(dt) {
   const src = NATURE_AMBIENCE_SRCS[activeTimeOfDay];
   if (audioState.element) return;
-  if (!src || !gameStarted || isPaused || isMenuOpen() || !audioState.context || !natureEmitters.length || settingVolume("natureVolume") <= 0) {
+  const sessionMenuSilencesNature = !pauseMenuOpen && (isPaused || isMenuOpen());
+  if (!src || !gameStarted || sessionMenuSilencesNature || !audioState.context || !natureEmitters.length || settingVolume("natureVolume") <= 0) {
     fadeNatureVoices(dt);
     return;
   }
@@ -13593,6 +13610,8 @@ function showQuickRaceResults() {
 function renderQuickRaceResults() {
   if (!quickRaceResultsListEl) return;
   if (quickRaceResultsRestartButton) quickRaceResultsRestartButton.hidden = false;
+  if (quickRaceResultsLobbyButton) quickRaceResultsLobbyButton.hidden = true;
+  if (quickRaceResultsMenuButton) quickRaceResultsMenuButton.textContent = "Main Menu";
   const titleEl = quickRaceResultsEl?.querySelector("header span");
   if (titleEl) titleEl.textContent = "Race Complete";
   const ordered = getQuickRaceOrderedEntries();
@@ -13637,7 +13656,11 @@ function restartQuickRaceFromResults() {
   startRaceCountdown();
 }
 
-function returnToMainMenuFromRace() {
+function returnToOnlineLobbyFromRace() {
+  if (!isOnlineRaceGameMode() || onlineRoomState.role === "none") {
+    returnToMainMenuFromRace();
+    return;
+  }
   closePauseMenu({ restorePause: false });
   gameStarted = false;
   setPaused(false);
@@ -13645,6 +13668,57 @@ function returnToMainMenuFromRace() {
   keys.clear();
   clearAiOpponents();
   removeOnlineRemoteCars();
+  onlineRoomState.raceStarted = false;
+  onlineRoomState.ready = onlineRoomState.role === "host";
+  onlineRoomState.players.set(onlineRoomState.playerId, getOnlineRoomPlayerPayload());
+  resetOnlineRaceRunState();
+  resetQuickRaceState();
+  clearTimeTrialGhost();
+  startMenu.classList.remove("is-hidden");
+  setMenuStep("online-room");
+  renderOnlineRoomStatus(
+    onlineRoomState.role === "host"
+      ? "Back in the lobby. Adjust the setup or start another race."
+      : "Back in the lobby. Ready up for the next race.",
+    onlineRoomState.role === "host" ? "is-good" : "is-warning",
+  );
+  if (onlineRoomState.role === "host") {
+    sendOnlineRosterUpdate();
+    startOnlinePublicLobbyAnnouncements();
+  } else {
+    sendOnlineRoomEvent("player_ready", getOnlineRoomPlayerPayload());
+  }
+  updateMenuVisual();
+  updateTimeTrialHud();
+  updateQuickRaceHud();
+}
+
+function leaveOnlineRoomForMainMenu() {
+  stopOnlinePublicLobbyAnnouncements();
+  disconnectOnlineRoom();
+  removeOnlineRemoteCars();
+  onlineRoomState.role = "none";
+  onlineRoomState.roomCode = "";
+  onlineRoomState.topic = "";
+  onlineRoomState.hostSettings = null;
+  onlineRoomState.ready = false;
+  onlineRoomState.raceStarted = false;
+  onlineRoomState.gridOrder = [];
+  onlineRoomState.players = new Map();
+  resetOnlineRaceRunState();
+  selectedGameMode = "drive";
+}
+
+function returnToMainMenuFromRace() {
+  const shouldLeaveOnlineRoom = isOnlineRaceGameMode() || onlineRoomState.role !== "none";
+  closePauseMenu({ restorePause: false });
+  gameStarted = false;
+  setPaused(false);
+  stopRaceIntroMusic();
+  keys.clear();
+  clearAiOpponents();
+  removeOnlineRemoteCars();
+  if (shouldLeaveOnlineRoom) leaveOnlineRoomForMainMenu();
   resetQuickRaceState();
   clearTimeTrialGhost();
   startMenu.classList.remove("is-hidden");

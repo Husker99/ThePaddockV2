@@ -2814,7 +2814,7 @@ h1 {
 
 .quick-race-results-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -3240,6 +3240,10 @@ h1 {
   gap: 8px;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.controls[hidden] {
+  display: none !important;
 }
 
 .controls span {
