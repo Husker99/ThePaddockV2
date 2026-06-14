@@ -1253,6 +1253,10 @@ h1 {
   gap: 4px;
 }
 
+.showroom-label[hidden] {
+  display: none !important;
+}
+
 .showroom-label span {
   color: rgba(246, 242, 232, 0.62);
   font-size: 11px;
@@ -1279,7 +1283,9 @@ h1 {
 
 .showroom-visual.is-hidden,
 #menu-preview.is-hidden {
-  display: none;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .intro-visual {
@@ -1551,10 +1557,12 @@ h1 {
   68% { transform: translateX(-42%) rotate(10deg); }
 }
 #menu-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 480px;
 }
 
 .track-editor {
@@ -3300,7 +3308,9 @@ h1 {
 
 .showroom-visual.is-hidden,
 #menu-preview.is-hidden {
-  display: none;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .intro-visual {

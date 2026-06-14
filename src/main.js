@@ -322,7 +322,11 @@ function getSceneryVisibilityMultiplier() {
 }
 
 function getSceneryLightVisibilityMultiplier(role = "ambient") {
-  if (gameSettings.graphicsQuality === "low") return role === "lamp" ? 0.5 : 0.55;
+  if (gameSettings.graphicsQuality === "low") {
+    if (role === "lamp" && activeTimeOfDay === "sunset") return 0;
+    if (role === "lamp" && activeTimeOfDay === "night") return 0.26;
+    return role === "lamp" ? 0.38 : 0.55;
+  }
   if (gameSettings.graphicsQuality === "high") return role === "lamp" ? 2 : 1.22;
   return 1;
 }
@@ -545,6 +549,8 @@ function applyTimeOfDay(timeOfDay = "day") {
 }
 
 function sceneryLightIntensity(baseIntensity, role = "ambient") {
+  if (gameSettings.graphicsQuality === "low" && role === "lamp" && activeTimeOfDay === "sunset") return 0;
+  if (gameSettings.graphicsQuality === "low" && role === "lamp" && activeTimeOfDay === "night") return baseIntensity * 1.9;
   const sunsetMultiplier = role === "lamp" ? 5.2 : 1.75;
   const nightMultiplier = role === "lamp" ? 6.4 : 2.25;
   if (activeTimeOfDay === "sunset") return baseIntensity * sunsetMultiplier;
@@ -553,6 +559,8 @@ function sceneryLightIntensity(baseIntensity, role = "ambient") {
 }
 
 function sceneryLightDistance(baseDistance, role = "ambient") {
+  if (gameSettings.graphicsQuality === "low" && role === "lamp" && activeTimeOfDay === "sunset") return 0;
+  if (gameSettings.graphicsQuality === "low" && role === "lamp" && activeTimeOfDay === "night") return baseDistance * 0.95;
   const sunsetMultiplier = role === "lamp" ? 2.7 : 1.18;
   const nightMultiplier = role === "lamp" ? 3 : 1.3;
   if (activeTimeOfDay === "sunset") return baseDistance * sunsetMultiplier;
@@ -790,6 +798,8 @@ let selectedOnlineGhostRecordId = "";
 let selectedHowToPlayTopic = "quick-start";
 let selectedCar = "ferraro";
 let selectedTrack = "katara-speedway";
+let previewTrackId = null;
+let previewCarCategory = null;
 let driverProfile = loadDriverProfile();
 let cameraMode = gameSettings.defaultCamera;
 let editorTool = "select";
@@ -1392,7 +1402,7 @@ editorCanvas.addEventListener("pointerleave", () => {
   updateEditorStatus();
   renderTrackEditor();
 });
-trackNextButton.addEventListener("click", () => setMenuStep("car-category"));
+trackNextButton?.addEventListener("click", () => setMenuStep("car-category"));
 startButton.addEventListener("pointerenter", startMenuMusic);
 for (const button of startRaceButtons) {
   button.addEventListener("pointerenter", startMenuMusic);
@@ -1436,6 +1446,10 @@ for (const button of carButtons) {
   button.addEventListener("click", () => selectCar(button.dataset.car));
 }
 for (const button of carCategoryButtons) {
+  button.addEventListener("pointerenter", () => previewCarCategorySelection(button.dataset.carCategory));
+  button.addEventListener("focus", () => previewCarCategorySelection(button.dataset.carCategory));
+  button.addEventListener("pointerleave", () => clearCarCategoryPreview(button.dataset.carCategory));
+  button.addEventListener("blur", () => clearCarCategoryPreview(button.dataset.carCategory));
   button.addEventListener("click", () => selectCarCategory(button.dataset.carCategory));
 }
 for (const button of backButtons) {
@@ -1450,7 +1464,11 @@ for (const button of backButtons) {
   });
 }
 for (const button of trackButtons) {
-  button.addEventListener("click", () => selectTrack(button.dataset.track));
+  button.addEventListener("pointerenter", () => previewTrackSelection(button.dataset.track));
+  button.addEventListener("focus", () => previewTrackSelection(button.dataset.track));
+  button.addEventListener("pointerleave", () => clearTrackPreview(button.dataset.track));
+  button.addEventListener("blur", () => clearTrackPreview(button.dataset.track));
+  button.addEventListener("click", () => chooseTrackFromMenu(button.dataset.track));
 }
 setMenuStep("intro");
 
@@ -8961,16 +8979,39 @@ function selectCar(carId) {
   updateMenuPreviewCar();
 }
 
-function selectCarCategory(category) {
-  if (isRaceModeCarCategoryRestricted() && !raceModeCarCategories.has(category)) return;
-  const defaultCars = {
+function getDefaultCarForCategory(category) {
+  return {
     formula: PROFILE_TEAM_CAR_IDS.formula,
     lmp: PROFILE_TEAM_CAR_IDS.lmp,
     stock: PROFILE_TEAM_CAR_IDS.stock,
     jeep: PROFILE_TEAM_CAR_IDS.jeep,
     corvette: PROFILE_TEAM_CAR_IDS.corvette,
-  };
-  selectCar(defaultCars[category] ?? "red");
+  }[category] ?? "red";
+}
+
+function previewCarCategorySelection(category) {
+  if (menuStep !== "car-category") return;
+  if (isRaceModeCarCategoryRestricted() && !raceModeCarCategories.has(category)) return;
+  previewCarCategory = category;
+  for (const button of carCategoryButtons) {
+    button.classList.toggle("is-selected", button.dataset.carCategory === previewCarCategory);
+  }
+  updateMenuVisual();
+}
+
+function clearCarCategoryPreview(category) {
+  if (menuStep !== "car-category" || previewCarCategory !== category) return;
+  previewCarCategory = null;
+  for (const button of carCategoryButtons) {
+    button.classList.remove("is-selected");
+  }
+  updateMenuVisual();
+}
+
+function selectCarCategory(category) {
+  if (isRaceModeCarCategoryRestricted() && !raceModeCarCategories.has(category)) return;
+  previewCarCategory = category;
+  selectCar(getDefaultCarForCategory(category));
   if (isTimeTrialGameMode()) {
     const backButton = document.querySelector("[data-menu-step=\"time-trial-setup\"] [data-menu-back]");
     if (backButton) backButton.dataset.menuBack = "car-category";
@@ -10279,11 +10320,35 @@ function setOnlineJoinStatus(text, className = "") {
   if (className) onlineJoinStatusEl.classList.add(className);
 }
 
+function previewTrackSelection(trackId) {
+  if (menuStep !== "track") return;
+  previewTrackId = trackId;
+  for (const button of trackButtons) {
+    button.classList.toggle("is-selected", button.dataset.track === previewTrackId);
+  }
+  updateMenuVisual();
+}
+
+function clearTrackPreview(trackId) {
+  if (menuStep !== "track" || previewTrackId !== trackId) return;
+  previewTrackId = null;
+  for (const button of trackButtons) {
+    button.classList.remove("is-selected");
+  }
+  updateMenuVisual();
+}
+
+function chooseTrackFromMenu(trackId) {
+  previewTrackId = trackId;
+  selectTrack(trackId);
+  setMenuStep("car-category");
+}
+
 function selectTrack(trackId) {
   selectedTrack = trackId;
   clearAiOpponents();
   for (const button of trackButtons) {
-    button.classList.toggle("is-selected", button.dataset.track === selectedTrack);
+    button.classList.toggle("is-selected", menuStep === "track" && button.dataset.track === (previewTrackId ?? selectedTrack));
   }
 
   scene.remove(track.group);
@@ -10295,6 +10360,14 @@ function selectTrack(trackId) {
 
 function setMenuStep(step) {
   menuStep = step;
+  if (menuStep === "track") {
+    previewTrackId = null;
+    for (const button of trackButtons) button.classList.remove("is-selected");
+  }
+  if (menuStep === "car-category") {
+    previewCarCategory = null;
+    for (const button of carCategoryButtons) button.classList.remove("is-selected");
+  }
   startMenu.dataset.menuStep = menuStep;
   const titles = {
     intro: "The Paddock",
@@ -10790,7 +10863,11 @@ function getSelectedCarLabel() {
 }
 
 function getSelectedTrackLabel() {
-  return document.querySelector(`[data-track="${selectedTrack}"] strong`)?.textContent ?? "Practice Track";
+  return getTrackLabelById(selectedTrack);
+}
+
+function getTrackLabelById(trackId) {
+  return document.querySelector(`[data-track="${trackId}"] strong`)?.textContent ?? trackDefinitions[trackId]?.name ?? "Practice Track";
 }
 
 function isPaintMenuStep() {
@@ -10802,17 +10879,16 @@ function updateMenuVisual() {
     ? "intro"
     : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track")
       ? "track"
-      : menuStep === "car-category"
-        ? "driver"
-        : menuStep === "driver-profile"
+      : menuStep === "driver-profile"
           ? "profile"
           : "car";
   for (const visualEl of showroomVisuals) {
     visualEl.classList.toggle("is-hidden", visualEl.dataset.showroomVisual !== visual);
   }
+  const visibleTrackMapId = menuStep === "track" ? previewTrackId : selectedTrack;
   for (const map of trackMaps) {
-    map.classList.toggle("is-hidden", map.dataset.trackMap !== selectedTrack);
-    map.classList.toggle("is-selected", map.dataset.trackMap === selectedTrack);
+    map.classList.toggle("is-hidden", !visibleTrackMapId || map.dataset.trackMap !== visibleTrackMapId);
+    map.classList.toggle("is-selected", !!visibleTrackMapId && map.dataset.trackMap === visibleTrackMapId);
   }
   menuPreviewCanvas.classList.toggle("is-hidden", !isMenuPreviewCarStep());
   driverProfileCustomizerEl?.classList.toggle("is-hidden", menuStep !== "driver-profile");
@@ -10827,8 +10903,8 @@ function updateMenuVisual() {
     "online-room": ["Room Code", onlineRoomState.roomCode || "Waiting"],
     "editor-choice": ["Track Editor", "Choose Starting Point"],
     "editor-default-track": ["Default Track", "Choose Layout"],
-    track: ["Selected Track", getSelectedTrackLabel()],
-    "car-category": ["Pick a Garage", "Driver Ready"],
+    track: previewTrackId ? ["Track Preview", getTrackLabelById(previewTrackId)] : ["Track Preview", "Hover a Track"],
+    "car-category": previewCarCategory ? ["Class Preview", getCarClassLabel(previewCarCategory)] : ["Class Preview", "Hover a Class"],
     "ai-opponents": ["Race Grid", `${selectedAiOpponentCount} AI - ${getAiDifficultyLabel()}`],
     "time-trial-setup": selectedGameMode === "weekly-time-trial"
       ? ["Weekly Time Trial", `${getSelectedTrackLabel()} / ${getCarClassLabel(getCarProfile().kind)}`]
@@ -10836,6 +10912,8 @@ function updateMenuVisual() {
   };
   const [label, title] = labels[menuStep] ?? ["Selected Machine", getSelectedCarLabel()];
   const labelEl = previewTitle?.previousElementSibling;
+  const showroomLabelEl = previewTitle?.closest(".showroom-label");
+  if (showroomLabelEl) showroomLabelEl.hidden = menuStep === "intro";
   if (labelEl) labelEl.textContent = label;
   if (previewTitle) previewTitle.textContent = title;
 
@@ -10849,7 +10927,7 @@ function updateMenuVisual() {
 }
 
 function isMenuPreviewCarStep() {
-  return isPaintMenuStep() || menuStep === "driver-profile";
+  return isPaintMenuStep() || menuStep === "driver-profile" || (menuStep === "car-category" && !!previewCarCategory);
 }
 
 function updateAiOpponentSelection() {
@@ -10984,12 +11062,23 @@ function handleStartRaceClick() {
 function updateMenuPreviewCar(force = false) {
   if (!menuPreviewReady || !menuPreviewCanvas || !isMenuPreviewCarStep()) return;
   const profilePreview = menuStep === "driver-profile";
-  const carId = profilePreview ? PROFILE_TEAM_CAR_IDS.stock : selectedCar;
+  const categoryPreview = menuStep === "car-category" && !!previewCarCategory;
+  const carId = profilePreview
+    ? PROFILE_TEAM_CAR_IDS.stock
+    : categoryPreview
+      ? getDefaultCarForCategory(previewCarCategory)
+      : selectedCar;
   const previewId = profilePreview
     ? `${carId}:${driverProfile.primaryColor}:${driverProfile.accentColor}`
-    : carId;
+    : categoryPreview
+      ? `${carId}:category-preview`
+      : carId;
   if (!force && previewCarId === previewId) {
-    if (previewTitle) previewTitle.textContent = profilePreview ? driverProfile.teamName || "Team Name" : getSelectedCarLabel();
+    if (previewTitle) previewTitle.textContent = profilePreview
+      ? driverProfile.teamName || "Team Name"
+      : categoryPreview
+        ? getCarClassLabel(previewCarCategory)
+        : getSelectedCarLabel();
     return;
   }
   const previousRotationY = previewCar?.root?.rotation?.y ?? Math.PI * 0.18;
@@ -10999,11 +11088,15 @@ function updateMenuPreviewCar(force = false) {
   previewCar = createSelectedCar(carId);
   previewCar.root.position.set(0, 0, 0);
   previewCar.root.rotation.set(0, force ? previousRotationY : Math.PI * 0.18, 0);
-  const profile = profilePreview ? carProfiles["orange-stock"] : getCarProfile();
+  const profile = getCarProfileById(carId) ?? (profilePreview ? carProfiles["orange-stock"] : getCarProfile());
   const scale = profile.kind === "jeep" ? 0.72 : profile.kind === "formula" ? 0.66 : 0.68;
   previewCar.root.scale.setScalar(scale);
   previewScene.add(previewCar.root);
-  if (previewTitle) previewTitle.textContent = profilePreview ? driverProfile.teamName || "Team Name" : getSelectedCarLabel();
+  if (previewTitle) previewTitle.textContent = profilePreview
+    ? driverProfile.teamName || "Team Name"
+    : categoryPreview
+      ? getCarClassLabel(previewCarCategory)
+      : getSelectedCarLabel();
 }
 
 function updateMenuPreview(dt) {
