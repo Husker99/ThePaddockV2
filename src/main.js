@@ -14126,12 +14126,21 @@ function updateAiDifficultyModifiers(opponent, dt) {
   const setting = getAiDifficultySetting();
   updateAiBossModeState(opponent);
   const rubberbandScale = getAiRubberbandAccelerationScale(opponent, setting);
+  const rubberbandBrakeScale = getAiRubberbandBrakeScale(opponent, setting);
   const bossCatchupScale = getAiBossCatchupAccelerationScale(opponent);
+  const bossCatchupBrakeScale = getAiBossCatchupBrakeScale(opponent);
   const bossModePressureScale = getAiBossModePressureScale(opponent);
   const targetAccelerationScale = (setting.accelerationScale ?? 1) * rubberbandScale * bossModePressureScale.acceleration;
   opponent.difficultyAccelerationScale = THREE.MathUtils.damp(
     opponent.difficultyAccelerationScale ?? targetAccelerationScale * bossCatchupScale,
     targetAccelerationScale * bossCatchupScale,
+    3.2,
+    dt,
+  );
+  const targetBrakeScale = Math.max(rubberbandBrakeScale, bossCatchupBrakeScale);
+  opponent.difficultyBrakeScale = THREE.MathUtils.damp(
+    opponent.difficultyBrakeScale ?? targetBrakeScale,
+    targetBrakeScale,
     3.2,
     dt,
   );
@@ -14174,6 +14183,22 @@ function getAiBehindRubberbandScale(gapSeconds, setting) {
   return THREE.MathUtils.lerp(startScale, maxScale, blend);
 }
 
+function getAiRubberbandBrakeScale(opponent, setting) {
+  const gapSeconds = getAiHumanGapSeconds(opponent);
+  if (!Number.isFinite(gapSeconds) || !Number.isFinite(setting.rubberbandBehindSeconds)) return 1;
+  if (gapSeconds >= -setting.rubberbandBehindSeconds) return 1;
+  const maxSeconds = Number.isFinite(setting.rubberbandBehindMaxSeconds)
+    ? setting.rubberbandBehindMaxSeconds
+    : setting.rubberbandBehindSeconds + 2;
+  const blend = THREE.MathUtils.clamp(
+    (Math.abs(gapSeconds) - setting.rubberbandBehindSeconds) / Math.max(0.001, maxSeconds - setting.rubberbandBehindSeconds),
+    0,
+    1,
+  );
+  const maxBonus = selectedAiDifficulty === "beginner" ? 0.02 : 0.03;
+  return 1 + maxBonus * (0.5 + blend * 0.5);
+}
+
 function updateAiBossModeState(opponent) {
   if (!opponent?.isBoss) return;
   const active = isAiBossModeLapActive(opponent);
@@ -14189,6 +14214,11 @@ function getAiBossCatchupAccelerationScale(opponent) {
 function getAiBossCatchupTopSpeedScale(opponent) {
   if (!opponent?.isBoss) return 1;
   return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.05 : 1;
+}
+
+function getAiBossCatchupBrakeScale(opponent) {
+  if (!opponent?.isBoss) return 1;
+  return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.03 : 1;
 }
 
 function getAiBossModePressureScale(opponent) {
@@ -14817,7 +14847,7 @@ function updateAiOpponents(dt) {
 
     const cornerAccelPenalty = 1 - racing.cornerSeverity * 0.14;
     const acceleration = profile.engineForce * 1.42 * (opponent.difficultyAccelerationScale ?? 1) * opponent.throttle * cornerAccelPenalty;
-    const braking = profile.brakeForce * 0.9 * opponent.brake;
+    const braking = profile.brakeForce * 0.9 * (opponent.difficultyBrakeScale ?? 1) * opponent.brake;
     const drag = opponent.speed * opponent.speed * 0.0048 + 0.34;
     opponent.speed += (acceleration - braking - drag) * dt;
     opponent.speed = THREE.MathUtils.clamp(opponent.speed, 0, racing.maxSpeed);
@@ -15435,7 +15465,7 @@ function updateAiDrivenCar(opponent, targetPose, racing, profile, dt) {
     forwardSpeed += profile.engineForce * 1.45 * (opponent.difficultyAccelerationScale ?? 1) * offTrackScale * slipstreamPowerScale * boostPowerScale * opponent.throttle * Math.max(0.5, cornerAccelPenalty) * (0.45 + powerFade * 0.55) * dt;
   }
   if (opponent.brake > 0) {
-    forwardSpeed = moveToward(forwardSpeed, 0, profile.brakeForce * 0.92 * opponent.brake * dt);
+    forwardSpeed = moveToward(forwardSpeed, 0, profile.brakeForce * 0.92 * (opponent.difficultyBrakeScale ?? 1) * opponent.brake * dt);
   }
 
   const grip = (surface.kind === "grass" ? profile.grassGrip : profile.baseGrip) * (1 + speed * speed * profile.downforce);
