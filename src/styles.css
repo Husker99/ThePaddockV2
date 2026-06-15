@@ -201,6 +201,7 @@ h1 {
 .selection-card[data-car],
 .selection-card[data-track],
 .selection-card[data-car-category],
+.challenge-card,
 .online-menu-card {
   cursor: pointer;
 }
@@ -276,6 +277,119 @@ h1 {
   font-size: 21px;
   line-height: 1.15;
   text-transform: uppercase;
+}
+
+.challenge-difficulty-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 22px 0 14px;
+}
+
+.challenge-difficulty-toggle button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(246, 242, 232, 0.06);
+  color: rgba(246, 242, 232, 0.82);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.challenge-difficulty-toggle button.is-selected {
+  border-color: rgba(255, 207, 74, 0.72);
+  background: linear-gradient(145deg, rgba(255, 207, 74, 0.22), rgba(228, 63, 63, 0.08));
+  color: #ffcf4a;
+  box-shadow: inset 0 0 0 1px rgba(255, 207, 74, 0.24);
+}
+
+.challenge-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 22px;
+}
+
+.challenge-card {
+  display: grid;
+  gap: 5px;
+  min-height: 98px;
+}
+
+.challenge-card em,
+.challenge-card small {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.challenge-card em {
+  color: rgba(246, 242, 232, 0.74);
+}
+
+.challenge-card small {
+  color: rgba(255, 207, 74, 0.78);
+}
+
+.challenge-card-medal-row {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  margin: 0;
+}
+
+.challenge-medal {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 238, 159, 0.92);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, #fff7b8 0 18%, transparent 19%),
+    linear-gradient(145deg, #ffdf5a, #c88616);
+  box-shadow: 0 0 14px rgba(255, 207, 74, 0.34), 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+
+.challenge-medal--silver {
+  border-color: rgba(244, 247, 250, 0.92);
+  background:
+    radial-gradient(circle at 34% 28%, #ffffff 0 18%, transparent 19%),
+    linear-gradient(145deg, #f1f5f8, #8e9aa6);
+  box-shadow: 0 0 14px rgba(210, 224, 235, 0.3), 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+
+.challenge-medal--bronze {
+  border-color: rgba(255, 204, 150, 0.9);
+  background:
+    radial-gradient(circle at 34% 28%, #ffe1b5 0 18%, transparent 19%),
+    linear-gradient(145deg, #d98a43, #7b421d);
+  box-shadow: 0 0 14px rgba(212, 127, 54, 0.28), 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+
+.challenge-medal::before,
+.challenge-medal::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  width: 8px;
+  height: 12px;
+  border-radius: 0 0 3px 3px;
+  background: #b92828;
+}
+
+.challenge-medal::before {
+  left: 3px;
+  transform: rotate(14deg);
+}
+
+.challenge-medal::after {
+  right: 3px;
+  transform: rotate(-14deg);
+  background: #1f4f9c;
 }
 
 .race-setup-panel {
@@ -2662,6 +2776,18 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(255, 207, 74, 0.34);
 }
 
+.race-leaderboard li.is-boss-mode {
+  background: rgba(214, 50, 42, 0.26);
+  color: #ff776d;
+  box-shadow: inset 0 0 0 1px rgba(255, 90, 79, 0.42), 0 0 18px rgba(214, 50, 42, 0.14);
+}
+
+.race-leaderboard li.is-player.is-boss-mode {
+  background: rgba(255, 207, 74, 0.2);
+  color: #ffcf4a;
+  box-shadow: inset 0 0 0 1px rgba(255, 207, 74, 0.34);
+}
+
 .race-leaderboard li span {
   color: rgba(246, 242, 232, 0.58);
   font-weight: 950;
@@ -2678,27 +2804,23 @@ h1 {
   white-space: nowrap;
 }
 
-.boss-push-icon {
-  flex: 0 0 auto;
-  padding: 1px 3px;
-  border-radius: 3px;
-  background: rgba(255, 90, 79, 0.22);
-  color: #ff5a4f;
-  font-family: Orbitron, system-ui, sans-serif;
-  font-size: 9px;
-  font-weight: 950;
-  line-height: 1;
-}
-
 .race-leaderboard li small {
   grid-column: 2;
   color: rgba(246, 242, 232, 0.66);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 850;
   white-space: nowrap;
 }
 
 .race-leaderboard li.is-player small {
+  color: #ffcf4a;
+}
+
+.race-leaderboard li.is-boss-mode small {
+  color: #ffb0aa;
+}
+
+.race-leaderboard li.is-player.is-boss-mode small {
   color: #ffcf4a;
 }
 

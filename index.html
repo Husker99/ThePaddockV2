@@ -23,9 +23,20 @@
               <button id="play-game" class="start-button" type="button">Just Drive</button>
               <button id="time-trial-game" class="start-button" type="button">Time Trial</button>
               <button id="quick-race-game" class="start-button" type="button">Quick Race</button>
+              <button id="challenges-game" class="start-button" type="button">Challenges</button>
               <button id="open-track-editor" class="start-button" type="button">Track Editor</button>
               <button id="go-online-game" class="start-button go-online-button" type="button">Go Online</button>
             </div>
+          </div>
+
+          <div class="menu-step is-hidden" data-menu-step="challenges">
+            <button class="back-button" type="button" data-menu-back="intro">Back</button>
+            <div class="challenge-difficulty-toggle" role="group" aria-label="Challenge difficulty">
+              <button class="is-selected" type="button" data-challenge-difficulty="beginner">Beginner</button>
+              <button type="button" data-challenge-difficulty="amateur">Amateur</button>
+              <button type="button" data-challenge-difficulty="professional">Professional</button>
+            </div>
+            <div id="challenge-list" class="challenge-list" aria-label="Challenges"></div>
           </div>
 
           <div class="menu-step is-hidden" data-menu-step="settings">
@@ -232,12 +243,12 @@
               </label>
               <label class="race-slider">
                 <span>AI Opponents</span>
-                <input id="online-ai-opponent-slider" type="range" min="0" max="10" step="1" value="4" />
+                <input id="online-ai-opponent-slider" type="range" min="0" max="15" step="1" value="4" />
                 <strong id="online-ai-opponent-readout">4</strong>
               </label>
               <label class="race-slider">
                 <span>Laps</span>
-                <input id="online-race-lap-slider" type="range" min="1" max="10" step="1" value="3" />
+                <input id="online-race-lap-slider" type="range" min="1" max="15" step="1" value="3" />
                 <strong id="online-race-lap-readout">3</strong>
               </label>
               <label class="race-select">
@@ -535,7 +546,7 @@
               <strong>AI Opponents</strong>
               <label class="race-slider">
                 <span>Opponents</span>
-                <input id="ai-opponent-slider" type="range" min="1" max="10" step="1" value="4" />
+                <input id="ai-opponent-slider" type="range" min="1" max="15" step="1" value="4" />
                 <strong id="ai-opponent-readout">4</strong>
               </label>
               <label class="race-slider">
@@ -545,7 +556,7 @@
               </label>
               <label class="race-slider">
                 <span>Laps</span>
-                <input id="quick-race-lap-slider" type="range" min="1" max="10" step="1" value="3" />
+                <input id="quick-race-lap-slider" type="range" min="1" max="15" step="1" value="3" />
                 <strong id="quick-race-lap-readout">3</strong>
               </label>
               <label class="race-select">
