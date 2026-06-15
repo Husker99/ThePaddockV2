@@ -14129,15 +14129,17 @@ function updateAiDifficultyModifiers(opponent, dt) {
   const rubberbandBrakeScale = getAiRubberbandBrakeScale(opponent, setting);
   const bossCatchupScale = getAiBossCatchupAccelerationScale(opponent);
   const bossCatchupBrakeScale = getAiBossCatchupBrakeScale(opponent);
+  const bossLastHumanTestScale = getAiBossBehindLastHumanTestScale(opponent);
+  const bossCloseAheadScale = getAiBossCloseAheadScale(opponent);
   const bossModePressureScale = getAiBossModePressureScale(opponent);
   const targetAccelerationScale = (setting.accelerationScale ?? 1) * rubberbandScale * bossModePressureScale.acceleration;
   opponent.difficultyAccelerationScale = THREE.MathUtils.damp(
-    opponent.difficultyAccelerationScale ?? targetAccelerationScale * bossCatchupScale,
-    targetAccelerationScale * bossCatchupScale,
+    opponent.difficultyAccelerationScale ?? targetAccelerationScale * bossCatchupScale * bossLastHumanTestScale.acceleration * bossCloseAheadScale.acceleration,
+    targetAccelerationScale * bossCatchupScale * bossLastHumanTestScale.acceleration * bossCloseAheadScale.acceleration,
     3.2,
     dt,
   );
-  const targetBrakeScale = Math.max(rubberbandBrakeScale, bossCatchupBrakeScale);
+  const targetBrakeScale = Math.max(rubberbandBrakeScale, bossCatchupBrakeScale, bossLastHumanTestScale.brake);
   opponent.difficultyBrakeScale = THREE.MathUtils.damp(
     opponent.difficultyBrakeScale ?? targetBrakeScale,
     targetBrakeScale,
@@ -14146,7 +14148,7 @@ function updateAiDifficultyModifiers(opponent, dt) {
   );
   opponent.difficultySafetyMarginScale = setting.safetyMarginScale ?? 1;
   opponent.difficultyOvertakeIntentScale = (setting.overtakeIntentScale ?? 1) * (opponent.bossModeActive ? 1.4 : 1);
-  opponent.difficultyTopSpeedScale = (setting.topSpeedScale ?? 1) * getAiBossCatchupTopSpeedScale(opponent) * bossModePressureScale.topSpeed;
+  opponent.difficultyTopSpeedScale = (setting.topSpeedScale ?? 1) * getAiBossCatchupTopSpeedScale(opponent) * bossModePressureScale.topSpeed * bossLastHumanTestScale.topSpeed * bossCloseAheadScale.topSpeed;
 }
 
 function getAiRubberbandAccelerationScale(opponent, setting) {
@@ -14221,6 +14223,21 @@ function getAiBossCatchupBrakeScale(opponent) {
   return getAiBossGapToLeadHumanSeconds(opponent) < -1 ? 1.03 : 1;
 }
 
+function getAiBossBehindLastHumanTestScale(opponent) {
+  if (!opponent?.isBoss) return { acceleration: 1, topSpeed: 1, brake: 1 };
+  return getAiBossGapToLastHumanSeconds(opponent) < 0
+    ? { acceleration: 1.1, topSpeed: 1.05, brake: 1.04 }
+    : { acceleration: 1, topSpeed: 1, brake: 1 };
+}
+
+function getAiBossCloseAheadScale(opponent) {
+  if (!opponent?.isBoss) return { acceleration: 1, topSpeed: 1 };
+  const gapSeconds = getAiHumanGapSeconds(opponent);
+  return gapSeconds > 0 && gapSeconds < 0.5
+    ? { acceleration: 1.02, topSpeed: 1.02 }
+    : { acceleration: 1, topSpeed: 1 };
+}
+
 function getAiBossModePressureScale(opponent) {
   if (!opponent?.isBoss || !opponent.bossModeActive) return { acceleration: 1, topSpeed: 1 };
   const gapSeconds = Math.abs(getAiHumanGapSeconds(opponent));
@@ -14275,6 +14292,18 @@ function getAiBossGapToLeadHumanSeconds(opponent) {
   const leadHumanDistance = Math.max(...humanDistances);
   const speedReference = Math.max(22, opponent.speed ?? 0, carState.velocity?.length?.() ?? 0);
   return (aiDistance - leadHumanDistance) / speedReference;
+}
+
+function getAiBossGapToLastHumanSeconds(opponent) {
+  if (!track.samples?.length) return 0;
+  const sampleSpacing = estimateAiSampleSpacing();
+  const lapDistance = Math.max(1, track.samples.length * sampleSpacing);
+  const aiDistance = getAiRaceDistanceMeters(opponent, sampleSpacing, lapDistance);
+  const humanDistances = getHumanRaceDistancesMeters(lapDistance, sampleSpacing);
+  if (!humanDistances.length || !Number.isFinite(aiDistance)) return 0;
+  const lastHumanDistance = Math.min(...humanDistances);
+  const speedReference = Math.max(22, opponent.speed ?? 0, carState.velocity?.length?.() ?? 0);
+  return (aiDistance - lastHumanDistance) / speedReference;
 }
 
 function getAiHumanGapSeconds(opponent) {
