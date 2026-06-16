@@ -312,6 +312,13 @@ function getGraphicsPixelRatio() {
   return Math.min(deviceRatio, 1.25);
 }
 
+function getMenuPreviewPixelRatio() {
+  const deviceRatio = window.devicePixelRatio || 1;
+  if (gameSettings.graphicsQuality === "low") return Math.min(deviceRatio, 0.42);
+  if (gameSettings.graphicsQuality === "medium") return Math.min(deviceRatio, 0.7);
+  return getGraphicsPixelRatio();
+}
+
 function shouldUseMediumOrLowGraphics() {
   return gameSettings.graphicsQuality === "low" || gameSettings.graphicsQuality === "medium";
 }
@@ -386,8 +393,8 @@ renderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const previewRenderer = new THREE.WebGLRenderer({ canvas: menuPreviewCanvas, antialias: true, alpha: true });
-previewRenderer.setPixelRatio(getGraphicsPixelRatio());
-previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
+previewRenderer.setPixelRatio(getMenuPreviewPixelRatio());
+previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality === "high";
 previewRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const previewScene = new THREE.Scene();
@@ -584,6 +591,7 @@ function addSoftLightBand(parent, count, spacing, y, z, color, intensity, distan
 function registerSceneryLight(light, maxDistance = 125, role = "ambient") {
   light.userData.baseMaxDistance = maxDistance;
   light.userData.lightRole = role;
+  light.userData.baseIntensity = light.intensity;
   sceneryLights.push(light);
   return light;
 }
@@ -594,6 +602,20 @@ function registerSceneryCullable(object, maxDistance = 520) {
   object.userData.baseHiddenDistance = maxDistance * 1.16;
   sceneryCullables.push(object);
   return object;
+}
+
+function applyLowGraphicsLampVisibility() {
+  const hideLamps = gameSettings.graphicsQuality === "low";
+  for (const object of sceneryCullables) {
+    if (object.userData.sceneryType !== "lamp") continue;
+    object.visible = !hideLamps;
+  }
+  for (const light of sceneryLights) {
+    if (light.userData.lightRole !== "lamp") continue;
+    light.visible = !hideLamps;
+    if (hideLamps) light.intensity = 0;
+    else light.intensity = light.userData.baseIntensity ?? light.intensity;
+  }
 }
 
 function preserveBaseShadowFlags(object) {
@@ -2222,6 +2244,9 @@ const SLIPSTREAM_START_DISTANCE = 0;
 const SLIPSTREAM_PEAK_DISTANCE = 38.5;
 const SLIPSTREAM_END_DISTANCE = 55;
 const CAR_VISUAL_RIDE_HEIGHT = 0.11;
+let menuWorldRenderTimer = Infinity;
+let menuWorldRenderRequested = true;
+let menuPreviewRenderTimer = Infinity;
 scene.add(dirtGroup);
 initDirtParticles();
 initCollisionSmokeParticles();
@@ -2252,7 +2277,8 @@ function update() {
     updateTimeTrialHud();
   }
   if (selectedGameMode !== "quick-race" || isPaused || isMenuOpen()) updateAiDebugPanel(window.paddockAiDebugSummary ?? null);
-  if (isMenuOpen()) updateMenuPreview(dt);
+  const menuOpen = isMenuOpen();
+  if (menuOpen) updateMenuPreview(dt);
   updateCamera(dt);
   updateSkyObjects();
   updateSceneryVisibility();
@@ -2265,16 +2291,38 @@ function update() {
   updateOpponentEngineAudio(dt);
   updateOnlineSessionRoomCodeHud();
   if (!gameStarted || isPaused || isMenuOpen() || raceStartBlocked) updateDraftCue(0);
-  renderer.render(scene, camera);
+  if (shouldRenderMainSceneThisFrame(dt, menuOpen)) renderer.render(scene, camera);
+}
+
+function shouldRenderMainSceneThisFrame(dt, menuOpen) {
+  if (!menuOpen || !shouldUseMediumOrLowGraphics()) {
+    menuWorldRenderTimer = Infinity;
+    menuWorldRenderRequested = false;
+    return true;
+  }
+  const interval = gameSettings.graphicsQuality === "low" ? 0.75 : 0.35;
+  menuWorldRenderTimer += dt;
+  if (menuWorldRenderRequested || menuWorldRenderTimer >= interval) {
+    menuWorldRenderTimer = 0;
+    menuWorldRenderRequested = false;
+    return true;
+  }
+  return false;
 }
 
 function updateSceneryLights() {
   if (!sceneryLights.length) return;
   const reference = gameStarted ? carState.position : camera.position;
   for (const light of sceneryLights) {
+    if (gameSettings.graphicsQuality === "low" && light.userData.lightRole === "lamp") {
+      light.visible = false;
+      light.intensity = 0;
+      continue;
+    }
     light.getWorldPosition(scratchLightPosition);
     const maxDistance = (light.userData.baseMaxDistance ?? 125) * getSceneryLightVisibilityMultiplier(light.userData.lightRole);
     light.visible = scratchLightPosition.distanceToSquared(reference) < maxDistance * maxDistance;
+    light.intensity = light.userData.baseIntensity ?? light.intensity;
   }
 }
 
@@ -2282,6 +2330,10 @@ function updateSceneryVisibility() {
   if (!sceneryCullables.length) return;
   const reference = gameStarted ? carState.position : camera.position;
   for (const object of sceneryCullables) {
+    if (gameSettings.graphicsQuality === "low" && object.userData.sceneryType === "lamp") {
+      object.visible = false;
+      continue;
+    }
     object.getWorldPosition(scratchLightPosition);
     const distanceSq = scratchLightPosition.distanceToSquared(reference);
     const multiplier = getSceneryVisibilityMultiplier();
@@ -5144,6 +5196,7 @@ function createTrack(trackId = KATARA_TRACK_ID) {
   rebuildNatureEmitters();
   addCloudsAndSun(group, trackId === "generated");
   applySceneShadowQuality(group);
+  applyLowGraphicsLampVisibility();
 
   const start = pointFromPlan(...definition.start, planScale);
   const next = pointFromPlan(...definition.next, planScale);
@@ -10532,12 +10585,13 @@ function updateGameSettingsFromInputs() {
 
 function applyGraphicsSettings() {
   renderer.setPixelRatio(getGraphicsPixelRatio());
-  previewRenderer.setPixelRatio(getGraphicsPixelRatio());
+  previewRenderer.setPixelRatio(getMenuPreviewPixelRatio());
   renderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
-  previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality !== "low";
+  previewRenderer.shadowMap.enabled = gameSettings.graphicsQuality === "high";
   sun.castShadow = gameSettings.graphicsQuality !== "low";
-  previewKeyLight.castShadow = gameSettings.graphicsQuality !== "low";
+  previewKeyLight.castShadow = gameSettings.graphicsQuality === "high";
   applySceneShadowQuality();
+  applyLowGraphicsLampVisibility();
   applyHeadlightQuality(car, { isPlayer: true, forceVisible: carState.headlightsOn });
   applyCarVisualQuality(car, { isPlayer: true });
   const activeAiHeadlights = getActiveAiHeadlightOpponents();
@@ -10556,6 +10610,8 @@ function applyGraphicsSettings() {
     applyCarVisualQuality(remote.car, { isPlayer: false });
     updateLowGraphicsCarDetail(remote.car, remote.car.root.position);
   }
+  menuWorldRenderRequested = true;
+  menuPreviewRenderTimer = Infinity;
 }
 
 function applyCarVisualQuality(carModel, { isPlayer = false } = {}) {
@@ -11077,6 +11133,8 @@ function isPaintMenuStep() {
 }
 
 function updateMenuVisual() {
+  menuWorldRenderRequested = true;
+  menuPreviewRenderTimer = Infinity;
   const visual = menuStep === "intro" || menuStep === "settings" || menuStep === "how-to-play" || menuStep === "challenges" || menuStep === "go-online" || menuStep === "online-join" || menuStep === "online-room"
     ? "intro"
     : (menuStep === "track" || menuStep === "editor-choice" || menuStep === "editor-default-track")
@@ -11317,6 +11375,16 @@ function updateMenuPreviewCar(force = false) {
 function updateMenuPreview(dt) {
   if (!isMenuPreviewCarStep()) return;
   if (!previewCar) updateMenuPreviewCar();
+  if (gameSettings.graphicsQuality !== "high") {
+    const interval = gameSettings.graphicsQuality === "low" ? 1 / 15 : 1 / 24;
+    if (!Number.isFinite(menuPreviewRenderTimer)) menuPreviewRenderTimer = interval;
+    menuPreviewRenderTimer += dt;
+    if (menuPreviewRenderTimer < interval) return;
+    dt = menuPreviewRenderTimer;
+    menuPreviewRenderTimer = 0;
+  } else {
+    menuPreviewRenderTimer = Infinity;
+  }
   const width = Math.max(1, menuPreviewCanvas.clientWidth);
   const height = Math.max(1, menuPreviewCanvas.clientHeight);
   if (menuPreviewCanvas.width !== Math.floor(width * previewRenderer.getPixelRatio()) ||
@@ -12236,6 +12304,7 @@ function addEditorLamp(group, x, z, rotation = 0) {
   pole.receiveShadow = true;
   arm.receiveShadow = true;
   lamp.add(groundGlow, pole, arm, light, glow);
+  lamp.userData.sceneryType = "lamp";
   lamp.position.set(x, 0, z);
   lamp.rotation.y = editorRotationToWorld(rotation);
   lamp.scale.setScalar(0.85);
@@ -16451,6 +16520,8 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  menuWorldRenderRequested = true;
+  menuPreviewRenderTimer = Infinity;
 });
 
 
